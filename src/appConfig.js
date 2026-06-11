@@ -328,6 +328,91 @@ const SETTING_DEFINITIONS = [
     required: false,
     autoReload: true
   },
+
+  {
+    key: 'AUTOMATION_RECEIPT_IMAGE_ENABLED',
+    section: 'automation',
+    label: 'Compras por imagem',
+    helper: 'Permite que o WhatsApp receba foto de comprovante, leia com IA e prepare uma compra para confirmação.',
+    input: 'switch',
+    defaultValue: '0',
+    required: false,
+    autoReload: true
+  },
+  {
+    key: 'AUTOMATION_RECEIPT_IMAGE_MAX_FILE_BYTES',
+    section: 'automation',
+    label: 'Limite de imagem de comprovante (bytes)',
+    helper: 'Tamanho máximo aceito para imagens de comprovante enviadas pelo WhatsApp.',
+    input: 'number',
+    defaultValue: '8000000',
+    min: 524288,
+    max: 20000000,
+    step: 524288,
+    required: false,
+    autoReload: true
+  },
+  {
+    key: 'AUTOMATION_RECEIPT_IMAGE_STAGING_TTL_MINUTES',
+    section: 'automation',
+    label: 'Tempo para confirmar comprovante',
+    helper: 'Minutos para guardar temporariamente a imagem enquanto o usuário confirma ou corrige os dados lidos.',
+    input: 'number',
+    defaultValue: '60',
+    min: 5,
+    max: 1440,
+    step: 5,
+    required: false,
+    autoReload: true
+  },
+
+  {
+    key: 'AUTOMATION_RECEIPT_IMAGE_PROVIDER',
+    section: 'automation',
+    label: 'Provedor de leitura de comprovante',
+    helper: 'Provedor usado na leitura de imagens. No MVP use gemini.',
+    input: 'text',
+    defaultValue: 'gemini',
+    placeholder: 'gemini',
+    monospace: true,
+    required: false,
+    autoReload: true
+  },
+  {
+    key: 'AUTOMATION_RECEIPT_IMAGE_GEMINI_MODEL',
+    section: 'automation',
+    label: 'Modelo Gemini para comprovantes',
+    helper: 'Modelo usado para ler comprovantes de cartão. Recomendado: gemini-2.5-flash.',
+    input: 'text',
+    defaultValue: 'gemini-2.5-flash',
+    placeholder: 'gemini-2.5-flash',
+    monospace: true,
+    required: false,
+    autoReload: true
+  },
+  {
+    key: 'AUTOMATION_RECEIPT_IMAGE_GEMINI_API_KEY',
+    section: 'automation',
+    label: 'API key Gemini para comprovantes',
+    helper: 'Opcional. Se vazio, o AcerttaPay tenta reaproveitar STATEMENT_PDF_GEMINI_API_KEY ou GEMINI_API_KEY.',
+    input: 'password',
+    defaultValue: '',
+    placeholder: 'opcional-se-ja-usa-a-chave-de-pdf',
+    secret: true,
+    monospace: true,
+    required: false,
+    autoReload: true
+  },
+  {
+    key: 'AUTOMATION_RECEIPT_IMAGE_DEBUG_ENABLED',
+    section: 'automation',
+    label: 'Debug de imagens de comprovante',
+    helper: 'Quando ligado, mantém a imagem temporária após consumo para investigação. Deixe desligado em produção.',
+    input: 'switch',
+    defaultValue: '0',
+    required: false,
+    autoReload: true
+  },
   {
     key: 'AUTOMATION_SMART_SUMMARIES_ENABLED',
     section: 'automation',

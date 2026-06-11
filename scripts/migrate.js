@@ -1116,6 +1116,37 @@ function runMigrations() {
     FOREIGN KEY (job_id) REFERENCES statement_import_jobs(id)
   );
 
+
+
+  CREATE TABLE IF NOT EXISTS automation_receipt_image_staging (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    phone_e164 TEXT,
+    whatsapp_number TEXT,
+    channel TEXT NOT NULL DEFAULT 'whatsapp',
+    original_filename TEXT,
+    mime_type TEXT,
+    byte_size INTEGER,
+    sha256 TEXT,
+    storage_path TEXT NOT NULL,
+    source_message_id TEXT,
+    source_meta_json TEXT,
+    caption TEXT,
+    parsed_json TEXT,
+    provider_key TEXT,
+    provider_model TEXT,
+    confidence TEXT,
+    status TEXT NOT NULL DEFAULT 'waiting_confirmation',
+    purchase_id INTEGER,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    consumed_at TEXT,
+    cancelled_at TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (purchase_id) REFERENCES transactions(id)
+  );
+
   CREATE TABLE IF NOT EXISTS automation_reminders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -1696,6 +1727,9 @@ function runMigrations() {
 
   CREATE INDEX IF NOT EXISTS idx_automation_pdf_staging_user_status ON automation_pdf_import_staging(user_id, status, expires_at);
   CREATE INDEX IF NOT EXISTS idx_automation_pdf_staging_message ON automation_pdf_import_staging(user_id, source_message_id);
+  CREATE INDEX IF NOT EXISTS idx_receipt_image_staging_user_status ON automation_receipt_image_staging(user_id, status, created_at);
+  CREATE INDEX IF NOT EXISTS idx_receipt_image_staging_sha ON automation_receipt_image_staging(user_id, sha256);
+  CREATE INDEX IF NOT EXISTS idx_receipt_image_staging_message ON automation_receipt_image_staging(user_id, source_message_id);
   CREATE INDEX IF NOT EXISTS idx_automation_workflow_registry_family ON automation_workflow_registry(family_key, enabled, maintenance_mode);
   CREATE INDEX IF NOT EXISTS idx_automation_user_preferences_user ON automation_user_preferences(user_id, enabled);
   CREATE INDEX IF NOT EXISTS idx_automation_user_preferences_workflow ON automation_user_preferences(workflow_key, enabled);

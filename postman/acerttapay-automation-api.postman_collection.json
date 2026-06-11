@@ -1,0 +1,3225 @@
+{
+  "info": {
+    "name": "AcerttaPay Automation API - Postman",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Coleção para testar endpoints /api/automation/v1. Use com cuidado em produção; as pastas de escrita alteram dados reais."
+  },
+  "item": [
+    {
+      "name": "00 - Diagnóstico e Router",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Confirma token/API de automação."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Resolve WhatsApp",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/whatsapp/resolve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "whatsapp",
+                "resolve"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Router Context",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/router/context",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "router",
+                "context"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"channel\": \"whatsapp\",\n  \"instance\": \"{{instance}}\",\n  \"message_id\": \"postman-{{$guid}}\",\n  \"push_name\": \"Postman\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  },\n  \"whatsapp\": {\n    \"phone\": \"{{phone}}\",\n    \"message_text\": \"Oi\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"instance\": \"{{instance}}\",\n    \"media\": {\n      \"has_media\": false,\n      \"is_pdf\": false\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Router Capabilities",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/router/capabilities",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "router",
+                "capabilities"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Router Intent Log",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/router/intent-log",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "router",
+                "intent-log"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"workflow_key\": \"0.0\",\n  \"family_key\": \"0.x\",\n  \"intent\": \"postman_test\",\n  \"operation\": \"router.dispatch\",\n  \"result_code\": \"POSTMAN_TEST\",\n  \"status_code\": 200,\n  \"source_message_id\": \"postman-{{$guid}}\",\n  \"request_meta\": {\n    \"tool\": \"postman\"\n  },\n  \"response_meta\": {\n    \"ok\": true\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01 - Compra Assistida",
+      "item": [
+        {
+          "name": "Criar compra - preparação/confirmação",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/purchases",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "purchases"
+              ]
+            },
+            "description": "Pode criar conversa de confirmação ou compra, conforme regra atual.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"description\": \"Compra teste Postman\",\n  \"amount_cents\": 1234,\n  \"date\": \"{{today}}\",\n  \"installments\": 1,\n  \"card_hint\": \"{{cardHint}}\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar compras recentes",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/purchases/recent",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "purchases",
+                "recent"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"limit\": 5,\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Preparar edição",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/purchases/{{purchaseId}}/prepare-edit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "purchases",
+                "{{purchaseId}}",
+                "prepare-edit"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"patch\": {\n    \"amount_cents\": 1000\n  },\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Confirmar edição",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/purchases/{{purchaseId}}/confirm-edit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "purchases",
+                "{{purchaseId}}",
+                "confirm-edit"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"confirmation\": \"confirmar\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Preparar exclusão",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/purchases/{{purchaseId}}/prepare-delete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "purchases",
+                "{{purchaseId}}",
+                "prepare-delete"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"reason\": \"teste postman\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Confirmar exclusão",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/purchases/{{purchaseId}}/confirm-delete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "purchases",
+                "{{purchaseId}}",
+                "confirm-delete"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"confirmation\": \"confirmar\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reabrir participantes",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/purchases/{{purchaseId}}/participants/reopen",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "purchases",
+                "{{purchaseId}}",
+                "participants",
+                "reopen"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Opções de divisão",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/purchases/{{purchaseId}}/split-options",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "purchases",
+                "{{purchaseId}}",
+                "split-options"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Aplicar divisão",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/purchases/{{purchaseId}}/split",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "purchases",
+                "{{purchaseId}}",
+                "split"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"split_mode\": \"equal\",\n  \"include_self\": true,\n  \"participants\": [\n    {\n      \"type\": \"self\"\n    }\n  ],\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Responder conversa pendente",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/conversations/reply",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "conversations",
+                "reply"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"text\": \"confirmar\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Preparar compra por imagem de comprovante",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "postman-receipt-{{$timestamp}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"image\": {\n    \"base64\": \"{{receiptImageBase64}}\",\n    \"mime_type\": \"{{receiptImageMimeType}}\",\n    \"filename\": \"{{receiptImageFilename}}\"\n  },\n  \"caption\": \"{{receiptCaption}}\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-receipt-{{$timestamp}}\",\n    \"raw_text\": \"teste de compra por imagem\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/purchases/receipt-image/prepare",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "purchases",
+                "receipt-image",
+                "prepare"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Confirmar compra por imagem de comprovante",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "postman-receipt-confirm-{{$timestamp}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"text\": \"confirmar\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-receipt-confirm-{{$timestamp}}\",\n    \"raw_text\": \"confirmar\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/purchases/receipt-image/conversations/reply",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "purchases",
+                "receipt-image",
+                "conversations",
+                "reply"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Corrigir dados lidos do comprovante",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "postman-receipt-correct-{{$timestamp}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"text\": \"corrigir valor para 42,26\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-receipt-correct-{{$timestamp}}\",\n    \"raw_text\": \"corrigir valor para 42,26\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/purchases/receipt-image/conversations/reply",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "purchases",
+                "receipt-image",
+                "conversations",
+                "reply"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Cancelar compra por imagem de comprovante",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "postman-receipt-cancel-{{$timestamp}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"text\": \"cancelar\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-receipt-cancel-{{$timestamp}}\",\n    \"raw_text\": \"cancelar\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/purchases/receipt-image/conversations/reply",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "purchases",
+                "receipt-image",
+                "conversations",
+                "reply"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "02 - Consultas Financeiras",
+      "item": [
+        {
+          "name": "Resumo mensal",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/queries/month-summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "queries",
+                "month-summary"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"query\": {\n    \"month\": \"{{month}}\",\n    \"year\": \"{{year}}\"\n  },\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Resumo por cartão",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/queries/card-summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "queries",
+                "card-summary"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"query\": {\n    \"month\": \"{{month}}\",\n    \"year\": \"{{year}}\",\n    \"card_hint\": \"{{cardHint}}\"\n  },\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Compras recentes",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/queries/recent-purchases",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "queries",
+                "recent-purchases"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"query\": {\n    \"month\": \"{{month}}\",\n    \"year\": \"{{year}}\",\n    \"limit\": 5\n  },\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Resumo por pessoa",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/queries/person-summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "queries",
+                "person-summary"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"query\": {\n    \"month\": \"{{month}}\",\n    \"year\": \"{{year}}\",\n    \"person_hint\": \"{{personHint}}\"\n  },\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Resumo de acertos",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/queries/debt-summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "queries",
+                "debt-summary"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"query\": {\n    \"month\": \"{{month}}\",\n    \"year\": \"{{year}}\"\n  },\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 - Lembretes",
+      "item": [
+        {
+          "name": "Criar lembrete",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/reminders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reminders"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"title\": \"Pagar conta teste\",\n  \"due_date\": \"{{today}}\",\n  \"due_time\": \"09:00\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Buscar lembretes",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/reminders/search",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reminders",
+                "search"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"query\": {\n    \"status\": \"pending\",\n    \"limit\": 10\n  },\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Lembretes vencidos",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/reminders/due",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reminders",
+                "due"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"limit\": 10\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Concluir lembrete",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/reminders/{{reminderId}}/complete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reminders",
+                "{{reminderId}}",
+                "complete"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cancelar lembrete",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/reminders/{{reminderId}}/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reminders",
+                "{{reminderId}}",
+                "cancel"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Adiar lembrete",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/reminders/{{reminderId}}/snooze",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reminders",
+                "{{reminderId}}",
+                "snooze"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"snooze_until\": \"{{today}}\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Marcar lembrete enviado",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/reminders/{{reminderId}}/mark-sent",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reminders",
+                "{{reminderId}}",
+                "mark-sent"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 - Central de Acertos",
+      "item": [
+        {
+          "name": "Resumo",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/shared-debts/summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "shared-debts",
+                "summary"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"query\": {\n    \"month\": \"{{month}}\",\n    \"year\": \"{{year}}\"\n  },\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Rascunhos",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/shared-debts/drafts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "shared-debts",
+                "drafts"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Solicitações",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/shared-debts/requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "shared-debts",
+                "requests"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Preparar envio de rascunho",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/shared-debts/drafts/{{queueId}}/prepare-send",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "shared-debts",
+                "drafts",
+                "{{queueId}}",
+                "prepare-send"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Confirmar envio de rascunho",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/shared-debts/drafts/{{queueId}}/confirm-send",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "shared-debts",
+                "drafts",
+                "{{queueId}}",
+                "confirm-send"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"confirmation\": \"confirmar\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Responder solicitação",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/shared-debts/requests/{{sharedDebtRequestId}}/respond",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "shared-debts",
+                "requests",
+                "{{sharedDebtRequestId}}",
+                "respond"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"action\": \"accept\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Marcar solicitação paga",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/shared-debts/requests/{{sharedDebtRequestId}}/mark-paid",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "shared-debts",
+                "requests",
+                "{{sharedDebtRequestId}}",
+                "mark-paid"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Confirmar recebido",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/shared-debts/requests/{{sharedDebtRequestId}}/confirm-received",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "shared-debts",
+                "requests",
+                "{{sharedDebtRequestId}}",
+                "confirm-received"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Preparar Pix de acerto",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/shared-debts/settlements/{{settlementId}}/pix/prepare",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "shared-debts",
+                "settlements",
+                "{{settlementId}}",
+                "pix",
+                "prepare"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Criar Pix de acerto",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/shared-debts/settlements/{{settlementId}}/pix/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "shared-debts",
+                "settlements",
+                "{{settlementId}}",
+                "pix",
+                "create"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"confirmation\": \"confirmar\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Responder conversa Central",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/shared-debts/conversations/reply",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "shared-debts",
+                "conversations",
+                "reply"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"text\": \"confirmar\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 - Finanças Mensais",
+      "item": [
+        {
+          "name": "Criar lançamento mensal",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/monthly-finances",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "monthly-finances"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"title\": \"Internet teste\",\n  \"kind\": \"expense\",\n  \"amount_cents\": 17999,\n  \"month\": \"{{month}}\",\n  \"year\": \"{{year}}\",\n  \"due_day\": 10,\n  \"paid\": false,\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Buscar lançamentos mensais",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/monthly-finances/search",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "monthly-finances",
+                "search"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"query\": {\n    \"month\": \"{{month}}\",\n    \"year\": \"{{year}}\",\n    \"limit\": 10\n  },\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Marcar pago",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/monthly-finances/{{monthlyFinanceId}}/mark-paid",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "monthly-finances",
+                "{{monthlyFinanceId}}",
+                "mark-paid"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Marcar não pago",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/monthly-finances/{{monthlyFinanceId}}/mark-unpaid",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "monthly-finances",
+                "{{monthlyFinanceId}}",
+                "mark-unpaid"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Atualizar lançamento",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/monthly-finances/{{monthlyFinanceId}}/update",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "monthly-finances",
+                "{{monthlyFinanceId}}",
+                "update"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"patch\": {\n    \"amount_cents\": 18000\n  },\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Excluir lançamento",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/monthly-finances/{{monthlyFinanceId}}/delete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "monthly-finances",
+                "{{monthlyFinanceId}}",
+                "delete"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"confirmation\": \"confirmar\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Responder conversa finanças",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/monthly-finances/conversations/reply",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "monthly-finances",
+                "conversations",
+                "reply"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"text\": \"confirmar\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06 - Fechamento Mensal",
+      "item": [
+        {
+          "name": "Prontidão",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/month-close/readiness",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "month-close",
+                "readiness"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"month\": \"{{month}}\",\n  \"year\": \"{{year}}\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Preparar fechamento",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/month-close/prepare-close",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "month-close",
+                "prepare-close"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"month\": \"{{month}}\",\n  \"year\": \"{{year}}\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Confirmar fechamento",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/month-close/confirm-close",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "month-close",
+                "confirm-close"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"month\": \"{{month}}\",\n  \"year\": \"{{year}}\",\n  \"confirmation\": \"FECHAR {{month}}/{{year}}\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Preparar reabertura",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/month-close/prepare-reopen",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "month-close",
+                "prepare-reopen"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"month\": \"{{month}}\",\n  \"year\": \"{{year}}\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Confirmar reabertura",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/month-close/confirm-reopen",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "month-close",
+                "confirm-reopen"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"month\": \"{{month}}\",\n  \"year\": \"{{year}}\",\n  \"confirmation\": \"REABRIR {{month}}/{{year}}\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Responder conversa fechamento",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/month-close/conversations/reply",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "month-close",
+                "conversations",
+                "reply"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"text\": \"confirmar\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "07 - Importação PDF",
+      "item": [
+        {
+          "name": "Criar job PDF com base64",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/imports/pdf/jobs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "imports",
+                "pdf",
+                "jobs"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"file_name\": \"fatura.pdf\",\n  \"mime_type\": \"application/pdf\",\n  \"file_base64\": \"{{pdfBase64}}\",\n  \"card_hint\": \"{{cardHint}}\",\n  \"month\": \"{{month}}\",\n  \"year\": \"{{year}}\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar jobs PDF",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/imports/pdf/jobs/list",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "imports",
+                "pdf",
+                "jobs",
+                "list"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"limit\": 10,\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Status job PDF",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/imports/pdf/jobs/{{pdfJobId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "imports",
+                "pdf",
+                "jobs",
+                "{{pdfJobId}}",
+                "status"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cancelar job PDF",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/imports/pdf/jobs/{{pdfJobId}}/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "imports",
+                "pdf",
+                "jobs",
+                "{{pdfJobId}}",
+                "cancel"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Responder conversa PDF",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/imports/pdf/conversations/reply",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "imports",
+                "pdf",
+                "conversations",
+                "reply"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"text\": \"Cartão Inter {{month}}/{{year}}\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "08 - Categorias e Inteligência",
+      "item": [
+        {
+          "name": "Opções de categoria",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/categories/options",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "options"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Compras sem categoria",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/categories/uncategorized",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "uncategorized"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"query\": {\n    \"month\": \"{{month}}\",\n    \"year\": \"{{year}}\",\n    \"limit\": 10\n  },\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Aplicar categoria em compra",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/categories/apply-to-purchase",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "apply-to-purchase"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"purchase_id\": \"{{purchaseId}}\",\n  \"category_id\": \"{{categoryId}}\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Criar regra de estabelecimento",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/categories/create-merchant-rule",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "create-merchant-rule"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"merchant_hint\": \"IFOOD\",\n  \"category_id\": \"{{categoryId}}\",\n  \"confirmation\": \"confirmar\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Responder conversa categorias",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/categories/conversations/reply",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "conversations",
+                "reply"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"text\": \"confirmar\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Insight mensal",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/insights/monthly",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "insights",
+                "monthly"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"month\": \"{{month}}\",\n  \"year\": \"{{year}}\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Insight semanal",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/insights/weekly",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "insights",
+                "weekly"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Enviar resumo",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/insights/send-summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "insights",
+                "send-summary"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"summary_type\": \"monthly\",\n  \"month\": \"{{month}}\",\n  \"year\": \"{{year}}\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Preferências de resumo",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/insights/preferences",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "insights",
+                "preferences"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"monthly_enabled\": true,\n  \"weekly_enabled\": false,\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Resumos vencidos",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/insights/due-summaries",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "insights",
+                "due-summaries"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"limit\": 10\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Marcar resumo enviado",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/insights/preferences/{{summaryPreferenceId}}/mark-sent",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "insights",
+                "preferences",
+                "{{summaryPreferenceId}}",
+                "mark-sent"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"summary_type\": \"monthly\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Resposta JSON', function () {",
+                  "  pm.response.to.be.withBody;",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "});",
+                  "pm.test('Status esperado', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201, 400, 401, 403, 404, 409, 422, 429, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{automationToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.request.headers.upsert({ key: 'Accept', value: 'application/json' });",
+          "if (pm.request.method !== 'GET') {",
+          "  pm.request.headers.upsert({ key: 'Content-Type', value: 'application/json' });",
+          "  if (!pm.request.headers.has('Idempotency-Key')) {",
+          "    pm.request.headers.upsert({ key: 'Idempotency-Key', value: 'postman-' + pm.variables.replaceIn('{{$guid}}') });",
+          "  }",
+          "}",
+          "const hmacSecret = pm.environment.get('hmacSecret') || pm.collectionVariables.get('hmacSecret');",
+          "if (hmacSecret) {",
+          "  const timestamp = Math.floor(Date.now() / 1000).toString();",
+          "  const rawBody = pm.request.body && pm.request.body.raw ? pm.request.body.raw : '';",
+          "  const signature = CryptoJS.HmacSHA256(timestamp + '.' + rawBody, hmacSecret).toString(CryptoJS.enc.Hex);",
+          "  pm.request.headers.upsert({ key: 'X-AcerttaPay-Timestamp', value: timestamp });",
+          "  pm.request.headers.upsert({ key: 'X-AcerttaPay-Signature', value: 'sha256=' + signature });",
+          "} else {",
+          "  pm.request.headers.remove('X-AcerttaPay-Timestamp');",
+          "  pm.request.headers.remove('X-AcerttaPay-Signature');",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://acerttapay.com.br/api/automation/v1"
+    },
+    {
+      "key": "hmacSecret",
+      "value": ""
+    }
+  ]
+}

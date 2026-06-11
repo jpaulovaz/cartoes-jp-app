@@ -7,6 +7,7 @@ const { createAutomationMonthlyFinancesController } = require('../controllers/au
 const { createAutomationMonthCloseController } = require('../controllers/automationMonthClose.controller');
 const { createAutomationPdfImportsController } = require('../controllers/automationPdfImports.controller');
 const { createAutomationIntelligenceController } = require('../controllers/automationIntelligence.controller');
+const { createAutomationReceiptPurchasesController } = require('../controllers/automationReceiptPurchases.controller');
 
 function createAutomationApiRouter(deps = {}) {
   const router = express.Router();
@@ -18,6 +19,7 @@ function createAutomationApiRouter(deps = {}) {
   const monthCloseController = createAutomationMonthCloseController(deps);
   const pdfImportsController = createAutomationPdfImportsController(deps);
   const intelligenceController = createAutomationIntelligenceController(deps);
+  const receiptPurchasesController = createAutomationReceiptPurchasesController(deps);
 
   router.use(controller.observeRequest);
   router.use(controller.authenticate);
@@ -28,6 +30,8 @@ function createAutomationApiRouter(deps = {}) {
   router.post('/router/capabilities', controller.routerCapabilities);
   router.post('/router/intent-log', controller.routerIntentLog);
   router.post('/purchases', controller.createPurchase);
+  router.post('/purchases/receipt-image/prepare', receiptPurchasesController.prepare);
+  router.post('/purchases/receipt-image/conversations/reply', receiptPurchasesController.conversationReply);
   router.post('/purchases/recent', controller.listRecentPurchases);
   router.post('/purchases/:id/prepare-edit', controller.preparePurchaseEdit);
   router.post('/purchases/:id/confirm-edit', controller.confirmPurchaseEdit);

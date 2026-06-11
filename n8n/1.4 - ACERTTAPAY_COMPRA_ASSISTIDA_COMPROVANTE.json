@@ -1,0 +1,561 @@
+{
+  "name": "1.4 - ACERTTAPAY_COMPRA_ASSISTIDA_COMPROVANTE",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "d4a7b97e-cdea-4a4e-93a2-59586476e1d0",
+      "name": "WA Incoming",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -1760,
+        800
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "f0935b48-06b6-4d96-90db-7d1d90b889d3",
+      "name": "EntradaWhatsapp",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1760,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const routed = $json || {};\nconst whatsapp = routed.whatsapp || routed;\nconst media = routed.media || whatsapp.media || {};\nconst raw = whatsapp.raw || routed.raw || {};\nconst rawBody = raw.body || raw || {};\nconst rawData = rawBody.data || {};\nconst rawMessage = rawData.message || {};\nfunction unwrapMessage(message) {\n  let current = message || {};\n  for (let i = 0; i < 5; i += 1) {\n    if (current.ephemeralMessage?.message) current = current.ephemeralMessage.message;\n    else if (current.viewOnceMessage?.message) current = current.viewOnceMessage.message;\n    else if (current.viewOnceMessageV2?.message) current = current.viewOnceMessageV2.message;\n    else if (current.documentWithCaptionMessage?.message) current = current.documentWithCaptionMessage.message;\n    else break;\n  }\n  return current || {};\n}\nconst inner = unwrapMessage(rawMessage);\nconst imageMessage = media.raw_image || inner.imageMessage || null;\nconst documentMessage = media.raw_document || inner.documentMessage || null;\nconst mediaMessage = imageMessage ? { imageMessage, messageContextInfo: rawMessage.messageContextInfo || inner.messageContextInfo || undefined } : (documentMessage ? { documentMessage, messageContextInfo: rawMessage.messageContextInfo || inner.messageContextInfo || undefined } : (media.raw_image || media.raw_document || null));\nconst mimeType = String(media.mime_type || imageMessage?.mimetype || documentMessage?.mimetype || '').trim();\nconst filename = String(media.filename || imageMessage?.fileName || documentMessage?.fileName || 'comprovante.jpg').trim();\nconst caption = String(media.caption || imageMessage?.caption || documentMessage?.caption || whatsapp.message_text || routed.source?.raw_text || '').trim();\nconst serverUrl = String($env.EVOLUTION_API_URL || routed.evolution_api_url || whatsapp.evolution_api_url || rawBody.server_url || '').trim();\nconst apiKey = String($env.EVOLUTION_API_KEY || routed.evolution_api_key || whatsapp.evolution_api_key || rawBody.apikey || '').trim();\nreturn [{ json: {\n  ...routed,\n  phone: whatsapp.phone || routed.phone,\n  instance: whatsapp.instance || routed.instance || $env.EVOLUTION_INSTANCE_NAME || 'ACERTTAPAY',\n  message_id: whatsapp.message_id || routed.source?.message_id || routed.message_id,\n  message_text: whatsapp.message_text || routed.source?.raw_text || '',\n  is_valid_user_message: whatsapp.is_valid_user_message !== false && whatsapp.can_reply !== false,\n  conversation_state: routed.conversation?.state || null,\n  media: { ...media, is_image: media.is_image === true, mime_type: mimeType || null, filename, caption: caption || null, raw_image: imageMessage || media.raw_image || null, raw_document: documentMessage || media.raw_document || null },\n  media_message: mediaMessage,\n  evolution_api_url: serverUrl,\n  evolution_api_key: apiKey,\n  source: routed.source || { channel: 'whatsapp', instance: whatsapp.instance, message_id: whatsapp.message_id, raw_text: whatsapp.message_text || caption },\n  whatsapp,\n  raw: raw || {}\n}}];"
+      },
+      "id": "6d318986-3618-42e0-9e3d-6c5081da693c",
+      "name": "Normalize Routed Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1504,
+        880
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "is-valid",
+              "leftValue": "={{ $json.is_valid_user_message === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "7c1f68e2-3500-4698-b16b-508e267fedf6",
+      "name": "Is Valid User Message?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1280,
+        880
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "is-conversation",
+              "leftValue": "={{ ['awaiting_receipt_purchase_confirmation','awaiting_receipt_purchase_details'].includes(String($json.conversation_state || '')) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "9f2d8a31-2d30-4756-bbd4-b19c8d214197",
+      "name": "Is Receipt Conversation?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1056,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const normalized = $('Normalize Routed Payload').first().json || {};\nconst text = normalized.message_text || normalized.source?.raw_text || '';\nreturn [{ json: {\n  phone: normalized.phone,\n  source: {\n    channel: 'whatsapp',\n    instance: normalized.instance,\n    message_id: normalized.message_id,\n    raw_text: text\n  },\n  reply: {\n    text,\n    raw_text: text,\n    intent: /cancelar|cancela|desistir|descartar/i.test(text) ? 'cancel_receipt_purchase' : undefined,\n    confirm: /^(sim|s|confirmar|confirmo|ok|pode|isso)$/i.test(String(text || '').trim()) ? true : undefined\n  }\n}}];"
+      },
+      "id": "aec93876-79ec-49dc-a5d0-60ed9d29c5ee",
+      "name": "Build Receipt Reply Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -832,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{($env.ACERTTAPAY_URL || '').replace(/\\/$/, '')}}/api/automation/v1/purchases/receipt-image/conversations/reply",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.ACERTTAPAY_AUTOMATION_API_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Idempotency-Key",
+              "value": "=receipt-reply:{{$('Normalize Routed Payload').first().json.instance}}:{{$('Normalize Routed Payload').first().json.message_id}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "d7a521d1-9273-4c8b-8ef1-89c35e35f86e",
+      "name": "Send Receipt Conversation Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -592,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "has-image",
+              "leftValue": "={{ $json.media?.is_image === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "51c1235a-bc19-4df9-aa74-24a55afe280b",
+      "name": "Has Receipt Image?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -832,
+        976
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{($env.EVOLUTION_API_URL || $('Normalize Routed Payload').first().json.evolution_api_url || '').replace(/\\/$/, '')}}/chat/getBase64FromMediaMessage/{{$('Normalize Routed Payload').first().json.instance || $env.EVOLUTION_INSTANCE_NAME || 'ACERTTAPAY'}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.EVOLUTION_API_KEY || $('Normalize Routed Payload').first().json.evolution_api_key}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ { message: $('Normalize Routed Payload').first().json.media_message, convertToMp4: false } }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "8dc13d2d-bc71-407e-8c89-51b487b98b81",
+      "name": "Download Image From Evolution",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -592,
+        880
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const normalized = $('Normalize Routed Payload').first().json || {};\nconst download = $json || {};\nfunction findBase64(value) {\n  if (!value) return '';\n  if (typeof value === 'string') {\n    const clean = value.replace(/^data:[^;]+;base64,/i, '').replace(/s+/g, '').trim();\n    return clean.length > 80 ? clean : '';\n  }\n  if (Array.isArray(value)) {\n    for (const item of value) { const found = findBase64(item); if (found) return found; }\n    return '';\n  }\n  if (typeof value === 'object') {\n    const keys = ['base64', 'base64Message', 'base64Data', 'file', 'data', 'media', 'buffer', 'content'];\n    for (const key of keys) { const found = findBase64(value[key]); if (found) return found; }\n  }\n  return '';\n}\nconst hasDownloadError = Boolean(download.error || download.message?.error || download.status === 'error' || download.code === 'ECONNREFUSED');\nconst base64 = hasDownloadError ? '' : findBase64(download);\nif (!base64) {\n  return [{ json: {\n    ok: false,\n    media_download_ok: false,\n    code: 'RECEIPT_IMAGE_MEDIA_DOWNLOAD_FAILED',\n    whatsapp: { text: 'Recebi a imagem, mas não consegui baixar o arquivo da Evolution agora. Confere a URL da Evolution no N8N e tenta reenviar o comprovante.' },\n    send_by_orchestrator: true\n  }}];\n}\nreturn [{ json: {\n  ok: true,\n  media_download_ok: true,\n  phone: normalized.phone,\n  image: {\n    base64,\n    mime_type: normalized.media?.mime_type || 'image/jpeg',\n    filename: normalized.media?.filename || 'comprovante.jpg'\n  },\n  caption: normalized.media?.caption || normalized.message_text || '',\n  source: {\n    channel: 'whatsapp',\n    instance: normalized.instance,\n    message_id: normalized.message_id,\n    raw_text: normalized.media?.caption || normalized.message_text || ''\n  }\n}}];"
+      },
+      "id": "9238d58b-e4e5-4d8b-82f4-51f239f996cb",
+      "name": "Build Receipt Image Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -352,
+        880
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "media-ok",
+              "leftValue": "={{ $json.media_download_ok === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "4d214770-ebc5-4c2d-85f7-d0ef68093fe0",
+      "name": "Media Download OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -128,
+        880
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{($env.ACERTTAPAY_URL || '').replace(/\\/$/, '')}}/api/automation/v1/purchases/receipt-image/prepare",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.ACERTTAPAY_AUTOMATION_API_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Idempotency-Key",
+              "value": "=receipt-image:{{$('Normalize Routed Payload').first().json.instance}}:{{$('Normalize Routed Payload').first().json.message_id}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "b027aa98-a027-4f64-84f7-bb414f07d54f",
+      "name": "Prepare Receipt Purchase in AcerttaPay",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        112,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $json || {};\nreturn [{ json: {\n  ...result,\n  ok: result.ok === true,\n  workflow_key: '1.4',\n  outbound_text: result.whatsapp?.text || result.message || 'Pedido processado no AcerttaPay.',\n  send_by_orchestrator: true,\n  whatsapp: { ...(result.whatsapp || {}), text: result.whatsapp?.text || result.message || 'Pedido processado no AcerttaPay.' }\n}}];"
+      },
+      "id": "f65c7a48-d94a-44b7-831a-bc4f71246683",
+      "name": "Normalize Backend Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        368,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all();"
+      },
+      "id": "b58f6539-a7bb-4dfd-b093-060f06f6fb1b",
+      "name": "Return Result To Orchestrator",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        608,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { ok: false, workflow_key: '1.4', code: 'RECEIPT_IMAGE_REQUIRED', send_by_orchestrator: true, whatsapp: { text: 'Me manda uma foto nítida do comprovante da compra. Se preferir, também posso registrar por texto: *Nova compra hoje de R$ 42,26 no Inter*.' } } }];"
+      },
+      "id": "5ecb5708-a283-4625-9235-994966fb1977",
+      "name": "Send Unsupported Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -592,
+        1104
+      ]
+    }
+  ],
+  "connections": {
+    "WA Incoming": {
+      "main": [
+        [
+          {
+            "node": "Normalize Routed Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "EntradaWhatsapp": {
+      "main": [
+        [
+          {
+            "node": "Normalize Routed Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Routed Payload": {
+      "main": [
+        [
+          {
+            "node": "Is Valid User Message?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Valid User Message?": {
+      "main": [
+        [
+          {
+            "node": "Is Receipt Conversation?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Unsupported Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Receipt Conversation?": {
+      "main": [
+        [
+          {
+            "node": "Build Receipt Reply Payload",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Has Receipt Image?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Receipt Reply Payload": {
+      "main": [
+        [
+          {
+            "node": "Send Receipt Conversation Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Receipt Conversation Reply": {
+      "main": [
+        [
+          {
+            "node": "Normalize Backend Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Receipt Image?": {
+      "main": [
+        [
+          {
+            "node": "Download Image From Evolution",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Unsupported Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Image From Evolution": {
+      "main": [
+        [
+          {
+            "node": "Build Receipt Image Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Receipt Image Payload": {
+      "main": [
+        [
+          {
+            "node": "Media Download OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Media Download OK?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Receipt Purchase in AcerttaPay",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Normalize Backend Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Receipt Purchase in AcerttaPay": {
+      "main": [
+        [
+          {
+            "node": "Normalize Backend Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Backend Result": {
+      "main": [
+        [
+          {
+            "node": "Return Result To Orchestrator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Unsupported Message": {
+      "main": [
+        [
+          {
+            "node": "Return Result To Orchestrator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "8e79c447-3f4c-42a9-9e12-3a029ea8ab8f",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "Vj7pC4wimRx7ZQj2",
+  "tags": []
+}

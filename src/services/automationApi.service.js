@@ -3,6 +3,7 @@ const dayjs = require('dayjs');
 const { createAutomationApiRepository } = require('../repositories/automationApi.repository');
 const { createAutomationOperationsRepository } = require('../repositories/automationOperations.repository');
 const { createPurchaseCreationService, PurchaseCreationError } = require('./purchaseCreation.service');
+const { createAutomationReceiptPurchasesService } = require('./automationReceiptPurchases.service');
 const { DEFAULT_PHONE_COUNTRY, normalizePhoneForWhatsapp } = require('../phone');
 const { formatBRLFromCents } = require('../utils');
 
@@ -204,6 +205,7 @@ function createAutomationApiService(deps = {}) {
   const repository = deps.repository || createAutomationApiRepository();
   const operationsRepository = deps.operationsRepository || createAutomationOperationsRepository();
   const purchaseService = deps.purchaseService || createPurchaseCreationService({ repository });
+  const receiptPurchasesService = deps.receiptPurchasesService || createAutomationReceiptPurchasesService(deps);
 
   function isEnabled() {
     return repository.getBooleanSetting('AUTOMATION_API_ENABLED', false);
@@ -1599,7 +1601,7 @@ function createAutomationApiService(deps = {}) {
   function buildRouterMenuText(capabilities = []) {
     const enabled = new Set((capabilities || []).filter((item) => item.enabled).map((item) => item.workflow_key));
     const sections = [];
-    if (enabled.has('1.1') || enabled.has('1.2') || enabled.has('1.3')) sections.push(['🧾 Compras', '• registrar compra', '• corrigir ou apagar compra recente', '• dividir com amigos ou contatos'].join('\n'));
+    if (enabled.has('1.1') || enabled.has('1.2') || enabled.has('1.3') || enabled.has('1.4')) sections.push(['🧾 Compras', '• registrar compra', '• enviar foto de comprovante', '• corrigir ou apagar compra recente', '• dividir com amigos ou contatos'].join('\n'));
     if (enabled.has('2.1')) sections.push(['📊 Consultas', '• gastos do mês', '• fatura do cartão', '• últimas compras'].join('\n'));
     if (enabled.has('3.1')) sections.push(['⏰ Lembretes', '• criar, listar, concluir ou adiar lembretes'].join('\n'));
     if (enabled.has('4.1')) sections.push(['🤝 Central de Acertos', '• ver quem deve', '• enviar rascunhos', '• marcar pagamento', '• gerar Pix'].join('\n'));
@@ -1635,7 +1637,7 @@ function createAutomationApiService(deps = {}) {
     const text = normalizeRouterText(rawText);
     if (!text) return false;
     const queryLike = /(quanto|qto|gastei|gasto|gastos|ultimas compras|ultimos lancamentos|listar.*compras|lista.*compras|compras?.*(dezembro|janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|mes|ano)|fatura|resumo|quem me deve|o que devo)/i.test(text);
-    const newActionLike = /(nova compra|comprei|passei no cartao|corrigir uma compra|corrige uma compra|apagar uma compra|dividir uma compra|dividir compras|lancar|lanca|lança|adicionar|cadastrar|criar lembrete|me lembra|enviar.*fatura|mandar.*fatura|pdf|importar.*fatura)/i.test(text);
+    const newActionLike = /(nova compra|comprei|passei no cartao|corrigir uma compra|corrige uma compra|apagar uma compra|dividir uma compra|dividir compras|lancar|lanca|lança|adicionar|cadastrar|criar lembrete|me lembra|enviar.*fatura|mandar.*fatura|pdf|importar.*fatura|comprovante|foto.*compra|imagem.*compra)/i.test(text);
     return queryLike || newActionLike;
   }
 
@@ -1646,6 +1648,7 @@ function createAutomationApiService(deps = {}) {
     if (/awaiting_card/.test(state)) return /(cartao|cartao|nubank|itau|itaucard|visa|master|elo|\b\d+\b|sim|nao|não|trocar|outro)/i.test(text);
     if (/awaiting_split|awaiting_exact/.test(state)) return /(eu|apenas eu|partes iguais|igual|valores|definidos|ana|bruno|,|\b\d+[,.]?\d*\b)/i.test(text);
     if (/awaiting_pdf_import_details/.test(state)) return /(cartao|nubank|itau|mes|ano|janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|\b20\d{2}\b)/i.test(text);
+    if (/awaiting_receipt_purchase/.test(state)) return /(sim|confirmar|cancelar|corrigir|valor|data|cartao|cartão|parcela|compra|loja|estabelecimento|nubank|inter|itau|itaú|visa|master|elo|\b\d+[,.]?\d*\b)/i.test(text);
     if (/awaiting_purchase_(edit|delete|create)_confirmation/.test(state)) return /^(sim|s|ok|confirmar|confirma|pode|aplica|apagar|excluir|deletar|cancelar|cancela|nao|não|n)$/.test(text);
     return /^(sim|s|ok|confirmar|cancelar|nao|não|n)$/.test(text);
   }
@@ -2105,6 +2108,10 @@ function createAutomationApiService(deps = {}) {
           code: 'CONVERSATION_INTERRUPTED',
           whatsapp: { text: 'Parei aquela ação pendente para não misturar assuntos. Me manda o novo pedido do jeito que você quer seguir.' }
         });
+      }
+
+      if (state === 'awaiting_receipt_purchase_confirmation' || state === 'awaiting_receipt_purchase_details') {
+        return receiptPurchasesService.handleConversationReply(payload, meta);
       }
 
       if (state === 'awaiting_purchase_create_confirmation') {

@@ -3,9 +3,10 @@ const { createAutomationApiService } = require('../services/automationApi.servic
 function createAutomationApiController(deps = {}) {
   const service = deps.service || createAutomationApiService(deps);
 
-  function sendResult(res, result) {
-    const statusCode = Number(result?.statusCode || 200) || 200;
-    const payload = { ...(result || {}) };
+  async function sendResult(res, result) {
+    const resolved = await Promise.resolve(result);
+    const statusCode = Number(resolved?.statusCode || 200) || 200;
+    const payload = { ...(resolved || {}) };
     delete payload.statusCode;
     return res.status(statusCode).json(payload);
   }

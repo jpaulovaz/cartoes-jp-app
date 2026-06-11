@@ -344,6 +344,46 @@ out_of_scope
 
 ---
 
+## Fluxo 1.4 - Compra por imagem de comprovante
+
+```txt
+1.4 - ACERTTAPAY_COMPRA_ASSISTIDA_COMPROVANTE.json
+```
+
+Responsabilidades:
+
+- receber imagens de comprovantes roteadas pelo orquestrador `0.0`;
+- baixar a mídia pela Evolution API;
+- enviar a imagem em base64 para o AcerttaPay;
+- deixar o AcerttaPay chamar o Gemini e validar os dados financeiros;
+- pedir confirmação antes de lançar qualquer compra;
+- reaproveitar o motor atual de criação de compras e participantes.
+
+### Endpoint principal
+
+```txt
+POST /api/automation/v1/purchases/receipt-image/prepare
+POST /api/automation/v1/purchases/receipt-image/conversations/reply
+```
+
+### Estados de conversa
+
+```txt
+awaiting_receipt_purchase_confirmation
+awaiting_receipt_purchase_details
+```
+
+### Regras
+
+- Imagem de comprovante é compra individual, não importação de fatura PDF.
+- A IA nunca cria compra diretamente. Ela apenas extrai estabelecimento, data, valor, parcelas e pista de cartão.
+- O backend valida usuário, MIME, tamanho, chave Gemini, mês fechado, cartão, idempotência e duplicidade provável.
+- Se o cartão não vier claro no comprovante, o usuário informa ou escolhe antes da criação.
+- O padrão de modelo é `gemini-2.5-flash`, configurável por `AUTOMATION_RECEIPT_IMAGE_GEMINI_MODEL`.
+- A imagem fica em staging temporário fora de `public` e não deve ser gravada em logs.
+
+---
+
 ## Fluxo 3.1 - Lembretes e Alertas
 
 ```txt
@@ -957,6 +997,7 @@ Responsabilidades do `0.0`:
 - priorizar conversa pendente antes de classificar intenção com IA;
 - montar menu dinâmico conforme capacidades liberadas;
 - chamar o subfluxo correto;
+- rotear PDF de fatura para `7.1` e imagem de comprovante para `1.4`;
 - enviar a resposta final ao WhatsApp;
 - registrar logs de roteamento.
 

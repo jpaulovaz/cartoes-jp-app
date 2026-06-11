@@ -100,6 +100,17 @@ const WORKFLOW_DEFINITIONS = [
     default_enabled: 1,
     default_rate_limit_per_minute: 80
   },
+
+  {
+    workflow_key: '1.4',
+    family_key: '1.x',
+    name: '1.4 - ACERTTAPAY_COMPRA_ASSISTIDA_COMPROVANTE',
+    title: 'Compra Assistida — Comprovante',
+    description: 'Recebe imagens de comprovantes de cartão, extrai dados com IA e prepara compras para confirmação.',
+    risk_level: 'high',
+    default_enabled: 1,
+    default_rate_limit_per_minute: 50
+  },
   {
     workflow_key: '2.1',
     family_key: '2.x',
@@ -367,6 +378,9 @@ function createAutomationOperationsRepository(deps = {}) {
     } else if (path.startsWith('/month-close')) {
       workflowKey = '6.1';
       operation = 'month_close.command';
+    } else if (path.startsWith('/purchases/receipt-image')) {
+      workflowKey = '1.4';
+      operation = 'purchase.receipt_image';
     } else if (path.startsWith('/imports/pdf')) {
       workflowKey = '7.1';
       operation = 'pdf_import.command';

@@ -11,6 +11,12 @@ function createAutomationApiRouter(deps = {}) {
   router.get('/health', controller.health);
   router.post('/whatsapp/resolve', controller.resolveWhatsapp);
   router.post('/purchases', controller.createPurchase);
+  router.post('/purchases/recent', controller.listRecentPurchases);
+  router.post('/purchases/:id/prepare-edit', controller.preparePurchaseEdit);
+  router.post('/purchases/:id/confirm-edit', controller.confirmPurchaseEdit);
+  router.post('/purchases/:id/prepare-delete', controller.preparePurchaseDelete);
+  router.post('/purchases/:id/confirm-delete', controller.confirmPurchaseDelete);
+  router.post('/purchases/:id/participants/reopen', controller.reopenPurchaseParticipants);
   router.get('/purchases/:id/split-options', controller.getSplitOptions);
   router.post('/purchases/:id/split-options', controller.getSplitOptions);
   router.post('/purchases/:id/split', controller.splitPurchase);

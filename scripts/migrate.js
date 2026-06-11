@@ -1038,6 +1038,20 @@ function runMigrations() {
     created_at TEXT NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
+
+  CREATE TABLE IF NOT EXISTS automation_mutation_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    phone_e164 TEXT,
+    operation TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_id INTEGER,
+    before_json TEXT,
+    after_json TEXT,
+    source_message_id TEXT,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
   `);
 
   db.exec(`
@@ -1521,6 +1535,8 @@ function runMigrations() {
   CREATE INDEX IF NOT EXISTS idx_automation_idempotency_user ON automation_idempotency_keys(user_id, operation, created_at);
   CREATE INDEX IF NOT EXISTS idx_automation_request_logs_created ON automation_request_logs(created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_automation_request_logs_user_channel ON automation_request_logs(user_id, channel, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_automation_mutation_events_user ON automation_mutation_events(user_id, entity_type, entity_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_automation_mutation_events_operation ON automation_mutation_events(operation, created_at DESC);
   `);
 
   ensureIndexWithAliases(

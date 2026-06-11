@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const dayjs = require('dayjs');
 const { createAutomationApiRepository } = require('../repositories/automationApi.repository');
 const { createPurchaseCreationService, PurchaseCreationError } = require('./purchaseCreation.service');
 const { DEFAULT_PHONE_COUNTRY, normalizePhoneForWhatsapp } = require('../phone');
@@ -402,6 +403,836 @@ function createAutomationApiService(deps = {}) {
       }
     });
     return buildPurchaseCreatedResponse({ purchase: created, conversation });
+  }
+
+
+  function normalizeMoneyPatch(value) {
+    if (value === null || value === undefined || value === '') return null;
+    if (typeof value === 'number' && Number.isFinite(value)) return Math.round(value);
+    const raw = String(value || '').trim();
+    if (!raw) return null;
+    if (/^-?\d+$/.test(raw)) return Number(raw);
+    const digits = raw.replace(/\D/g, '');
+    return digits ? Number(digits) : null;
+  }
+
+  function normalizeEditDescription(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 180);
+  }
+
+  function stripInstallmentMarker(description) {
+    return String(description || '').replace(/\s*\(\d{1,3}\/\d{1,3}\)\s*$/g, '').trim();
+  }
+
+  function formatInstallmentLabel(description, index, total) {
+    const base = stripInstallmentMarker(description);
+    const totalCount = Math.max(1, Number(total || 1) || 1);
+    if (totalCount <= 1) return base;
+    return `${base} (${String(index).padStart(2, '0')}/${String(totalCount).padStart(2, '0')})`;
+  }
+
+  function normalizeInstallmentCount(value, fallback) {
+    if (value === null || value === undefined || value === '') return fallback;
+    const parsed = Number.parseInt(String(value || ''), 10);
+    if (!Number.isFinite(parsed) || parsed < 1) return fallback;
+    return Math.min(120, parsed);
+  }
+
+  function normalizeMutationDate(value, fallback) {
+    const raw = String(value || '').trim();
+    if (!raw) return fallback;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(raw) || !dayjs(raw).isValid()) {
+      throw new AutomationApiError('Essa data não ficou válida para mim. Me manda no formato dia/mês ou uma data clara.', {
+        code: 'INVALID_DATE',
+        statusCode: 400
+      });
+    }
+    return raw;
+  }
+
+  function getInstallmentMonths(startYear, startMonth, installments) {
+    const months = [];
+    let currentYear = Number(startYear || 0);
+    let currentMonth = Number(startMonth || 0);
+    for (let i = 0; i < Math.max(1, Number(installments || 1)); i += 1) {
+      months.push({ year: currentYear, month: currentMonth, index: i + 1 });
+      currentMonth += 1;
+      if (currentMonth > 12) {
+        currentMonth = 1;
+        currentYear += 1;
+      }
+    }
+    return months;
+  }
+
+  function normalizeDayNumber(value) {
+    const parsed = Number.parseInt(String(value || '').trim(), 10);
+    if (!Number.isFinite(parsed) || parsed < 1 || parsed > 31) return null;
+    return parsed;
+  }
+
+  function suggestFirstDueMonthForMutation(purchaseDate, closeDay, dueDay) {
+    const purchase = dayjs(purchaseDate);
+    if (!purchase.isValid()) return null;
+    const normalizedCloseDay = normalizeDayNumber(closeDay);
+    const normalizedDueDay = normalizeDayNumber(dueDay);
+    let target = purchase.startOf('month');
+
+    if (normalizedCloseDay && normalizedDueDay && normalizedCloseDay > normalizedDueDay) {
+      target = target.add(1, 'month');
+    }
+
+    if (normalizedCloseDay) {
+      const effectiveCloseDay = Math.min(normalizedCloseDay, purchase.daysInMonth());
+      if (purchase.date() >= effectiveCloseDay) {
+        target = target.add(1, 'month');
+      }
+    }
+
+    return target.format('YYYY-MM');
+  }
+
+  function distributeTotal(totalCents, installments) {
+    const count = Math.max(1, Number(installments || 1) || 1);
+    const total = Math.round(Number(totalCents || 0));
+    const share = Math.trunc(total / count);
+    const remainder = total - (share * count);
+    return Array.from({ length: count }, (_, index) => share + (index < Math.abs(remainder) ? Math.sign(remainder) : 0));
+  }
+
+  function serializePurchaseRow(row = {}) {
+    return {
+      id: Number(row.id || 0),
+      card_id: Number(row.card_id || 0) || null,
+      card_name: row.card_name || null,
+      txn_date: row.txn_date || null,
+      description: row.description || '',
+      amount_cents: Number(row.amount_cents || 0),
+      due_month: Number(row.month || row.due_month || 0) || null,
+      due_year: Number(row.year || row.due_year || 0) || null,
+      parent_txn_id: Number(row.parent_txn_id || 0) || null,
+      recurring_rule_id: Number(row.recurring_rule_id || 0) || null,
+      purchase_category_id: Number(row.purchase_category_id || 0) || null,
+      created_at: row.created_at || null
+    };
+  }
+
+  function buildPurchaseSnapshot(userId, rows = []) {
+    const cleanRows = (rows || []).filter(Boolean);
+    const ids = cleanRows.map((row) => Number(row.id || 0)).filter(Boolean);
+    const allocations = repository.getAllocationsForTransactions(userId, ids).map((row) => ({
+      transaction_id: Number(row.transaction_id || 0),
+      person_id: Number(row.person_id || 0),
+      person_name: row.person_name || null,
+      share_cents: Number(row.share_cents || 0)
+    }));
+    return {
+      purchase_id: Number(cleanRows[0]?.parent_txn_id || cleanRows[0]?.id || 0) || null,
+      total_cents: cleanRows.reduce((sum, row) => sum + Number(row.amount_cents || 0), 0),
+      installments: cleanRows.length,
+      rows: cleanRows.map(serializePurchaseRow),
+      allocations
+    };
+  }
+
+  function listRecentPurchases(payload = {}, meta = {}) {
+    let resolved = null;
+    try {
+      assertApiEnabled();
+      resolved = resolveAuthorizedPhone(payload.phone || payload.user_phone || payload.number);
+      if (!resolved.authorized) {
+        throw new AutomationApiError('Esse número ainda não está liberado no AcerttaPay.', {
+          code: 'NOT_AUTHORIZED',
+          statusCode: 403
+        });
+      }
+      const rows = repository.getRecentPurchasesForAutomation(resolved.user.id, {
+        limit: payload.limit || 5,
+        windowHours: payload.window_hours || payload.windowHours || null
+      });
+      const purchases = rows.map((row, index) => ({
+        option: index + 1,
+        id: Number(row.purchase_id || row.id || 0),
+        description: row.description,
+        amount_cents: Number(row.amount_cents || 0),
+        card_id: Number(row.card_id || 0),
+        card_name: row.card_name,
+        date: row.txn_date,
+        due_month: Number(row.due_month || 0) || null,
+        due_year: Number(row.due_year || 0) || null,
+        installments: Number(row.installments || 1) || 1,
+        created_by_automation: Number(row.created_by_automation || 0) === 1,
+        mutation_window_open: Number(row.is_mutation_window_open || 0) === 1
+      }));
+      const lines = purchases.length
+        ? purchases.map((purchase) => `${purchase.option}. ${purchase.description} — *${formatBRLFromCents(purchase.amount_cents)}* no ${purchase.card_name || 'cartão'}${purchase.date ? ` (${purchase.date})` : ''}`)
+        : ['Não encontrei compras recentes para ajustar por aqui.'];
+      const response = makeResult({
+        ok: true,
+        code: 'RECENT_PURCHASES',
+        purchases,
+        whatsapp: {
+          text: purchases.length
+            ? [`🧾 *Compras recentes*`, '', ...lines, '', 'Quer corrigir alguma? Pode dizer: *corrige a 1 para R$ 189,90* ou *apaga a última compra*.'].join('\n')
+            : 'Não encontrei compras recentes para ajustar por aqui. Me manda uma compra nova ou faça o ajuste pelo app.'
+        }
+      });
+      repository.logRequest({
+        userId: resolved.user.id,
+        phoneE164: resolved.normalized.e164,
+        channel: payload.source?.channel || payload.channel || 'whatsapp',
+        operation: 'purchase.recent',
+        statusCode: response.statusCode,
+        resultCode: response.code,
+        sourceMessageId: payload.source?.message_id || payload.message_id || null,
+        ipAddress: meta.ipAddress || null
+      });
+      return response;
+    } catch (error) {
+      const response = handleServiceError(error);
+      repository.logRequest({
+        userId: resolved?.user?.id || null,
+        phoneE164: resolved?.normalized?.e164 || null,
+        channel: payload.source?.channel || payload.channel || 'whatsapp',
+        operation: 'purchase.recent',
+        statusCode: response.statusCode,
+        resultCode: response.code,
+        sourceMessageId: payload.source?.message_id || payload.message_id || null,
+        ipAddress: meta.ipAddress || null
+      });
+      return response;
+    }
+  }
+
+  function resolvePurchaseIdForMutation(userId, rawPurchaseId) {
+    const raw = String(rawPurchaseId || '').trim().toLowerCase();
+    if (raw && raw !== 'last' && raw !== 'ultima' && raw !== 'última') {
+      const parsed = Number(raw);
+      if (parsed) return parsed;
+    }
+    const recent = repository.getRecentPurchasesForAutomation(userId, { limit: 1 });
+    const first = recent[0];
+    if (!first) {
+      throw new AutomationApiError('Não encontrei uma compra recente para mexer. Me diz qual compra ou ajusta pelo app.', {
+        code: 'NO_RECENT_PURCHASE',
+        statusCode: 404
+      });
+    }
+    return Number(first.purchase_id || first.id || 0);
+  }
+
+  function getMutationRows(userId, rawPurchaseId) {
+    const purchaseId = resolvePurchaseIdForMutation(userId, rawPurchaseId);
+    const rows = repository.getPurchaseScopeRows(userId, purchaseId);
+    if (!rows.length) {
+      throw new AutomationApiError('Não encontrei essa compra por aqui.', {
+        code: 'PURCHASE_NOT_FOUND',
+        statusCode: 404
+      });
+    }
+    return rows;
+  }
+
+  function assertRowsMutable(userId, rows = []) {
+    const cleanRows = (rows || []).filter(Boolean);
+    if (!cleanRows.length) {
+      throw new AutomationApiError('Não encontrei essa compra por aqui.', {
+        code: 'PURCHASE_NOT_FOUND',
+        statusCode: 404
+      });
+    }
+    const locked = cleanRows.find((row) => repository.isMonthClosed(userId, row.month, row.year));
+    if (locked) {
+      throw new AutomationApiError(`Essa fatura já foi fechada (${purchaseService.monthLabel(locked.month, locked.year)}). Não mexi nela para não bagunçar o que já foi pago.`, {
+        code: 'MONTH_CLOSED',
+        statusCode: 423,
+        details: { month: locked.month, year: locked.year }
+      });
+    }
+    const root = cleanRows[0];
+    const createdByAutomation = String(root.raw_json || '').includes('automation_api_v1');
+    const windowHours = Math.max(1, repository.getIntegerSetting('AUTOMATION_PURCHASE_MUTATION_WINDOW_HOURS', 72));
+    const createdAt = root.created_at ? dayjs(root.created_at) : null;
+    const withinWindow = createdAt?.isValid() ? dayjs().diff(createdAt, 'hour') <= windowHours : false;
+    if (!createdByAutomation && !withinWindow) {
+      throw new AutomationApiError(`Por segurança, pelo WhatsApp eu só corrijo compras criadas por automação ou lançamentos recentes (${windowHours}h). Essa fica melhor ajustar pelo app.`, {
+        code: 'MUTATION_WINDOW_CLOSED',
+        statusCode: 409,
+        details: { window_hours: windowHours }
+      });
+    }
+    const protectedRows = repository.getProtectedSharedDebtRowsForTransactions(userId, cleanRows.map((row) => row.id));
+    if (protectedRows.length) {
+      const first = protectedRows[0];
+      throw new AutomationApiError(`Essa compra já foi enviada para ${first.receiver_name || 'alguém'} na Central de Acertos. Para não bagunçar saldo combinado, segura esse ajuste pelo app.`, {
+        code: 'SHARED_DEBT_ALREADY_SENT',
+        statusCode: 409,
+        details: { request_count: protectedRows.length }
+      });
+    }
+  }
+
+  function normalizeEditPatch(rawPatch = {}) {
+    const source = rawPatch || {};
+    const patch = {};
+    const amount = normalizeMoneyPatch(source.amount_cents ?? source.amountCents ?? source.amount ?? source.value);
+    if (amount !== null) patch.amount_cents = amount;
+    const date = source.date || source.txn_date || source.purchase_date;
+    if (date) patch.date = date;
+    const description = normalizeEditDescription(source.description || source.merchant || source.title || '');
+    if (description) patch.description = description;
+    const installmentsRaw = source.installments ?? source.parcelas;
+    if (installmentsRaw !== undefined && installmentsRaw !== null && installmentsRaw !== '') patch.installments = normalizeInstallmentCount(installmentsRaw, 1);
+    const cardId = Number(source.card_id || source.cardId || 0);
+    if (cardId) patch.card_id = cardId;
+    const cardHint = source.card_hint || source.cardHint || source.card_name || source.cardName || '';
+    if (cardHint) patch.card_hint = String(cardHint).trim();
+    return patch;
+  }
+
+  function patchHasMutation(patch = {}) {
+    return ['amount_cents', 'date', 'description', 'installments', 'card_id', 'card_hint'].some((key) => Object.prototype.hasOwnProperty.call(patch, key));
+  }
+
+  function resolveMutationCard(userId, rows, patch = {}) {
+    const root = rows[0];
+    if (patch.card_id) {
+      const card = repository.getActiveCardById(userId, patch.card_id);
+      if (!card) {
+        throw new AutomationApiError('Não encontrei esse cartão ativo para fazer a troca.', {
+          code: 'INVALID_CARD',
+          statusCode: 400
+        });
+      }
+      return card;
+    }
+    if (patch.card_hint) {
+      const cards = repository.getActiveCards(userId);
+      const card = resolveCardByHint(cards, patch.card_hint);
+      if (!card) {
+        const options = cards.map((item, index) => `${index + 1}. ${item.name}`).join(' ');
+        throw new AutomationApiError(`Não consegui bater esse cartão com segurança. Escolhe pelo nome ou número: ${options}`, {
+          code: 'CARD_HINT_NOT_MATCHED',
+          statusCode: 400,
+          details: { cards: buildCardOptions(cards) }
+        });
+      }
+      return card;
+    }
+    const card = repository.getActiveCardById(userId, root.card_id);
+    if (!card) {
+      throw new AutomationApiError('O cartão atual dessa compra não está ativo. Ajuste pelo app para evitar bagunça na fatura.', {
+        code: 'CURRENT_CARD_INACTIVE',
+        statusCode: 409
+      });
+    }
+    return card;
+  }
+
+  function buildRawMutationJson(existingRawJson, operation, source = {}) {
+    const parsed = safeJsonParse(existingRawJson, {});
+    return repository.safeJsonStringify({
+      ...(parsed && typeof parsed === 'object' ? parsed : {}),
+      last_automation_mutation: {
+        operation,
+        channel: source.channel || 'whatsapp',
+        message_id: source.message_id || source.messageId || null,
+        raw_text: source.raw_text || source.rawText || null,
+        mutated_at: new Date().toISOString()
+      }
+    }, '{}');
+  }
+
+  function buildMutationPlan({ userId, rows, patch, source = {} }) {
+    const root = rows[0];
+    const totalBefore = rows.reduce((sum, row) => sum + Number(row.amount_cents || 0), 0);
+    const totalAfter = Object.prototype.hasOwnProperty.call(patch, 'amount_cents') ? Number(patch.amount_cents || 0) : totalBefore;
+    if (!Number.isFinite(totalAfter) || totalAfter <= 0) {
+      throw new AutomationApiError('O novo valor precisa ser maior que zero.', {
+        code: 'INVALID_AMOUNT',
+        statusCode: 400
+      });
+    }
+
+    const installments = Object.prototype.hasOwnProperty.call(patch, 'installments')
+      ? normalizeInstallmentCount(patch.installments, rows.length || 1)
+      : rows.length || 1;
+    if (Number(root.recurring_rule_id || 0) && installments !== 1) {
+      throw new AutomationApiError('Essa compra parece recorrente. Para transformar em parcelada, melhor ajustar pelo app.', {
+        code: 'RECURRING_INSTALLMENTS_UNSUPPORTED',
+        statusCode: 409
+      });
+    }
+
+    const card = resolveMutationCard(userId, rows, patch);
+    const date = normalizeMutationDate(patch.date, root.txn_date || new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' }));
+    const baseDescription = normalizeEditDescription(patch.description || stripInstallmentMarker(root.description || ''));
+    if (!baseDescription) {
+      throw new AutomationApiError('A descrição não pode ficar vazia.', {
+        code: 'MISSING_DESCRIPTION',
+        statusCode: 400
+      });
+    }
+
+    const firstDue = suggestFirstDueMonthForMutation(date, card.close_day, card.due_day);
+    if (!firstDue) {
+      throw new AutomationApiError('Não consegui recalcular a fatura dessa compra.', {
+        code: 'INVALID_DUE_MONTH',
+        statusCode: 400
+      });
+    }
+    const [startYear, startMonth] = firstDue.split('-').map(Number);
+    const months = getInstallmentMonths(startYear, startMonth, installments);
+    const locked = months.find((item) => repository.isMonthClosed(userId, item.month, item.year));
+    if (locked) {
+      throw new AutomationApiError(`A nova fatura cairia em mês fechado (${purchaseService.monthLabel(locked.month, locked.year)}). Não mexi para não bagunçar o que já foi pago.`, {
+        code: 'MONTH_CLOSED',
+        statusCode: 423,
+        details: { month: locked.month, year: locked.year }
+      });
+    }
+
+    const amounts = distributeTotal(totalAfter, installments);
+    return {
+      rootId: Number(root.parent_txn_id || root.id || 0),
+      totalBefore,
+      totalAfter,
+      installmentsBefore: rows.length,
+      installmentsAfter: installments,
+      card,
+      date,
+      baseDescription,
+      amounts,
+      months,
+      rawJson: buildRawMutationJson(root.raw_json, 'purchase.edit', source)
+    };
+  }
+
+  function allocationTemplateForRows(userId, rows = []) {
+    const ids = rows.map((row) => Number(row.id || 0)).filter(Boolean);
+    const allocations = repository.getAllocationsForTransactions(userId, ids);
+    const byTxn = new Map();
+    allocations.forEach((row) => {
+      const key = Number(row.transaction_id || 0);
+      if (!byTxn.has(key)) byTxn.set(key, []);
+      byTxn.get(key).push(row);
+    });
+    const firstWithAllocations = rows.map((row) => byTxn.get(Number(row.id || 0)) || []).find((items) => items.length);
+    const self = repository.getSelfPerson(userId);
+    return { byTxn, fallback: firstWithAllocations?.length ? firstWithAllocations : (self?.id ? [{ person_id: self.id, share_cents: rows[0]?.amount_cents || 0 }] : []) };
+  }
+
+  function distributeAllocationShares(newAmount, allocationRows = []) {
+    const rows = (allocationRows || []).filter((row) => Number(row.person_id || row.personId || 0));
+    if (!rows.length) return [];
+    const oldAbsTotal = rows.reduce((sum, row) => sum + Math.abs(Number(row.share_cents ?? row.shareCents ?? 0)), 0);
+    const targetAbs = Math.abs(Number(newAmount || 0));
+    if (!oldAbsTotal) {
+      const share = distributeTotal(newAmount, rows.length);
+      return rows.map((row, index) => ({ personId: Number(row.person_id || row.personId || 0), shareCents: share[index] || 0 }));
+    }
+    const sign = Math.sign(Number(newAmount || 0)) || 1;
+    let used = 0;
+    const out = rows.map((row, index) => {
+      const personId = Number(row.person_id || row.personId || 0);
+      if (index === rows.length - 1) {
+        const remaining = (targetAbs - used) * sign;
+        return { personId, shareCents: remaining };
+      }
+      const raw = Math.floor((Math.abs(Number(row.share_cents ?? row.shareCents ?? 0)) / oldAbsTotal) * targetAbs);
+      used += raw;
+      return { personId, shareCents: raw * sign };
+    });
+    return out;
+  }
+
+  function applyPurchaseEditMutation({ userId, phoneE164, purchaseId, patch, source = {}, meta = {} }) {
+    const idempotencyKey = String(meta.idempotencyKey || '').trim();
+    const channel = source.channel || 'whatsapp';
+    if (!idempotencyKey) {
+      throw new AutomationApiError('Idempotency-Key é obrigatório para confirmar correções por WhatsApp.', {
+        code: 'IDEMPOTENCY_KEY_REQUIRED',
+        statusCode: 400
+      });
+    }
+    const rows = getMutationRows(userId, purchaseId);
+    assertRowsMutable(userId, rows);
+    const normalizedPatch = normalizeEditPatch(patch || {});
+    if (!patchHasMutation(normalizedPatch)) {
+      throw new AutomationApiError('Não encontrei o que deve ser corrigido nessa compra.', {
+        code: 'MISSING_EDIT_PATCH',
+        statusCode: 400
+      });
+    }
+
+    const idempotency = repository.tryCreateIdempotency({
+      userId,
+      channel,
+      idempotencyKey,
+      operation: 'purchase.edit.confirm',
+      requestHash: requestHash({ purchaseId, patch: normalizedPatch })
+    });
+    if (!idempotency.created) {
+      const cached = safeJsonParse(idempotency.row?.response_json, null);
+      if (cached) return makeResult({ ...cached, duplicate: true }, 200);
+      throw new AutomationApiError('Essa confirmação já está em processamento. Não dupliquei o ajuste.', {
+        code: 'IDEMPOTENCY_IN_PROGRESS',
+        statusCode: 409
+      });
+    }
+
+    let response;
+    try {
+      const before = buildPurchaseSnapshot(userId, rows);
+      const plan = buildMutationPlan({ userId, rows, patch: normalizedPatch, source });
+      const allocationTemplate = allocationTemplateForRows(userId, rows);
+      const rowsByIndex = rows.map((row) => ({ ...row }));
+      const extraRows = rowsByIndex.slice(plan.installmentsAfter);
+
+      repository.db.transaction(() => {
+        extraRows.forEach((row) => {
+          if (row.recurring_rule_id && row.month && row.year) {
+            repository.insertRecurringException({ userId, ruleId: row.recurring_rule_id, month: row.month, year: row.year });
+          }
+        });
+        if (extraRows.length) repository.deleteTransactionsForAutomation(userId, extraRows);
+
+        plan.months.forEach((monthInfo, index) => {
+          const existing = rowsByIndex[index];
+          const amountCents = plan.amounts[index];
+          const description = formatInstallmentLabel(plan.baseDescription, index + 1, plan.installmentsAfter);
+          const parentTxnId = index === 0 ? null : plan.rootId;
+          const recurringRuleId = Number(rows[0].recurring_rule_id || 0) && plan.installmentsAfter === 1 ? Number(rows[0].recurring_rule_id || 0) : null;
+          if (existing) {
+            repository.updateTransactionForAutomation({
+              userId,
+              transactionId: existing.id,
+              cardId: plan.card.id,
+              date: plan.date,
+              description,
+              amountCents,
+              dueMonth: monthInfo.month,
+              dueYear: monthInfo.year,
+              parentTxnId,
+              recurringRuleId,
+              purchaseCategoryId: existing.purchase_category_id || rows[0].purchase_category_id || null,
+              rawJson: plan.rawJson
+            });
+            const allocs = allocationTemplate.byTxn.get(Number(existing.id || 0)) || allocationTemplate.fallback;
+            repository.replaceAllocationsForTransaction(userId, existing.id, distributeAllocationShares(amountCents, allocs));
+          } else {
+            const transactionId = repository.insertTransaction({
+              userId,
+              cardId: Number(plan.card.id || 0),
+              date: plan.date,
+              description,
+              amountCents,
+              dueMonth: monthInfo.month,
+              dueYear: monthInfo.year,
+              parentTxnId: plan.rootId,
+              recurringRuleId: null,
+              purchaseCategoryId: rows[0].purchase_category_id || null,
+              rawJson: plan.rawJson
+            });
+            repository.replaceAllocationsForTransaction(userId, transactionId, distributeAllocationShares(amountCents, allocationTemplate.fallback));
+          }
+        });
+
+        if (Number(rows[0].recurring_rule_id || 0) && plan.installmentsAfter === 1) {
+          repository.updateRecurringRuleForAutomation({
+            userId,
+            ruleId: rows[0].recurring_rule_id,
+            cardId: plan.card.id,
+            description: plan.baseDescription,
+            amountCents: plan.totalAfter,
+            date: plan.date,
+            dueMonth: plan.months[0].month,
+            dueYear: plan.months[0].year,
+            purchaseCategoryId: rows[0].purchase_category_id || null
+          });
+        }
+      })();
+
+      const afterRows = repository.getPurchaseScopeRows(userId, plan.rootId);
+      const queueSummary = purchaseService.queueSharedDebtDraftsForRows(userId, afterRows);
+      const after = buildPurchaseSnapshot(userId, afterRows);
+      repository.insertAutomationMutationEvent({
+        userId,
+        phoneE164,
+        operation: 'purchase.edit',
+        entityType: 'transaction',
+        entityId: plan.rootId,
+        before,
+        after,
+        sourceMessageId: source.message_id || source.messageId || null
+      });
+      const rootAfter = afterRows[0] || {};
+      response = makeResult({
+        ok: true,
+        code: 'PURCHASE_EDITED',
+        purchase: {
+          id: plan.rootId,
+          description: stripInstallmentMarker(rootAfter.description || plan.baseDescription),
+          amount_cents: after.total_cents,
+          installments: afterRows.length,
+          card_id: Number(rootAfter.card_id || plan.card.id || 0),
+          card_name: rootAfter.card_name || plan.card.name,
+          date: rootAfter.txn_date || plan.date,
+          due_month: Number(rootAfter.month || rootAfter.due_month || 0) || null,
+          due_year: Number(rootAfter.year || rootAfter.due_year || 0) || null
+        },
+        queue_summary: queueSummary,
+        whatsapp: {
+          text: [
+            '✅ *Compra corrigida!*',
+            '',
+            `🧾 ${stripInstallmentMarker(rootAfter.description || plan.baseDescription)} — *${formatBRLFromCents(after.total_cents)}*`,
+            `💳 Cartão: *${rootAfter.card_name || plan.card.name}*`,
+            `🔢 Parcelas: *${afterRows.length}x*`,
+            queueSummary.itemCount > 0 ? `📬 ${queueSummary.itemCount} rascunho(s) atualizado(s) na Central de Acertos.` : '📌 Divisão interna atualizada sem enviar nada automaticamente.'
+          ].join('\n')
+        }
+      });
+      repository.finishIdempotency({ channel, idempotencyKey, response, status: 'success' });
+      return response;
+    } catch (error) {
+      response = handleServiceError(error);
+      repository.finishIdempotency({ channel, idempotencyKey, response, status: 'error' });
+      throw error;
+    }
+  }
+
+  function describePatchForConfirmation(patch = {}, rows = []) {
+    const pieces = [];
+    if (Object.prototype.hasOwnProperty.call(patch, 'amount_cents')) pieces.push(`valor para *${formatBRLFromCents(patch.amount_cents)}*`);
+    if (patch.date) pieces.push(`data para *${patch.date}*`);
+    if (patch.description) pieces.push(`descrição para *${patch.description}*`);
+    if (patch.installments) pieces.push(`parcelas para *${patch.installments}x*`);
+    if (patch.card_hint || patch.card_id) pieces.push(`cartão para *${patch.card_hint || `#${patch.card_id}`}*`);
+    return pieces.length ? pieces.join(', ') : 'os dados dessa compra';
+  }
+
+  function preparePurchaseEdit(payload = {}, meta = {}) {
+    let resolved = null;
+    try {
+      assertApiEnabled();
+      resolved = resolveAuthorizedPhone(payload.phone || payload.user_phone || payload.number);
+      if (!resolved.authorized) throw new AutomationApiError('Esse número ainda não está liberado no AcerttaPay.', { code: 'NOT_AUTHORIZED', statusCode: 403 });
+      const purchaseId = resolvePurchaseIdForMutation(resolved.user.id, payload.purchaseId || payload.purchase_id || payload.id || 'last');
+      const rows = repository.getPurchaseScopeRows(resolved.user.id, purchaseId);
+      assertRowsMutable(resolved.user.id, rows);
+      const patch = normalizeEditPatch(payload.patch || payload.edit || payload);
+      if (!patchHasMutation(patch)) {
+        throw new AutomationApiError('Me diz o que você quer corrigir: valor, cartão, data, descrição ou parcelas.', {
+          code: 'MISSING_EDIT_PATCH',
+          statusCode: 400
+        });
+      }
+      buildMutationPlan({ userId: resolved.user.id, rows, patch, source: payload.source || {} });
+      const conversation = repository.createConversationState({
+        userId: resolved.user.id,
+        phoneE164: resolved.normalized.e164,
+        channel: payload.source?.channel || payload.channel || 'whatsapp',
+        state: 'awaiting_purchase_edit_confirmation',
+        relatedPurchaseId: purchaseId,
+        payload: { purchase_id: purchaseId, patch, source: payload.source || {}, preview: describePatchForConfirmation(patch, rows) }
+      });
+      const root = rows[0];
+      const response = makeResult({
+        ok: false,
+        code: 'NEEDS_PURCHASE_EDIT_CONFIRMATION',
+        conversation: publicConversation(conversation, repository),
+        purchase: {
+          id: purchaseId,
+          description: stripInstallmentMarker(root.description || ''),
+          amount_cents: rows.reduce((sum, row) => sum + Number(row.amount_cents || 0), 0),
+          card_name: root.card_name,
+          installments: rows.length
+        },
+        patch,
+        whatsapp: {
+          text: [`⚠️ *Confirmar correção?*`, '', `Compra: *${stripInstallmentMarker(root.description || '')}*`, `Atual: *${formatBRLFromCents(rows.reduce((sum, row) => sum + Number(row.amount_cents || 0), 0))}* no ${root.card_name}`, `Vou ajustar: ${describePatchForConfirmation(patch, rows)}.`, '', 'Responde *confirmar* para aplicar ou *cancelar* para deixar como está.'].join('\n')
+        }
+      });
+      repository.logRequest({ userId: resolved.user.id, phoneE164: resolved.normalized.e164, channel: payload.source?.channel || payload.channel || 'whatsapp', operation: 'purchase.edit.prepare', statusCode: response.statusCode, resultCode: response.code, sourceMessageId: payload.source?.message_id || payload.message_id || null, ipAddress: meta.ipAddress || null });
+      return response;
+    } catch (error) {
+      const response = handleServiceError(error);
+      repository.logRequest({ userId: resolved?.user?.id || null, phoneE164: resolved?.normalized?.e164 || null, channel: payload.source?.channel || payload.channel || 'whatsapp', operation: 'purchase.edit.prepare', statusCode: response.statusCode, resultCode: response.code, sourceMessageId: payload.source?.message_id || payload.message_id || null, ipAddress: meta.ipAddress || null });
+      return response;
+    }
+  }
+
+  function confirmPurchaseEdit(payload = {}, meta = {}) {
+    let resolved = null;
+    try {
+      assertApiEnabled();
+      resolved = resolveAuthorizedPhone(payload.phone || payload.user_phone || payload.number);
+      if (!resolved.authorized) throw new AutomationApiError('Esse número ainda não está liberado no AcerttaPay.', { code: 'NOT_AUTHORIZED', statusCode: 403 });
+      const conversation = repository.getOpenConversationForUser(resolved.user.id, resolved.normalized.e164);
+      const data = conversation && String(conversation.state || '') === 'awaiting_purchase_edit_confirmation'
+        ? repository.getConversationPayload(conversation)
+        : {};
+      const rawText = payload.source?.raw_text || payload.text || payload.reply?.raw_text || '';
+      const confirmed = payload.confirm === true || payload.reply?.confirm === true || isAffirmativeText(rawText) || payload.reply?.intent === 'confirm_edit';
+      if (!confirmed) {
+        if (isNegativeText(rawText) || payload.confirm === false || payload.reply?.confirm === false) {
+          if (conversation) repository.resolveConversationState(conversation.id);
+          return makeResult({ ok: true, code: 'PURCHASE_EDIT_CANCELLED', whatsapp: { text: 'Combinado, não alterei essa compra. Às vezes o melhor ajuste é não mexer mesmo.' } });
+        }
+        return makeResult({ ok: false, code: 'NEEDS_PURCHASE_EDIT_CONFIRMATION', conversation: publicConversation(conversation, repository), whatsapp: { text: 'Para aplicar essa correção, responde *confirmar*. Para desistir, responde *cancelar*.' } });
+      }
+      const purchaseId = payload.purchaseId || payload.purchase_id || data.purchase_id || payload.id || 'last';
+      const patch = normalizeEditPatch(payload.patch || payload.edit || data.patch || {});
+      const result = applyPurchaseEditMutation({ userId: resolved.user.id, phoneE164: resolved.normalized.e164, purchaseId, patch, source: payload.source || data.source || {}, meta });
+      if (conversation) repository.resolveConversationState(conversation.id);
+      repository.logRequest({ userId: resolved.user.id, phoneE164: resolved.normalized.e164, channel: payload.source?.channel || payload.channel || 'whatsapp', operation: 'purchase.edit.confirm', statusCode: result.statusCode, resultCode: result.code, sourceMessageId: payload.source?.message_id || payload.message_id || null, ipAddress: meta.ipAddress || null });
+      return result;
+    } catch (error) {
+      const response = handleServiceError(error);
+      repository.logRequest({ userId: resolved?.user?.id || null, phoneE164: resolved?.normalized?.e164 || null, channel: payload.source?.channel || payload.channel || 'whatsapp', operation: 'purchase.edit.confirm', statusCode: response.statusCode, resultCode: response.code, sourceMessageId: payload.source?.message_id || payload.message_id || null, ipAddress: meta.ipAddress || null });
+      return response;
+    }
+  }
+
+  function preparePurchaseDelete(payload = {}, meta = {}) {
+    let resolved = null;
+    try {
+      assertApiEnabled();
+      resolved = resolveAuthorizedPhone(payload.phone || payload.user_phone || payload.number);
+      if (!resolved.authorized) throw new AutomationApiError('Esse número ainda não está liberado no AcerttaPay.', { code: 'NOT_AUTHORIZED', statusCode: 403 });
+      const purchaseId = resolvePurchaseIdForMutation(resolved.user.id, payload.purchaseId || payload.purchase_id || payload.id || 'last');
+      const rows = repository.getPurchaseScopeRows(resolved.user.id, purchaseId);
+      assertRowsMutable(resolved.user.id, rows);
+      const root = rows[0];
+      const total = rows.reduce((sum, row) => sum + Number(row.amount_cents || 0), 0);
+      const conversation = repository.createConversationState({
+        userId: resolved.user.id,
+        phoneE164: resolved.normalized.e164,
+        channel: payload.source?.channel || payload.channel || 'whatsapp',
+        state: 'awaiting_purchase_delete_confirmation',
+        relatedPurchaseId: purchaseId,
+        payload: { purchase_id: purchaseId, source: payload.source || {}, description: stripInstallmentMarker(root.description || ''), amount_cents: total }
+      });
+      const response = makeResult({
+        ok: false,
+        code: 'NEEDS_PURCHASE_DELETE_CONFIRMATION',
+        conversation: publicConversation(conversation, repository),
+        purchase: { id: purchaseId, description: stripInstallmentMarker(root.description || ''), amount_cents: total, card_name: root.card_name, installments: rows.length },
+        whatsapp: { text: [`⚠️ *Confirmar exclusão?*`, '', `Vou apagar: *${stripInstallmentMarker(root.description || '')}*`, `Valor: *${formatBRLFromCents(total)}*`, `Cartão: *${root.card_name || 'cartão'}*`, rows.length > 1 ? `Parcelas afetadas: *${rows.length}*` : '', '', 'Responde *apagar* para confirmar ou *cancelar* para manter tudo como está.'].filter(Boolean).join('\n') }
+      });
+      repository.logRequest({ userId: resolved.user.id, phoneE164: resolved.normalized.e164, channel: payload.source?.channel || payload.channel || 'whatsapp', operation: 'purchase.delete.prepare', statusCode: response.statusCode, resultCode: response.code, sourceMessageId: payload.source?.message_id || payload.message_id || null, ipAddress: meta.ipAddress || null });
+      return response;
+    } catch (error) {
+      const response = handleServiceError(error);
+      repository.logRequest({ userId: resolved?.user?.id || null, phoneE164: resolved?.normalized?.e164 || null, channel: payload.source?.channel || payload.channel || 'whatsapp', operation: 'purchase.delete.prepare', statusCode: response.statusCode, resultCode: response.code, sourceMessageId: payload.source?.message_id || payload.message_id || null, ipAddress: meta.ipAddress || null });
+      return response;
+    }
+  }
+
+  function applyPurchaseDeleteMutation({ userId, phoneE164, purchaseId, source = {}, meta = {} }) {
+    const idempotencyKey = String(meta.idempotencyKey || '').trim();
+    const channel = source.channel || 'whatsapp';
+    if (!idempotencyKey) {
+      throw new AutomationApiError('Idempotency-Key é obrigatório para confirmar exclusões por WhatsApp.', {
+        code: 'IDEMPOTENCY_KEY_REQUIRED',
+        statusCode: 400
+      });
+    }
+    const rows = getMutationRows(userId, purchaseId);
+    assertRowsMutable(userId, rows);
+    const rootId = Number(rows[0]?.parent_txn_id || rows[0]?.id || 0);
+    const idempotency = repository.tryCreateIdempotency({ userId, channel, idempotencyKey, operation: 'purchase.delete.confirm', requestHash: requestHash({ purchaseId: rootId }) });
+    if (!idempotency.created) {
+      const cached = safeJsonParse(idempotency.row?.response_json, null);
+      if (cached) return makeResult({ ...cached, duplicate: true }, 200);
+      throw new AutomationApiError('Essa exclusão já está em processamento. Não fiz duas vezes.', { code: 'IDEMPOTENCY_IN_PROGRESS', statusCode: 409 });
+    }
+    let response;
+    try {
+      const before = buildPurchaseSnapshot(userId, rows);
+      repository.db.transaction(() => {
+        rows.forEach((row) => {
+          if (row.recurring_rule_id && row.month && row.year) {
+            repository.insertRecurringException({ userId, ruleId: row.recurring_rule_id, month: row.month, year: row.year });
+          }
+        });
+        repository.deleteTransactionsForAutomation(userId, rows);
+      })();
+      repository.insertAutomationMutationEvent({ userId, phoneE164, operation: 'purchase.delete', entityType: 'transaction', entityId: rootId, before, after: { deleted: true, affected_count: rows.length }, sourceMessageId: source.message_id || source.messageId || null });
+      response = makeResult({ ok: true, code: 'PURCHASE_DELETED', deleted_count: rows.length, whatsapp: { text: rows.length > 1 ? `🗑️ Pronto, apaguei ${rows.length} parcelas dessa compra. Sem duplicar bagunça por aqui.` : '🗑️ Pronto, apaguei essa compra. Errou, corrigiu, vida que segue.' } });
+      repository.finishIdempotency({ channel, idempotencyKey, response, status: 'success' });
+      return response;
+    } catch (error) {
+      response = handleServiceError(error);
+      repository.finishIdempotency({ channel, idempotencyKey, response, status: 'error' });
+      throw error;
+    }
+  }
+
+  function confirmPurchaseDelete(payload = {}, meta = {}) {
+    let resolved = null;
+    try {
+      assertApiEnabled();
+      resolved = resolveAuthorizedPhone(payload.phone || payload.user_phone || payload.number);
+      if (!resolved.authorized) throw new AutomationApiError('Esse número ainda não está liberado no AcerttaPay.', { code: 'NOT_AUTHORIZED', statusCode: 403 });
+      const conversation = repository.getOpenConversationForUser(resolved.user.id, resolved.normalized.e164);
+      const data = conversation && String(conversation.state || '') === 'awaiting_purchase_delete_confirmation'
+        ? repository.getConversationPayload(conversation)
+        : {};
+      const rawText = payload.source?.raw_text || payload.text || payload.reply?.raw_text || '';
+      const confirmed = payload.confirm === true || payload.reply?.confirm === true || payload.reply?.intent === 'confirm_delete' || ['apagar', 'excluir', 'deletar', 'confirmar'].includes(normalizeIntentText(rawText));
+      if (!confirmed) {
+        if (isNegativeText(rawText) || payload.confirm === false || payload.reply?.confirm === false) {
+          if (conversation) repository.resolveConversationState(conversation.id);
+          return makeResult({ ok: true, code: 'PURCHASE_DELETE_CANCELLED', whatsapp: { text: 'Combinado, mantive a compra. Nada foi apagado.' } });
+        }
+        return makeResult({ ok: false, code: 'NEEDS_PURCHASE_DELETE_CONFIRMATION', conversation: publicConversation(conversation, repository), whatsapp: { text: 'Para apagar essa compra, responde *apagar*. Para desistir, responde *cancelar*.' } });
+      }
+      const purchaseId = payload.purchaseId || payload.purchase_id || data.purchase_id || payload.id || 'last';
+      const result = applyPurchaseDeleteMutation({ userId: resolved.user.id, phoneE164: resolved.normalized.e164, purchaseId, source: payload.source || data.source || {}, meta });
+      if (conversation) repository.resolveConversationState(conversation.id);
+      repository.logRequest({ userId: resolved.user.id, phoneE164: resolved.normalized.e164, channel: payload.source?.channel || payload.channel || 'whatsapp', operation: 'purchase.delete.confirm', statusCode: result.statusCode, resultCode: result.code, sourceMessageId: payload.source?.message_id || payload.message_id || null, ipAddress: meta.ipAddress || null });
+      return result;
+    } catch (error) {
+      const response = handleServiceError(error);
+      repository.logRequest({ userId: resolved?.user?.id || null, phoneE164: resolved?.normalized?.e164 || null, channel: payload.source?.channel || payload.channel || 'whatsapp', operation: 'purchase.delete.confirm', statusCode: response.statusCode, resultCode: response.code, sourceMessageId: payload.source?.message_id || payload.message_id || null, ipAddress: meta.ipAddress || null });
+      return response;
+    }
+  }
+
+  function reopenParticipantsForPurchase(payload = {}, meta = {}) {
+    let resolved = null;
+    try {
+      assertApiEnabled();
+      resolved = resolveAuthorizedPhone(payload.phone || payload.user_phone || payload.number);
+      if (!resolved.authorized) throw new AutomationApiError('Esse número ainda não está liberado no AcerttaPay.', { code: 'NOT_AUTHORIZED', statusCode: 403 });
+      const purchaseId = resolvePurchaseIdForMutation(resolved.user.id, payload.purchaseId || payload.purchase_id || payload.id || 'last');
+      const options = purchaseService.getSplitOptions({ userId: resolved.user.id, purchaseId });
+      assertRowsMutable(resolved.user.id, repository.getPurchaseScopeRows(resolved.user.id, purchaseId));
+      const conversation = repository.createConversationState({
+        userId: resolved.user.id,
+        phoneE164: resolved.normalized.e164,
+        channel: payload.source?.channel || payload.channel || 'whatsapp',
+        state: 'awaiting_split_participants',
+        relatedPurchaseId: purchaseId,
+        payload: { purchase_id: purchaseId, options: options.options }
+      });
+      const names = options.options.map((option, index) => `${index + 1}. ${option.label || option.name}`).join(' ');
+      const response = makeResult({
+        ok: false,
+        code: 'NEEDS_SPLIT_PARTICIPANTS',
+        conversation: publicConversation(conversation, repository),
+        options: options.options,
+        whatsapp: { text: `Vamos definir os participantes dessa compra. ${names}. Pode responder *Apenas eu*, *Eu, Ana e Bruno* ou só os nomes. Se você quiser entrar no rateio, escreva *Eu* junto.` }
+      });
+      repository.logRequest({ userId: resolved.user.id, phoneE164: resolved.normalized.e164, channel: payload.source?.channel || payload.channel || 'whatsapp', operation: 'purchase.participants.reopen', statusCode: response.statusCode, resultCode: response.code, sourceMessageId: payload.source?.message_id || payload.message_id || null, ipAddress: meta.ipAddress || null });
+      return response;
+    } catch (error) {
+      const response = handleServiceError(error);
+      repository.logRequest({ userId: resolved?.user?.id || null, phoneE164: resolved?.normalized?.e164 || null, channel: payload.source?.channel || payload.channel || 'whatsapp', operation: 'purchase.participants.reopen', statusCode: response.statusCode, resultCode: response.code, sourceMessageId: payload.source?.message_id || payload.message_id || null, ipAddress: meta.ipAddress || null });
+      return response;
+    }
   }
 
   function handleServiceError(error) {
@@ -1014,6 +1845,27 @@ function createAutomationApiService(deps = {}) {
         });
       }
 
+      if (state === 'awaiting_purchase_edit_confirmation') {
+        return confirmPurchaseEdit({
+          phone: resolved.normalized.e164,
+          source: payload.source || {},
+          reply,
+          text: rawText,
+          purchaseId: data.purchase_id || conversation.related_purchase_id || 'last',
+          patch: data.patch || {}
+        }, meta);
+      }
+
+      if (state === 'awaiting_purchase_delete_confirmation') {
+        return confirmPurchaseDelete({
+          phone: resolved.normalized.e164,
+          source: payload.source || {},
+          reply,
+          text: rawText,
+          purchaseId: data.purchase_id || conversation.related_purchase_id || 'last'
+        }, meta);
+      }
+
       repository.resolveConversationState(conversation.id);
       return makeResult({
         ok: false,
@@ -1128,6 +1980,12 @@ function createAutomationApiService(deps = {}) {
     disableWhatsappForUser,
     ensurePhoneAvailableForUser,
     syncAuthorizationAfterSelfPhoneChange,
+    listRecentPurchases,
+    preparePurchaseEdit,
+    confirmPurchaseEdit,
+    preparePurchaseDelete,
+    confirmPurchaseDelete,
+    reopenParticipantsForPurchase,
     isEnabled,
     handleServiceError
   };

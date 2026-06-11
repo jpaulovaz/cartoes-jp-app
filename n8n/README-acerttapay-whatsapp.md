@@ -201,3 +201,94 @@ acerttapay-wa-queries:<telefone>
 ```
 
 Essa memória serve apenas para contexto conversacional. As consultas continuam sempre buscando dados reais no AcerttaPay.
+
+---
+
+# AcerttaPay - Workflows N8N WhatsApp Correções e Participantes
+
+## Fluxo 1.2 - Correções de compra
+
+Identificador do fluxo:
+
+```txt
+1.2 - ACERTTAPAY_COMPRA_ASSISTIDA_CORRECOES
+```
+
+Este workflow pertence à família **1.x - Compra Assistida** e permite mostrar, corrigir ou apagar compras recentes com confirmação explícita no AcerttaPay.
+
+Exemplos:
+
+```txt
+Mostra a última compra
+Corrige a última compra para R$ 189,90
+Troca o cartão da última compra para Nubank
+Essa compra foi ontem
+Era em 3x
+Apaga a última compra
+```
+
+Webhook de teste:
+
+```txt
+acerttapay-wa-purchase-corrections
+```
+
+Endpoints usados:
+
+```txt
+POST /api/automation/v1/purchases/recent
+POST /api/automation/v1/purchases/:id/prepare-edit
+POST /api/automation/v1/purchases/:id/confirm-edit
+POST /api/automation/v1/purchases/:id/prepare-delete
+POST /api/automation/v1/purchases/:id/confirm-delete
+POST /api/automation/v1/conversations/reply
+```
+
+Regras importantes:
+
+- edição e exclusão sempre exigem confirmação;
+- o N8N apenas interpreta a intenção;
+- o AcerttaPay valida mês fechado, janela de segurança, rascunhos e cobranças já enviadas;
+- exclusões/correções usam `Idempotency-Key` na confirmação;
+- compras com cobranças já enviadas/aceitas na Central de Acertos são bloqueadas pelo backend.
+
+## Fluxo 1.3 - Participantes posteriores
+
+Identificador do fluxo:
+
+```txt
+1.3 - ACERTTAPAY_COMPRA_ASSISTIDA_PARTICIPANTES
+```
+
+Este workflow reabre a definição de participantes de uma compra recente quando o usuário não definiu a divisão no momento do cadastro.
+
+Exemplos:
+
+```txt
+Quero dividir a última compra
+Definir participantes da última compra
+Colocar Ana e Bruno na última compra
+```
+
+Webhook de teste:
+
+```txt
+acerttapay-wa-purchase-participants
+```
+
+Endpoints usados:
+
+```txt
+POST /api/automation/v1/purchases/recent
+POST /api/automation/v1/purchases/:id/participants/reopen
+POST /api/automation/v1/conversations/reply
+```
+
+Memória dos novos fluxos:
+
+```txt
+acerttapay-wa-corrections:<telefone>
+acerttapay-wa-participants:<telefone>
+```
+
+A memória é apenas conversacional. Estados de confirmação, divisão e mutação ficam no AcerttaPay.

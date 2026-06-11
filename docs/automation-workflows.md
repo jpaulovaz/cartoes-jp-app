@@ -235,3 +235,109 @@ QUERY_INTERNAL_ERROR
 - Cartões e pessoas citadas por nome são resolvidos no backend.
 - Em caso de ambiguidade, o backend pede esclarecimento.
 - O N8N pode dar tom de concierge, mas não inventa dados financeiros.
+
+---
+
+## Fluxo 1.2 - Correções de Compra
+
+```txt
+1.2 - ACERTTAPAY_COMPRA_ASSISTIDA_CORRECOES.json
+```
+
+Responsabilidades:
+
+- consultar compras recentes;
+- preparar correção de valor, data, cartão, descrição ou quantidade de parcelas;
+- preparar exclusão de compra recente;
+- exigir confirmação antes de qualquer escrita;
+- usar `Idempotency-Key` na confirmação;
+- manter logs em `automation_request_logs` e trilha de mutação em `automation_mutation_events`.
+
+### Intents do fluxo 1.2
+
+```txt
+greeting
+help
+show_last_purchase
+edit_last_purchase_amount
+edit_last_purchase_date
+edit_last_purchase_card
+edit_last_purchase_description
+edit_last_purchase_installments
+delete_last_purchase
+set_participants_later
+clarification
+out_of_scope
+```
+
+### Endpoints da Etapa 3
+
+```txt
+POST /api/automation/v1/purchases/recent
+POST /api/automation/v1/purchases/:id/prepare-edit
+POST /api/automation/v1/purchases/:id/confirm-edit
+POST /api/automation/v1/purchases/:id/prepare-delete
+POST /api/automation/v1/purchases/:id/confirm-delete
+POST /api/automation/v1/purchases/:id/participants/reopen
+```
+
+### Códigos de resposta de correção/exclusão
+
+```txt
+RECENT_PURCHASES
+NO_RECENT_PURCHASE
+NEEDS_PURCHASE_EDIT_CONFIRMATION
+PURCHASE_EDITED
+PURCHASE_EDIT_CANCELLED
+NEEDS_PURCHASE_DELETE_CONFIRMATION
+PURCHASE_DELETED
+PURCHASE_DELETE_CANCELLED
+MISSING_EDIT_PATCH
+MUTATION_WINDOW_CLOSED
+SHARED_DEBT_ALREADY_SENT
+IDEMPOTENCY_KEY_REQUIRED
+IDEMPOTENCY_IN_PROGRESS
+```
+
+### Regras de segurança da Etapa 3
+
+- Correções e remoções só são aplicadas após confirmação explícita.
+- A janela padrão para compra que não nasceu da automação é `AUTOMATION_PURCHASE_MUTATION_WINDOW_HOURS`.
+- Compras criadas pela automação podem ser corrigidas mesmo fora da janela, desde que não violem mês fechado ou Central de Acertos.
+- Mês fechado bloqueia qualquer alteração.
+- Rascunhos da Central de Acertos podem ser atualizados/removidos.
+- Cobranças já enviadas, pendentes, aceitas ou liquidadas bloqueiam a mutação pelo WhatsApp.
+- Toda mutação grava snapshot antes/depois em `automation_mutation_events`.
+
+---
+
+## Fluxo 1.3 - Participantes Posteriores
+
+```txt
+1.3 - ACERTTAPAY_COMPRA_ASSISTIDA_PARTICIPANTES.json
+```
+
+Responsabilidades:
+
+- reabrir a seleção de participantes da última compra ou de uma compra indicada;
+- reaproveitar os estados de divisão do fluxo 1.1;
+- permitir `Apenas eu`, múltiplos participantes, partes iguais e valores definidos;
+- manter o backend como fonte de verdade da divisão.
+
+### Intents do fluxo 1.3
+
+```txt
+greeting
+help
+show_last_purchase
+set_participants_later
+clarification
+out_of_scope
+```
+
+### Regras
+
+- O usuário precisa responder `Eu` quando quiser entrar no rateio.
+- Contatos locais entram apenas no controle interno.
+- Amigos elegíveis geram rascunho na Central de Acertos.
+- Nada é enviado automaticamente.

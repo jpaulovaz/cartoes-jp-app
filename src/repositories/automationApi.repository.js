@@ -262,7 +262,8 @@ function createAutomationApiRepository() {
     return db.prepare(`
       SELECT t.id, t.user_id, t.import_id, t.card_id, t.txn_date, t.description, t.amount_cents,
              t.due_month, t.due_year, t.parent_txn_id, t.recurring_rule_id, t.purchase_category_id,
-             c.name AS card_name,
+             t.raw_json, t.created_at,
+             c.name AS card_name, c.close_day, c.due_day, c.brand,
              COALESCE(t.due_month, i.month) AS month,
              COALESCE(t.due_year, i.year) AS year
       FROM transactions t
@@ -280,7 +281,8 @@ function createAutomationApiRepository() {
     return db.prepare(`
       SELECT t.id, t.user_id, t.import_id, t.card_id, t.txn_date, t.description, t.amount_cents,
              t.due_month, t.due_year, t.parent_txn_id, t.recurring_rule_id, t.purchase_category_id,
-             c.name AS card_name,
+             t.raw_json, t.created_at,
+             c.name AS card_name, c.close_day, c.due_day, c.brand,
              COALESCE(t.due_month, i.month) AS month,
              COALESCE(t.due_year, i.year) AS year
       FROM transactions t
@@ -705,6 +707,231 @@ function createAutomationApiRepository() {
     }
   }
 
+
+  function getRecentPurchasesForAutomation(userId, options = {}) {
+    const limit = Math.max(1, Math.min(20, Number(options.limit || 5) || 5));
+    const windowHours = Math.max(1, Math.min(24 * 30, Number(options.windowHours || getIntegerSetting('AUTOMATION_PURCHASE_MUTATION_WINDOW_HOURS', 72)) || 72));
+    const hoursModifier = `-${windowHours} hours`;
+    return db.prepare(`
+      SELECT
+        t.id,
+        t.id AS purchase_id,
+        t.user_id,
+        t.card_id,
+        c.name AS card_name,
+        t.txn_date,
+        t.description,
+        t.amount_cents AS first_amount_cents,
+        (
+          SELECT COALESCE(SUM(COALESCE(tx.amount_cents, 0)), 0)
+          FROM transactions tx
+          WHERE tx.user_id = t.user_id
+            AND (tx.id = t.id OR tx.parent_txn_id = t.id)
+        ) AS amount_cents,
+        (
+          SELECT COUNT(1)
+          FROM transactions tx
+          WHERE tx.user_id = t.user_id
+            AND (tx.id = t.id OR tx.parent_txn_id = t.id)
+        ) AS installments,
+        COALESCE(t.due_month, i.month) AS due_month,
+        COALESCE(t.due_year, i.year) AS due_year,
+        t.purchase_category_id,
+        t.recurring_rule_id,
+        t.raw_json,
+        t.created_at,
+        CASE WHEN COALESCE(t.raw_json, '') LIKE '%automation_api_v1%' THEN 1 ELSE 0 END AS created_by_automation,
+        CASE
+          WHEN COALESCE(t.raw_json, '') LIKE '%automation_api_v1%' THEN 1
+          WHEN datetime(t.created_at) >= datetime('now', ?) THEN 1
+          ELSE 0
+        END AS is_mutation_window_open
+      FROM transactions t
+      LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+      LEFT JOIN cards c ON c.id = t.card_id AND c.user_id = t.user_id
+      WHERE t.user_id = ?
+        AND COALESCE(t.parent_txn_id, 0) = 0
+      ORDER BY datetime(t.created_at) DESC, t.id DESC
+      LIMIT ?
+    `).all(hoursModifier, Number(userId || 0), limit);
+  }
+
+  function getAllocationsForTransactions(userId, transactionIds = []) {
+    const ids = Array.from(new Set((transactionIds || []).map(Number).filter(Boolean)));
+    if (!ids.length) return [];
+    return db.prepare(`
+      SELECT a.id, a.user_id, a.transaction_id, a.person_id, a.share_cents, a.created_at,
+             p.name AS person_name,
+             COALESCE(p.profile_kind, CASE WHEN COALESCE(p.is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) AS profile_kind
+      FROM allocations a
+      LEFT JOIN people p ON p.id = a.person_id AND p.user_id = a.user_id
+      WHERE a.user_id = ?
+        AND a.transaction_id IN (${ids.map(() => '?').join(', ')})
+      ORDER BY a.transaction_id ASC, a.id ASC
+    `).all(Number(userId || 0), ...ids);
+  }
+
+  function replaceAllocationsForTransaction(userId, transactionId, allocationRows = []) {
+    const cleanRows = (Array.isArray(allocationRows) ? allocationRows : [])
+      .map((row) => ({ personId: Number(row.personId || row.person_id || 0), shareCents: Number(row.shareCents ?? row.share_cents ?? 0) }))
+      .filter((row) => row.personId);
+    deleteAllocationsForTransaction(userId, transactionId);
+    cleanRows.forEach((row) => insertAllocation({
+      userId,
+      transactionId,
+      personId: row.personId,
+      shareCents: row.shareCents
+    }));
+  }
+
+  function updateTransactionForAutomation(payload = {}) {
+    db.prepare(`
+      UPDATE transactions
+      SET card_id = ?,
+          txn_date = ?,
+          description = ?,
+          amount_cents = ?,
+          due_month = ?,
+          due_year = ?,
+          parent_txn_id = ?,
+          recurring_rule_id = ?,
+          purchase_category_id = ?,
+          raw_json = COALESCE(?, raw_json)
+      WHERE id = ? AND user_id = ?
+    `).run(
+      Number(payload.cardId || 0),
+      payload.date || null,
+      payload.description,
+      Number(payload.amountCents || 0),
+      Number(payload.dueMonth || 0) || null,
+      Number(payload.dueYear || 0) || null,
+      Number(payload.parentTxnId || 0) || null,
+      Number(payload.recurringRuleId || 0) || null,
+      Number(payload.purchaseCategoryId || 0) || null,
+      payload.rawJson || null,
+      Number(payload.transactionId || 0),
+      Number(payload.userId || 0)
+    );
+  }
+
+  function deleteTransactionsForAutomation(userId, rows = []) {
+    const uniqueRows = Array.from(new Map((rows || [])
+      .map((row) => ({ id: Number(row.id || 0), import_id: row.import_id ? Number(row.import_id) : null }))
+      .filter((row) => row.id)
+      .map((row) => [row.id, row])).values());
+    if (!uniqueRows.length) return 0;
+
+    const deleteAllocation = db.prepare('DELETE FROM allocations WHERE transaction_id = ? AND user_id = ?');
+    const deleteTransaction = db.prepare('DELETE FROM transactions WHERE id = ? AND user_id = ?');
+    const deleteImportIfEmpty = db.prepare(`
+      DELETE FROM imports
+      WHERE id = ? AND user_id = ?
+        AND NOT EXISTS (
+          SELECT 1 FROM transactions t
+          WHERE t.import_id = imports.id AND t.user_id = imports.user_id
+        )
+    `);
+
+    const importIds = new Set();
+    uniqueRows.forEach((row) => {
+      clearDraftSharedDebtItemsForTransactions(userId, [row.id]);
+      db.prepare(`
+        UPDATE shared_debt_requests
+        SET source_transaction_id = NULL,
+            source_allocation_id = NULL,
+            card_id = NULL,
+            updated_at = ?
+        WHERE requester_user_id = ?
+          AND source_transaction_id = ?
+          AND status = 'cancelled'
+      `).run(nowIso(), Number(userId || 0), row.id);
+      deleteAllocation.run(row.id, Number(userId || 0));
+      deleteTransaction.run(row.id, Number(userId || 0));
+      if (row.import_id) importIds.add(row.import_id);
+    });
+    importIds.forEach((importId) => deleteImportIfEmpty.run(importId, Number(userId || 0)));
+    return uniqueRows.length;
+  }
+
+  function insertRecurringException({ userId, ruleId, month, year }) {
+    if (!Number(ruleId || 0) || !Number(month || 0) || !Number(year || 0)) return;
+    db.prepare(`
+      INSERT OR IGNORE INTO recurring_exceptions (user_id, rule_id, month, year, created_at)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(Number(userId || 0), Number(ruleId || 0), Number(month || 0), Number(year || 0), nowIso());
+  }
+
+  function updateRecurringRuleForAutomation({ userId, ruleId, cardId, description, amountCents, date, dueMonth, dueYear, purchaseCategoryId }) {
+    if (!Number(ruleId || 0)) return;
+    db.prepare(`
+      UPDATE recurring_rules
+      SET card_id = COALESCE(?, card_id),
+          description = COALESCE(?, description),
+          amount_cents = COALESCE(?, amount_cents),
+          purchase_category_id = COALESCE(?, purchase_category_id),
+          start_txn_date = COALESCE(?, start_txn_date),
+          start_due_month = COALESCE(?, start_due_month),
+          start_due_year = COALESCE(?, start_due_year),
+          active_from_month = COALESCE(?, active_from_month),
+          active_from_year = COALESCE(?, active_from_year),
+          updated_at = ?
+      WHERE id = ? AND user_id = ?
+    `).run(
+      Number(cardId || 0) || null,
+      description || null,
+      Number.isFinite(Number(amountCents)) ? Number(amountCents) : null,
+      Number(purchaseCategoryId || 0) || null,
+      date || null,
+      Number(dueMonth || 0) || null,
+      Number(dueYear || 0) || null,
+      Number(dueMonth || 0) || null,
+      Number(dueYear || 0) || null,
+      nowIso(),
+      Number(ruleId || 0),
+      Number(userId || 0)
+    );
+  }
+
+  function getProtectedSharedDebtRowsForTransactions(userId, transactionIds = []) {
+    const ids = Array.from(new Set((transactionIds || []).map(Number).filter(Boolean)));
+    if (!ids.length) return [];
+    return db.prepare(`
+      SELECT r.id, r.status, r.receiver_user_id, r.source_transaction_id,
+             r.description_snapshot, r.amount_cents,
+             COALESCE(u.name, u.email, r.receiver_name_snapshot, 'essa pessoa') AS receiver_name
+      FROM shared_debt_requests r
+      LEFT JOIN users u ON u.id = r.receiver_user_id
+      WHERE r.requester_user_id = ?
+        AND COALESCE(r.request_kind, 'card') = 'card'
+        AND r.source_transaction_id IN (${ids.map(() => '?').join(', ')})
+        AND COALESCE(r.status, 'pending') <> 'cancelled'
+      ORDER BY r.updated_at DESC, r.id DESC
+    `).all(Number(userId || 0), ...ids);
+  }
+
+  function insertAutomationMutationEvent(payload = {}) {
+    try {
+      db.prepare(`
+        INSERT INTO automation_mutation_events (
+          user_id, phone_e164, operation, entity_type, entity_id,
+          before_json, after_json, source_message_id, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        Number(payload.userId || 0) || null,
+        payload.phoneE164 || null,
+        payload.operation || 'unknown',
+        payload.entityType || 'transaction',
+        Number(payload.entityId || 0) || null,
+        safeJsonStringify(payload.before || null, 'null'),
+        safeJsonStringify(payload.after || null, 'null'),
+        payload.sourceMessageId || null,
+        nowIso()
+      );
+    } catch (error) {
+      // auditoria nao deve derrubar a operacao principal
+    }
+  }
+
   return {
     db,
     nowIso,
@@ -749,7 +976,16 @@ function createAutomationApiRepository() {
     getIdempotency,
     tryCreateIdempotency,
     finishIdempotency,
-    logRequest
+    logRequest,
+    getRecentPurchasesForAutomation,
+    getAllocationsForTransactions,
+    replaceAllocationsForTransaction,
+    updateTransactionForAutomation,
+    deleteTransactionsForAutomation,
+    insertRecurringException,
+    updateRecurringRuleForAutomation,
+    getProtectedSharedDebtRowsForTransactions,
+    insertAutomationMutationEvent
   };
 }
 

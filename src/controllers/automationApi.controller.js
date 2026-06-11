@@ -44,6 +44,50 @@ function createAutomationApiController(deps = {}) {
       return sendResult(res, service.createPurchaseFromAutomation(req.body || {}, metaFromRequest(req)));
     },
 
+    listRecentPurchases(req, res) {
+      return sendResult(res, service.listRecentPurchases(req.body || {}, metaFromRequest(req)));
+    },
+
+    preparePurchaseEdit(req, res) {
+      return sendResult(res, service.preparePurchaseEdit({
+        ...(req.body || {}),
+        purchaseId: req.params.id,
+        purchase_id: req.params.id
+      }, metaFromRequest(req)));
+    },
+
+    confirmPurchaseEdit(req, res) {
+      return sendResult(res, service.confirmPurchaseEdit({
+        ...(req.body || {}),
+        purchaseId: req.params.id,
+        purchase_id: req.params.id
+      }, metaFromRequest(req)));
+    },
+
+    preparePurchaseDelete(req, res) {
+      return sendResult(res, service.preparePurchaseDelete({
+        ...(req.body || {}),
+        purchaseId: req.params.id,
+        purchase_id: req.params.id
+      }, metaFromRequest(req)));
+    },
+
+    confirmPurchaseDelete(req, res) {
+      return sendResult(res, service.confirmPurchaseDelete({
+        ...(req.body || {}),
+        purchaseId: req.params.id,
+        purchase_id: req.params.id
+      }, metaFromRequest(req)));
+    },
+
+    reopenPurchaseParticipants(req, res) {
+      return sendResult(res, service.reopenParticipantsForPurchase({
+        ...(req.body || {}),
+        purchaseId: req.params.id,
+        purchase_id: req.params.id
+      }, metaFromRequest(req)));
+    },
+
     getSplitOptions(req, res) {
       return sendResult(res, service.getSplitOptionsForPurchase({
         ...(req.body || {}),

@@ -4,6 +4,7 @@ function runMigrations() {
     ensureMessageTemplateTables,
     syncMessageCatalogWithDatabase
   } = require('../src/messageCatalog');
+  const { WORKFLOW_DEFINITIONS } = require('../src/repositories/automationOperations.repository');
 
   function columnExists(table, col) {
     const cols = db.prepare(`PRAGMA table_info(${table})`).all().map(r => r.name);
@@ -1138,6 +1139,68 @@ function runMigrations() {
     sent_count INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
+
+  CREATE TABLE IF NOT EXISTS automation_workflow_registry (
+    workflow_key TEXT PRIMARY KEY,
+    family_key TEXT NOT NULL,
+    name TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    maintenance_mode INTEGER NOT NULL DEFAULT 0,
+    risk_level TEXT NOT NULL DEFAULT 'operational',
+    rate_limit_per_minute INTEGER NOT NULL DEFAULT 60,
+    notes TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS automation_user_preferences (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    workflow_key TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    updated_by_user_id INTEGER,
+    UNIQUE(user_id, workflow_key),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (updated_by_user_id) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS automation_intent_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    phone_e164 TEXT,
+    workflow_key TEXT,
+    family_key TEXT,
+    intent TEXT,
+    operation TEXT,
+    status_code INTEGER,
+    result_code TEXT,
+    channel TEXT NOT NULL DEFAULT 'whatsapp',
+    source_message_id TEXT,
+    request_meta_json TEXT,
+    response_meta_json TEXT,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS automation_error_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    phone_e164 TEXT,
+    workflow_key TEXT,
+    family_key TEXT,
+    operation TEXT,
+    status_code INTEGER,
+    result_code TEXT,
+    error_message TEXT,
+    error_stack TEXT,
+    request_meta_json TEXT,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
   `);
 
   db.exec(`
@@ -1633,7 +1696,60 @@ function runMigrations() {
 
   CREATE INDEX IF NOT EXISTS idx_automation_pdf_staging_user_status ON automation_pdf_import_staging(user_id, status, expires_at);
   CREATE INDEX IF NOT EXISTS idx_automation_pdf_staging_message ON automation_pdf_import_staging(user_id, source_message_id);
+  CREATE INDEX IF NOT EXISTS idx_automation_workflow_registry_family ON automation_workflow_registry(family_key, enabled, maintenance_mode);
+  CREATE INDEX IF NOT EXISTS idx_automation_user_preferences_user ON automation_user_preferences(user_id, enabled);
+  CREATE INDEX IF NOT EXISTS idx_automation_user_preferences_workflow ON automation_user_preferences(workflow_key, enabled);
+  CREATE INDEX IF NOT EXISTS idx_automation_intent_logs_created ON automation_intent_logs(created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_automation_intent_logs_workflow ON automation_intent_logs(workflow_key, status_code, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_automation_intent_logs_user ON automation_intent_logs(user_id, workflow_key, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_automation_error_events_created ON automation_error_events(created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_automation_error_events_workflow ON automation_error_events(workflow_key, created_at DESC);
   `);
+
+  const seedAutomationWorkflowRegistry = db.prepare(`
+    INSERT OR IGNORE INTO automation_workflow_registry (
+      workflow_key, family_key, name, title, description, enabled, maintenance_mode,
+      risk_level, rate_limit_per_minute, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
+  `);
+  const refreshAutomationWorkflowRegistry = db.prepare(`
+    UPDATE automation_workflow_registry
+    SET family_key = ?,
+        name = ?,
+        title = ?,
+        description = ?,
+        risk_level = ?,
+        rate_limit_per_minute = CASE WHEN COALESCE(rate_limit_per_minute, 0) <= 0 THEN ? ELSE rate_limit_per_minute END,
+        updated_at = COALESCE(updated_at, ?)
+    WHERE workflow_key = ?
+  `);
+  const automationWorkflowSeededAt = new Date().toISOString();
+  db.transaction(() => {
+    (WORKFLOW_DEFINITIONS || []).forEach((workflow) => {
+      seedAutomationWorkflowRegistry.run(
+        workflow.workflow_key,
+        workflow.family_key,
+        workflow.name,
+        workflow.title,
+        workflow.description,
+        Number(workflow.default_enabled ? 1 : 0),
+        workflow.risk_level,
+        Number(workflow.default_rate_limit_per_minute || 60),
+        automationWorkflowSeededAt,
+        automationWorkflowSeededAt
+      );
+      refreshAutomationWorkflowRegistry.run(
+        workflow.family_key,
+        workflow.name,
+        workflow.title,
+        workflow.description,
+        workflow.risk_level,
+        Number(workflow.default_rate_limit_per_minute || 60),
+        automationWorkflowSeededAt,
+        workflow.workflow_key
+      );
+    });
+  })();
 
   ensureIndexWithAliases(
     "CREATE INDEX IF NOT EXISTS idx_recurring_exceptions_rule_month ON recurring_exceptions(user_id, rule_id, year, month);",

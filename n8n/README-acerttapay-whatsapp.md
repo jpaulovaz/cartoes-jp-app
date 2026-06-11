@@ -763,3 +763,42 @@ POST /api/automation/v1/insights/preferences
 POST /api/automation/v1/insights/due-summaries
 POST /api/automation/v1/insights/preferences/:id/mark-sent
 ```
+
+## Etapa 10 — Operação, HMAC e manutenção
+
+A operação das automações agora fica em:
+
+```txt
+/admin/automation
+```
+
+Use essa área para:
+
+- desligar um workflow específico sem derrubar os demais;
+- colocar uma família em manutenção;
+- ajustar rate limit por workflow;
+- bloquear uma família para um usuário específico;
+- consultar logs por telefone, usuário, workflow e resultado;
+- rotacionar o Bearer token usado pelo N8N.
+
+### HMAC opcional/obrigatório
+
+O AcerttaPay aceita assinatura HMAC real. Por padrão ela pode ficar opcional durante homologação. Para exigir em produção:
+
+```txt
+AUTOMATION_HMAC_REQUIRED=1
+AUTOMATION_HMAC_SECRET=<segredo forte>
+```
+
+Cada HTTP Request do N8N deve enviar:
+
+```txt
+X-AcerttaPay-Timestamp: {{$now.toMillis()}}
+X-AcerttaPay-Signature: sha256=<HMAC_SHA256(timestamp + "." + raw_body)>
+```
+
+Enquanto `AUTOMATION_HMAC_REQUIRED=0`, os workflows existentes continuam funcionando apenas com Bearer token. Quando ligar o HMAC obrigatório, ajuste todos os HTTP Requests antes de ativar novamente em produção.
+
+### Rotação de token
+
+Depois de usar `/admin/automation` para rotacionar `AUTOMATION_API_TOKEN`, atualize a variável/credencial equivalente no N8N antes de testar os fluxos. Token velho vira chave sem fechadura.

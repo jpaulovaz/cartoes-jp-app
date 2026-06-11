@@ -329,6 +329,68 @@ const SETTING_DEFINITIONS = [
     autoReload: true
   },
   {
+    key: 'AUTOMATION_HMAC_REQUIRED',
+    section: 'automation',
+    label: 'Exigir assinatura HMAC',
+    helper: 'Quando ligado, toda chamada do N8N precisa enviar X-AcerttaPay-Timestamp e X-AcerttaPay-Signature.',
+    input: 'switch',
+    defaultValue: '0',
+    required: false,
+    autoReload: true
+  },
+  {
+    key: 'AUTOMATION_HMAC_MAX_SKEW_SECONDS',
+    section: 'automation',
+    label: 'Janela HMAC em segundos',
+    helper: 'Tempo máximo de diferença aceito entre o timestamp assinado e o relógio do servidor.',
+    input: 'number',
+    defaultValue: '300',
+    min: 30,
+    max: 3600,
+    step: 30,
+    required: false,
+    autoReload: true
+  },
+  {
+    key: 'AUTOMATION_DEFAULT_WORKFLOW_RATE_LIMIT_PER_MINUTE',
+    section: 'automation',
+    label: 'Limite padrão por workflow/minuto',
+    helper: 'Fallback usado quando um workflow ainda não tem limite próprio no painel de automações.',
+    input: 'number',
+    defaultValue: '120',
+    min: 1,
+    max: 5000,
+    step: 10,
+    required: false,
+    autoReload: true
+  },
+  {
+    key: 'AUTOMATION_LOG_RETENTION_DAYS',
+    section: 'automation',
+    label: 'Retenção de logs gerais',
+    helper: 'Dias mantidos para logs técnicos pesquisáveis de automação.',
+    input: 'number',
+    defaultValue: '90',
+    min: 1,
+    max: 3650,
+    step: 1,
+    required: false,
+    autoReload: true
+  },
+  {
+    key: 'AUTOMATION_ERROR_RETENTION_DAYS',
+    section: 'automation',
+    label: 'Retenção de erros',
+    helper: 'Dias mantidos para eventos de erro da automação.',
+    input: 'number',
+    defaultValue: '180',
+    min: 1,
+    max: 3650,
+    step: 1,
+    required: false,
+    autoReload: true
+  },
+  {
     key: 'WELCOME_EMAIL_ENABLED',
     section: 'email',
     label: 'Enviar boas-vindas por e-mail',

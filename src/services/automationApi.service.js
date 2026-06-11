@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const dayjs = require('dayjs');
 const { createAutomationApiRepository } = require('../repositories/automationApi.repository');
+const { createAutomationOperationsRepository } = require('../repositories/automationOperations.repository');
 const { createPurchaseCreationService, PurchaseCreationError } = require('./purchaseCreation.service');
 const { DEFAULT_PHONE_COUNTRY, normalizePhoneForWhatsapp } = require('../phone');
 const { formatBRLFromCents } = require('../utils');
@@ -17,6 +18,7 @@ class AutomationApiError extends Error {
 
 const rateLimitBuckets = new Map();
 const keyRateLimitBuckets = new Map();
+const workflowRateLimitBuckets = new Map();
 
 function safeJsonParse(value, fallback = null) {
   if (!value) return fallback;
@@ -186,6 +188,7 @@ function resolveCardByHint(cards = [], hint = '') {
 
 function createAutomationApiService(deps = {}) {
   const repository = deps.repository || createAutomationApiRepository();
+  const operationsRepository = deps.operationsRepository || createAutomationOperationsRepository();
   const purchaseService = deps.purchaseService || createPurchaseCreationService({ repository });
 
   function isEnabled() {
@@ -205,7 +208,73 @@ function createAutomationApiService(deps = {}) {
     }
   }
 
+  function getRequestIp(req) {
+    return String(req.ip || req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
+  }
+
+  function getAutomationRequestContext(req) {
+    return operationsRepository.inferWorkflowFromPath(req.path || req.originalUrl || '', req.method || '');
+  }
+
+  function getHmacSecret() {
+    return String(repository.getAppSetting('AUTOMATION_HMAC_SECRET', '') || '').trim();
+  }
+
+  function isHmacRequired() {
+    return repository.getBooleanSetting('AUTOMATION_HMAC_REQUIRED', false);
+  }
+
+  function verifyHmacSignature(req) {
+    const secret = getHmacSecret();
+    const signatureHeader = String(req.get('x-acerttapay-signature') || req.get('x-signature') || '').trim();
+    const timestamp = String(req.get('x-acerttapay-timestamp') || req.get('x-timestamp') || '').trim();
+    const required = isHmacRequired();
+
+    if (!required && !signatureHeader) return { ok: true, skipped: true };
+    if (!secret) {
+      return { ok: false, statusCode: 503, code: 'AUTOMATION_HMAC_SECRET_MISSING', message: 'Segredo HMAC não configurado.' };
+    }
+    if (!signatureHeader || !timestamp) {
+      return { ok: false, statusCode: 401, code: 'HMAC_MISSING', message: 'Assinatura HMAC ausente.' };
+    }
+
+    const timestampMs = Number(timestamp) > 9999999999 ? Number(timestamp) : Number(timestamp) * 1000;
+    const maxSkewSeconds = Math.max(30, repository.getIntegerSetting('AUTOMATION_HMAC_MAX_SKEW_SECONDS', 300));
+    if (!Number.isFinite(timestampMs) || Math.abs(Date.now() - timestampMs) > maxSkewSeconds * 1000) {
+      return { ok: false, statusCode: 401, code: 'HMAC_TIMESTAMP_INVALID', message: 'Timestamp da assinatura fora da janela permitida.' };
+    }
+
+    const rawBody = typeof req.rawBody === 'string' ? req.rawBody : JSON.stringify(req.body || {});
+    const signedPayload = `${timestamp}.${rawBody}`;
+    const expected = crypto.createHmac('sha256', secret).update(signedPayload).digest('hex');
+    const provided = signatureHeader.replace(/^sha256=/i, '').trim();
+    if (!safeCompare(provided, expected)) {
+      return { ok: false, statusCode: 401, code: 'HMAC_INVALID', message: 'Assinatura HMAC inválida.' };
+    }
+    return { ok: true };
+  }
+
+  function verifyWorkflowAvailability(context = {}) {
+    const workflow = operationsRepository.getWorkflowByKey(context.workflowKey || 'automation-api');
+    if (!workflow) return { ok: true, workflow: null };
+    if (Number(workflow.enabled || 0) === 0) {
+      return { ok: false, statusCode: 503, code: 'WORKFLOW_DISABLED', message: 'Essa família de automação está desligada no AcerttaPay.' };
+    }
+    if (Number(workflow.maintenance_mode || 0) !== 0) {
+      return { ok: false, statusCode: 503, code: 'WORKFLOW_MAINTENANCE', message: 'Esse fluxo está em manutenção. Nada de bagunçar o caixa agora.' };
+    }
+    try {
+      checkWorkflowRateLimit(workflow.workflow_key, workflow.rate_limit_per_minute || repository.getIntegerSetting('AUTOMATION_DEFAULT_WORKFLOW_RATE_LIMIT_PER_MINUTE', 120));
+    } catch (error) {
+      return { ok: false, statusCode: error.statusCode || 429, code: error.code || 'WORKFLOW_RATE_LIMITED', message: error.message };
+    }
+    return { ok: true, workflow };
+  }
+
   function verifyAutomationRequest(req) {
+    const context = getAutomationRequestContext(req);
+    req.automationContext = context;
+
     if (!isEnabled()) {
       return { ok: false, statusCode: 503, code: 'AUTOMATION_DISABLED', message: 'A API de automações está desligada.' };
     }
@@ -215,11 +284,17 @@ function createAutomationApiService(deps = {}) {
       return { ok: false, statusCode: 503, code: 'AUTOMATION_TOKEN_MISSING', message: 'Token da API de automações não configurado.' };
     }
 
+    const workflowCheck = verifyWorkflowAvailability(context);
+    if (!workflowCheck.ok) return workflowCheck;
+
     const header = String(req.get('authorization') || '').trim();
     const provided = header.toLowerCase().startsWith('bearer ') ? header.slice(7).trim() : '';
     if (!provided || !safeCompare(provided, expected)) {
       return { ok: false, statusCode: 401, code: 'UNAUTHORIZED', message: 'Token de automação inválido.' };
     }
+
+    const hmacCheck = verifyHmacSignature(req);
+    if (!hmacCheck.ok) return hmacCheck;
 
     try {
       checkKeyRateLimit(provided);
@@ -232,13 +307,13 @@ function createAutomationApiService(deps = {}) {
       .map((ip) => ip.trim())
       .filter(Boolean);
     if (allowedIps.length) {
-      const requestIp = String(req.ip || req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
+      const requestIp = getRequestIp(req);
       if (!allowedIps.includes(requestIp)) {
         return { ok: false, statusCode: 403, code: 'IP_NOT_ALLOWED', message: 'Origem não autorizada para a API de automações.' };
       }
     }
 
-    return { ok: true };
+    return { ok: true, workflowKey: context.workflowKey, familyKey: context.familyKey };
   }
 
   function assertBucketRateLimit({ bucketMap, key, limit, message }) {
@@ -279,6 +354,107 @@ function createAutomationApiService(deps = {}) {
       limit,
       message: 'Muita mensagem seguida desse número. Segurei um minutinho para não virar bagunça.'
     });
+  }
+
+  function checkWorkflowRateLimit(workflowKey, limit) {
+    const safeWorkflowKey = String(workflowKey || 'automation-api').trim();
+    assertBucketRateLimit({
+      bucketMap: workflowRateLimitBuckets,
+      key: safeWorkflowKey,
+      limit: Math.max(1, Number(limit || 60) || 60),
+      message: 'Esse fluxo recebeu requisições demais em pouco tempo. Segurei para não virar efeito dominó.'
+    });
+  }
+
+  function getRequestMetaFromHttp(req, context = {}) {
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    return {
+      method: req.method,
+      path: req.path || req.originalUrl || '',
+      workflow_key: context.workflowKey || null,
+      family_key: context.familyKey || null,
+      ip_address: getRequestIp(req),
+      idempotency_key: req.get('Idempotency-Key') || req.get('X-Idempotency-Key') || '',
+      source_message_id: body.source?.message_id || body.message_id || body.source_message_id || null
+    };
+  }
+
+  function verifyWorkflowUserPreference(req) {
+    const context = req.automationContext || getAutomationRequestContext(req);
+    if (!context.workflowKey || context.workflowKey === 'automation-api') return { ok: true };
+    const payload = req.body && typeof req.body === 'object' ? req.body : {};
+    const phone = operationsRepository.extractPhoneFromPayload(payload) || String(req.query?.phone || '').trim();
+    if (!phone) return { ok: true };
+    const normalized = normalizeAutomationPhone(phone);
+    if (!normalized.ok) return { ok: true };
+    const authorization = repository.getAuthorizationByPhone(normalized.e164, normalized.whatsappNumber);
+    if (!authorization || !authorization.user_id) return { ok: true };
+    if (!operationsRepository.isUserWorkflowEnabled(authorization.user_id, context.workflowKey)) {
+      return {
+        ok: false,
+        statusCode: 403,
+        code: 'AUTOMATION_USER_WORKFLOW_DISABLED',
+        message: 'Essa função do WhatsApp está desligada para este usuário.'
+      };
+    }
+    return { ok: true };
+  }
+
+  function recordAutomationHttpEvent(req, responsePayload = {}, statusCode = 200) {
+    const context = req.automationContext || getAutomationRequestContext(req);
+    const payload = req.body && typeof req.body === 'object' ? req.body : {};
+    const phone = operationsRepository.extractPhoneFromPayload(payload) || null;
+    let resolvedUser = null;
+    let phoneE164 = null;
+    if (phone) {
+      const normalized = normalizeAutomationPhone(phone);
+      if (normalized.ok) {
+        phoneE164 = normalized.e164;
+        resolvedUser = operationsRepository.findAutomationUserByPhone(normalized.e164);
+      }
+    }
+    const resultCode = responsePayload?.code || (Number(statusCode || 0) >= 400 ? 'HTTP_ERROR' : 'OK');
+    const intent = payload.intent || payload.reply?.intent || responsePayload?.intent || null;
+    const sourceMessageId = payload.source?.message_id || payload.message_id || payload.source_message_id || null;
+    const requestMeta = getRequestMetaFromHttp(req, context);
+    const responseMeta = {
+      ok: responsePayload?.ok,
+      code: resultCode,
+      statusCode,
+      conversation_state: responsePayload?.conversation?.state || null
+    };
+
+    try {
+      operationsRepository.logIntentEvent({
+        userId: resolvedUser?.user_id || null,
+        phoneE164,
+        workflowKey: context.workflowKey,
+        familyKey: context.familyKey,
+        intent,
+        operation: context.operation,
+        statusCode,
+        resultCode,
+        channel: payload.source?.channel || payload.channel || 'whatsapp',
+        sourceMessageId,
+        requestMeta,
+        responseMeta
+      });
+      if (Number(statusCode || 0) >= 400 || responsePayload?.ok === false) {
+        operationsRepository.logErrorEvent({
+          userId: resolvedUser?.user_id || null,
+          phoneE164,
+          workflowKey: context.workflowKey,
+          familyKey: context.familyKey,
+          operation: context.operation,
+          statusCode,
+          resultCode,
+          errorMessage: responsePayload?.message || responsePayload?.error || resultCode,
+          requestMeta
+        });
+      }
+    } catch (error) {
+      // Observabilidade nunca deve quebrar o fluxo financeiro.
+    }
   }
 
   function resolveAuthorizedPhone(phone) {
@@ -1970,6 +2146,9 @@ function createAutomationApiService(deps = {}) {
   return {
     normalizeAutomationPhone,
     verifyAutomationRequest,
+    verifyWorkflowUserPreference,
+    recordAutomationHttpEvent,
+    getAutomationRequestContext,
     resolveWhatsapp,
     createPurchaseFromAutomation,
     getSplitOptionsForPurchase,

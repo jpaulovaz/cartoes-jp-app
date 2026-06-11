@@ -19,7 +19,9 @@ function createAutomationApiRouter(deps = {}) {
   const pdfImportsController = createAutomationPdfImportsController(deps);
   const intelligenceController = createAutomationIntelligenceController(deps);
 
+  router.use(controller.observeRequest);
   router.use(controller.authenticate);
+  router.use(controller.enforceUserPreferences);
   router.get('/health', controller.health);
   router.post('/whatsapp/resolve', controller.resolveWhatsapp);
   router.post('/purchases', controller.createPurchase);

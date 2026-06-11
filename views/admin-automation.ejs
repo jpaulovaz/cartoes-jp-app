@@ -1,0 +1,280 @@
+<%- include("partials/header", { title: "AcerttaPay | Automação WhatsApp" }) %>
+
+<%
+  const workflowsList = Array.isArray(workflows) ? workflows : [];
+  const usersList = Array.isArray(users) ? users : [];
+  const logRows = Array.isArray(logs) ? logs : [];
+  const errorRows = Array.isArray(errors) ? errors : [];
+  const pendingRows = Array.isArray(pendingConversations) ? pendingConversations : [];
+  const dashboardStats = stats || {};
+  const filtersState = filters || {};
+  const security = securityState || {};
+  const active = typeof activePanel !== 'undefined' && activePanel ? activePanel : 'overview';
+  const badgeByRisk = {
+    low: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200',
+    medium: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-200',
+    high: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200',
+    critical: 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-200',
+    operational: 'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900/60 dark:bg-violet-950/30 dark:text-violet-200'
+  };
+  const panelClassByHealth = {
+    success: 'border-emerald-200 bg-emerald-50/80 dark:border-emerald-900/60 dark:bg-emerald-950/20',
+    warning: 'border-amber-200 bg-amber-50/80 dark:border-amber-900/60 dark:bg-amber-950/20',
+    danger: 'border-rose-200 bg-rose-50/80 dark:border-rose-900/60 dark:bg-rose-950/20',
+    neutral: 'border-slate-200 bg-slate-50/90 dark:border-slate-700 dark:bg-slate-900/40'
+  };
+  function riskLabel(value) {
+    return ({ low: 'baixo', medium: 'médio', high: 'alto', critical: 'crítico', operational: 'operação' })[value] || 'operação';
+  }
+  function rowDate(value) {
+    if (!value) return '—';
+    try {
+      return new Date(value).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    } catch (_) {
+      return value;
+    }
+  }
+  function statusTone(statusCode, resultCode) {
+    const code = Number(statusCode || 0);
+    const result = String(resultCode || '').toUpperCase();
+    if (code >= 500 || result.includes('ERROR')) return 'danger';
+    if (code >= 400 || result.includes('RATE') || result.includes('UNAUTHORIZED') || result.includes('DISABLED')) return 'warning';
+    return 'success';
+  }
+%>
+
+<div class="op-page-shell max-w-[1500px] mx-auto space-y-5 pb-24">
+  <section class="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+    <div class="px-6 py-6 sm:px-8 flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+      <div class="max-w-4xl">
+        <span class="text-[11px] font-bold uppercase tracking-[0.18em] text-violet-500 dark:text-violet-300">Automação WhatsApp</span>
+        <h1 class="mt-2 text-3xl font-semibold tracking-tight text-slate-900 dark:text-white">Governança dos workflows</h1>
+        <p class="mt-3 max-w-3xl text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+          Aqui você vê saúde, logs, preferências por usuário e interruptores de manutenção das automações. O N8N conversa, mas quem segura a chave do cofre continua sendo o AcerttaPay.
+        </p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <a href="/admin" class="inline-flex items-center justify-center rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-900/40">Voltar ao admin</a>
+        <a href="/admin/automation#logs" class="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 dark:bg-blue-500 dark:hover:bg-blue-400">Ver logs</a>
+      </div>
+    </div>
+  </section>
+
+  <% if (typeof error !== 'undefined' && error) { %>
+    <div class="op-inline-alert op-inline-alert--warning">
+      <div class="op-inline-alert__icon"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
+      <div><div class="op-inline-alert__title">Revise antes de continuar</div><div class="op-inline-alert__text"><%= error %></div></div>
+    </div>
+  <% } %>
+
+  <% if (typeof success !== 'undefined' && success) { %>
+    <div class="op-inline-alert op-inline-alert--success">
+      <div class="op-inline-alert__icon"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></div>
+      <div><div class="op-inline-alert__title">Automação atualizada</div><div class="op-inline-alert__text"><%= success %></div></div>
+    </div>
+  <% } %>
+
+  <% if (typeof rotatedToken !== 'undefined' && rotatedToken) { %>
+    <section class="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm dark:border-amber-900/60 dark:bg-amber-950/30">
+      <div class="text-xs font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-200">Token novo — aparece só agora</div>
+      <p class="mt-2 text-sm font-medium text-amber-800 dark:text-amber-100">Copie e atualize o N8N. Depois que sair desta tela, o segredo volta para a toca.</p>
+      <code class="mt-4 block overflow-x-auto rounded-xl border border-amber-200 bg-white px-4 py-3 text-xs font-mono text-amber-900 dark:border-amber-900/60 dark:bg-slate-950 dark:text-amber-100"><%= rotatedToken %></code>
+    </section>
+  <% } %>
+
+  <section id="overview" class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+      <div class="text-xs font-black uppercase tracking-[0.14em] text-slate-400">Workflows</div>
+      <div class="mt-3 text-3xl font-black text-slate-900 dark:text-white"><%= dashboardStats.workflowsEnabled || 0 %>/<%= dashboardStats.workflowsTotal || 0 %></div>
+      <p class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400"><%= dashboardStats.workflowsMaintenance || 0 %> em manutenção.</p>
+    </article>
+    <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+      <div class="text-xs font-black uppercase tracking-[0.14em] text-slate-400">WhatsApp autorizado</div>
+      <div class="mt-3 text-3xl font-black text-slate-900 dark:text-white"><%= dashboardStats.authorizedPhones || 0 %></div>
+      <p class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400"><%= dashboardStats.disabledPhones || 0 %> número(s) desligados.</p>
+    </article>
+    <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+      <div class="text-xs font-black uppercase tracking-[0.14em] text-slate-400">Requisições 24h</div>
+      <div class="mt-3 text-3xl font-black text-slate-900 dark:text-white"><%= dashboardStats.requests24h || 0 %></div>
+      <p class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400"><%= dashboardStats.errors24h || 0 %> erro(s) registrados.</p>
+    </article>
+    <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+      <div class="text-xs font-black uppercase tracking-[0.14em] text-slate-400">Conversas pendentes</div>
+      <div class="mt-3 text-3xl font-black text-slate-900 dark:text-white"><%= dashboardStats.openConversations || 0 %></div>
+      <p class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400"><%= dashboardStats.mutations24h || 0 %> mutação(ões) nas últimas 24h.</p>
+    </article>
+  </section>
+
+  <section id="security" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <div>
+        <span class="text-xs font-black uppercase tracking-[0.18em] text-rose-500 dark:text-rose-300">Hardening</span>
+        <h2 class="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Segurança operacional</h2>
+        <p class="mt-2 max-w-3xl text-sm font-medium leading-relaxed text-slate-600 dark:text-slate-300">Bearer token, HMAC, IPs permitidos e retenção ficam centralizados. Segurança sem caça ao tesouro.</p>
+      </div>
+      <div class="grid gap-2 sm:grid-cols-2 lg:min-w-[420px]">
+        <span class="rounded-xl border px-3 py-2 text-xs font-black uppercase tracking-[0.12em] <%= security.tokenConfigured ? badgeByRisk.low : badgeByRisk.high %>"><%= security.tokenConfigured ? 'Token configurado' : 'Token ausente' %></span>
+        <span class="rounded-xl border px-3 py-2 text-xs font-black uppercase tracking-[0.12em] <%= security.hmacRequired ? badgeByRisk.high : badgeByRisk.medium %>"><%= security.hmacRequired ? 'HMAC obrigatório' : 'HMAC opcional' %></span>
+        <span class="rounded-xl border px-3 py-2 text-xs font-black uppercase tracking-[0.12em] <%= security.hmacSecretConfigured ? badgeByRisk.low : badgeByRisk.medium %>"><%= security.hmacSecretConfigured ? 'Segredo HMAC pronto' : 'Segredo HMAC vazio' %></span>
+        <span class="rounded-xl border px-3 py-2 text-xs font-black uppercase tracking-[0.12em] <%= security.allowedIps ? badgeByRisk.low : badgeByRisk.medium %>"><%= security.allowedIps ? 'IP restrito' : 'IP livre com token' %></span>
+      </div>
+    </div>
+
+    <div class="mt-6 grid gap-4 lg:grid-cols-2">
+      <form action="/admin/automation/tokens/rotate" method="POST" class="rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-900/40">
+        <h3 class="text-lg font-black text-slate-900 dark:text-white">Rotacionar token</h3>
+        <p class="mt-2 text-sm font-medium text-slate-600 dark:text-slate-300">Gera um novo Bearer token. Depois disso, todos os workflows precisam receber o segredo novo.</p>
+        <label class="mt-4 block text-sm font-black text-slate-700 dark:text-slate-200">Confirmação forte</label>
+        <input name="confirmation" placeholder="rotacionar token" class="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm dark:border-slate-600 dark:bg-slate-950 dark:text-white" />
+        <button type="submit" class="mt-4 inline-flex rounded-xl bg-rose-600 px-4 py-3 text-sm font-black text-white hover:bg-rose-700">Rotacionar token</button>
+      </form>
+
+      <form action="/admin/automation/logs/prune" method="POST" class="rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-900/40">
+        <h3 class="text-lg font-black text-slate-900 dark:text-white">Retenção de logs</h3>
+        <p class="mt-2 text-sm font-medium text-slate-600 dark:text-slate-300">Limpa logs técnicos antigos. Mutação financeira continua preservada separadamente para auditoria.</p>
+        <div class="mt-4 grid gap-3 sm:grid-cols-2">
+          <label class="block text-sm font-black text-slate-700 dark:text-slate-200">Logs gerais/dias
+            <input name="request_days" type="number" min="1" max="3650" value="<%= security.logRetentionDays || 90 %>" class="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm dark:border-slate-600 dark:bg-slate-950 dark:text-white" />
+          </label>
+          <label class="block text-sm font-black text-slate-700 dark:text-slate-200">Erros/dias
+            <input name="error_days" type="number" min="1" max="3650" value="<%= security.errorRetentionDays || 180 %>" class="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm dark:border-slate-600 dark:bg-slate-950 dark:text-white" />
+          </label>
+        </div>
+        <button type="submit" class="mt-4 inline-flex rounded-xl border border-slate-300 px-4 py-3 text-sm font-black text-slate-700 hover:bg-white dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-950">Limpar logs antigos</button>
+      </form>
+    </div>
+  </section>
+
+  <section id="workflows" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+    <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <span class="text-xs font-black uppercase tracking-[0.18em] text-sky-500 dark:text-sky-300">Workflows</span>
+        <h2 class="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Interruptores por família</h2>
+      </div>
+      <span class="text-sm font-medium text-slate-500 dark:text-slate-400">Desligar uma família não derruba as outras.</span>
+    </div>
+    <div class="mt-6 grid gap-4 xl:grid-cols-2">
+      <% workflowsList.forEach((workflow) => { const risk = workflow.risk_level || 'operational'; %>
+        <form action="/admin/automation/workflows/<%= workflow.workflow_key %>/update" method="POST" class="rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-900/40">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="badge"><%= workflow.workflow_key %></span>
+                <span class="rounded-full border px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] <%= badgeByRisk[risk] || badgeByRisk.operational %>"><%= riskLabel(risk) %></span>
+                <span class="rounded-full border px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] <%= Number(workflow.maintenance_mode || 0) ? badgeByRisk.high : (Number(workflow.enabled || 0) ? badgeByRisk.low : badgeByRisk.medium) %>"><%= Number(workflow.maintenance_mode || 0) ? 'manutenção' : (Number(workflow.enabled || 0) ? 'ativo' : 'desligado') %></span>
+              </div>
+              <h3 class="mt-3 text-lg font-black text-slate-900 dark:text-white"><%= workflow.title || workflow.name %></h3>
+              <p class="mt-2 text-sm font-medium leading-relaxed text-slate-600 dark:text-slate-300"><%= workflow.description %></p>
+            </div>
+          </div>
+          <div class="mt-4 grid gap-3 sm:grid-cols-3">
+            <label class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black dark:border-slate-700 dark:bg-slate-950"><input type="checkbox" name="enabled" value="1" <%= Number(workflow.enabled || 0) ? 'checked' : '' %> /> Ativo</label>
+            <label class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black dark:border-slate-700 dark:bg-slate-950"><input type="checkbox" name="maintenance_mode" value="1" <%= Number(workflow.maintenance_mode || 0) ? 'checked' : '' %> /> Manutenção</label>
+            <label class="text-sm font-black text-slate-700 dark:text-slate-200">Req/min
+              <input type="number" name="rate_limit_per_minute" min="1" max="5000" value="<%= workflow.rate_limit_per_minute || 60 %>" class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-950 dark:text-white" />
+            </label>
+          </div>
+          <label class="mt-4 block text-sm font-black text-slate-700 dark:text-slate-200">Notas internas
+            <input name="notes" value="<%= workflow.notes || '' %>" placeholder="ex.: pausa para manutenção da Evolution" class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-950 dark:text-white" />
+          </label>
+          <button type="submit" class="mt-4 inline-flex rounded-xl bg-slate-900 px-4 py-3 text-sm font-black text-white hover:bg-slate-800 dark:bg-blue-500 dark:hover:bg-blue-400">Salvar workflow</button>
+        </form>
+      <% }) %>
+    </div>
+  </section>
+
+  <section id="users" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+    <div>
+      <span class="text-xs font-black uppercase tracking-[0.18em] text-emerald-500 dark:text-emerald-300">Usuários</span>
+      <h2 class="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Preferências por pessoa</h2>
+      <p class="mt-2 text-sm font-medium text-slate-600 dark:text-slate-300">Use para liberar consultas, mas segurar ações sensíveis de um usuário específico. Controle fino, sem martelo grande.</p>
+    </div>
+    <div class="mt-6 space-y-4">
+      <% usersList.forEach((item) => { %>
+        <form action="/admin/automation/users/<%= item.id %>/preferences" method="POST" class="rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-900/40">
+          <div class="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <h3 class="text-lg font-black text-slate-900 dark:text-white"><%= item.name || item.email %></h3>
+              <p class="text-sm font-medium text-slate-500 dark:text-slate-400"><%= item.email %> · <%= item.phone_e164 || 'WhatsApp ainda não autorizado' %></p>
+            </div>
+            <span class="rounded-full border px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] <%= Number(item.whatsapp_enabled || 0) ? badgeByRisk.low : badgeByRisk.medium %>"><%= Number(item.whatsapp_enabled || 0) ? 'WhatsApp ativo' : 'WhatsApp off' %></span>
+          </div>
+          <div class="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <% item.preferences.forEach((pref) => { %>
+              <label class="rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"><input type="checkbox" name="workflow_<%= pref.workflow_key %>" value="1" <%= pref.enabled ? 'checked' : '' %> /> <%= pref.workflow_key %> · <%= pref.title %></label>
+            <% }) %>
+          </div>
+          <button type="submit" class="mt-4 inline-flex rounded-xl border border-slate-300 px-4 py-3 text-sm font-black text-slate-700 hover:bg-white dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-950">Salvar preferências</button>
+        </form>
+      <% }) %>
+    </div>
+  </section>
+
+  <section id="conversations" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+    <div>
+      <span class="text-xs font-black uppercase tracking-[0.18em] text-amber-500 dark:text-amber-300">Conversas pendentes</span>
+      <h2 class="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Estados aguardando resposta</h2>
+    </div>
+    <div class="mt-6 overflow-x-auto">
+      <table class="min-w-full text-sm">
+        <thead class="text-left text-xs font-black uppercase tracking-[0.12em] text-slate-400"><tr><th class="py-2 pr-4">Usuário</th><th class="py-2 pr-4">Telefone</th><th class="py-2 pr-4">Estado</th><th class="py-2 pr-4">Expira</th></tr></thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+          <% if (!pendingRows.length) { %><tr><td colspan="4" class="py-4 text-slate-500">Nenhuma conversa pendente agora. O zap está calminho.</td></tr><% } %>
+          <% pendingRows.forEach((row) => { %><tr><td class="py-3 pr-4"><%= row.user_name || row.user_email || row.user_id || '—' %></td><td class="py-3 pr-4"><%= row.phone_e164 || '—' %></td><td class="py-3 pr-4"><code><%= row.state %></code></td><td class="py-3 pr-4"><%= rowDate(row.expires_at) %></td></tr><% }) %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="logs" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+    <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <div>
+        <span class="text-xs font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300">Logs</span>
+        <h2 class="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Trilha pesquisável</h2>
+      </div>
+      <form method="GET" action="/admin/automation#logs" class="grid gap-2 sm:grid-cols-2 lg:grid-cols-5 lg:min-w-[760px]">
+        <input name="q" value="<%= filtersState.q || '' %>" placeholder="buscar" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-950 dark:text-white" />
+        <select name="workflow_key" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-950 dark:text-white"><option value="all">Todos</option><% workflowsList.forEach((workflow) => { %><option value="<%= workflow.workflow_key %>" <%= filtersState.workflow_key === workflow.workflow_key ? 'selected' : '' %>><%= workflow.workflow_key %></option><% }) %></select>
+        <select name="status" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-950 dark:text-white"><option value="all">Todos</option><option value="success" <%= filtersState.status === 'success' ? 'selected' : '' %>>Sucesso</option><option value="error" <%= filtersState.status === 'error' ? 'selected' : '' %>>Erros</option></select>
+        <input name="limit" type="number" min="1" max="250" value="<%= filtersState.limit || 50 %>" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-950 dark:text-white" />
+        <button type="submit" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-black text-white dark:bg-blue-500">Filtrar</button>
+      </form>
+    </div>
+    <div class="mt-6 overflow-x-auto">
+      <table class="min-w-full text-sm">
+        <thead class="text-left text-xs font-black uppercase tracking-[0.12em] text-slate-400"><tr><th class="py-2 pr-4">Data</th><th class="py-2 pr-4">Workflow</th><th class="py-2 pr-4">Operação</th><th class="py-2 pr-4">Resultado</th><th class="py-2 pr-4">Usuário</th><th class="py-2 pr-4">Telefone</th></tr></thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+          <% if (!logRows.length) { %><tr><td colspan="6" class="py-4 text-slate-500">Ainda não há logs nessa busca.</td></tr><% } %>
+          <% logRows.forEach((row) => { const tone = statusTone(row.status_code, row.result_code); %>
+            <tr>
+              <td class="py-3 pr-4 whitespace-nowrap"><%= rowDate(row.created_at) %></td>
+              <td class="py-3 pr-4"><span class="badge"><%= row.workflow_key || '—' %></span></td>
+              <td class="py-3 pr-4"><code><%= row.operation || row.intent || '—' %></code></td>
+              <td class="py-3 pr-4"><span class="rounded-full border px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] <%= tone === 'danger' ? badgeByRisk.high : (tone === 'warning' ? badgeByRisk.medium : badgeByRisk.low) %>"><%= row.result_code || row.status_code || 'OK' %></span></td>
+              <td class="py-3 pr-4"><%= row.user_name || row.user_email || row.user_id || '—' %></td>
+              <td class="py-3 pr-4"><%= row.phone_e164 || '—' %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+    <div>
+      <span class="text-xs font-black uppercase tracking-[0.18em] text-rose-500 dark:text-rose-300">Últimos erros</span>
+      <h2 class="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Falhas recentes</h2>
+    </div>
+    <div class="mt-6 grid gap-3">
+      <% if (!errorRows.length) { %><div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200">Sem erros recentes. Hoje o robô tomou café.</div><% } %>
+      <% errorRows.forEach((row) => { %>
+        <article class="rounded-2xl border border-rose-200 bg-rose-50/80 p-4 text-sm dark:border-rose-900/60 dark:bg-rose-950/20">
+          <div class="flex flex-wrap gap-2"><span class="badge"><%= row.workflow_key || '—' %></span><span class="badge"><%= row.result_code || row.status_code || 'erro' %></span><span class="badge"><%= rowDate(row.created_at) %></span></div>
+          <p class="mt-3 font-medium text-rose-800 dark:text-rose-100"><%= row.error_message || 'Erro sem mensagem.' %></p>
+        </article>
+      <% }) %>
+    </div>
+  </section>
+</div>
+
+<%- include("partials/footer") %>

@@ -3,6 +3,7 @@ const { createSecurityRouter } = require('./security.routes');
 const { createNotificationsRouter } = require('./notifications.routes');
 const { createAdminMessagesRouter } = require('./adminMessages.routes');
 const { createAdminCoreRouter } = require('./adminCore.routes');
+const { createAutomationOperationsRouter } = require('./automationOperations.routes');
 const { createCardsRouter } = require('./cards.routes');
 const { createFinancesRouter } = require('./finances.routes');
 const { createImportRouter } = require('./import.routes');
@@ -27,6 +28,10 @@ function registerNotificationsRoutes(app, deps = {}) {
 
 function registerAdminCoreRoutes(app, deps = {}) {
   app.use('/admin', createAdminCoreRouter(deps));
+}
+
+function registerAutomationOperationsRoutes(app, deps = {}) {
+  app.use('/admin', createAutomationOperationsRouter(deps));
 }
 
 function registerAdminMessagesRoutes(app, deps = {}) {
@@ -74,6 +79,7 @@ module.exports = {
   registerSecurityRoutes,
   registerNotificationsRoutes,
   registerAdminCoreRoutes,
+  registerAutomationOperationsRoutes,
   registerAdminMessagesRoutes,
   registerCardsRoutes,
   registerFinancesRoutes,
@@ -88,6 +94,7 @@ module.exports = {
   createSecurityRouter,
   createNotificationsRouter,
   createAdminCoreRouter,
+  createAutomationOperationsRouter,
   createAdminMessagesRouter,
   createCardsRouter,
   createFinancesRouter,

@@ -141,7 +141,7 @@ const {
   buildImportPreviewFromBuffer,
   applyImportPreview
 } = require('./src/messageCsvService');
-const { registerAuthRoutes, registerSecurityRoutes, registerNotificationsRoutes, registerAdminCoreRoutes, registerAdminMessagesRoutes, registerAutomationApiRoutes, registerCardsRoutes, registerFinancesRoutes, registerImportRoutes, registerSummaryRoutes, registerSharedDebtsRoutes, registerPeopleRoutes, registerSocialShareRoutes, registerMonthlyEmailSummaryRoutes } = require('./src/routes');
+const { registerAuthRoutes, registerSecurityRoutes, registerNotificationsRoutes, registerAdminCoreRoutes, registerAutomationOperationsRoutes, registerAdminMessagesRoutes, registerAutomationApiRoutes, registerCardsRoutes, registerFinancesRoutes, registerImportRoutes, registerSummaryRoutes, registerSharedDebtsRoutes, registerPeopleRoutes, registerSocialShareRoutes, registerMonthlyEmailSummaryRoutes } = require('./src/routes');
 
 // Migração oficial executada explicitamente pelo bootstrap do runtime.
 // Seed opcional permanece fora do bootstrap automático.
@@ -2911,6 +2911,14 @@ function formatAdminMessageUpdatedAt(value) {
   return parsed.format('DD/MM/YYYY [às] HH:mm');
 }
 
+
+function renderAutomationAdmin(res, state = {}) {
+  return safeRenderView(res, 'admin-automation', {
+    title: 'AcerttaPay | Automação WhatsApp',
+    ...state
+  });
+}
+
 function renderAdminMessages(res, { error = null, success = null, filters = {}, openMessageKey = '', draftByMessageKey = {}, importPreview = null } = {}) {
   const pageData = listMessageTemplatesForAdmin(filters, { draftByMessageKey });
 
@@ -4298,7 +4306,12 @@ function handleFriendlyErrorResponse(req, res, error, { defaultMessage = null, f
 }
 
 // --- MIDDLEWARES DE BODY PARSER (DEVE VIR ANTES DAS ROTAS) ---
-app.use(express.json({ limit: '30mb' }));
+app.use(express.json({
+  limit: '30mb',
+  verify: (req, res, buf) => {
+    req.rawBody = buf ? buf.toString('utf8') : '';
+  }
+}));
 app.use(express.urlencoded({ limit: '30mb', extended: true }));
 
 // --- MIDDLEWARE DE LOGGING GLOBAL ---
@@ -20858,6 +20871,7 @@ registerAdminCoreRoutes(app, {
   ensureAuthenticated,
   backupRestoreUpload,
   renderAdmin,
+  renderAutomationAdmin,
   isAdminUser,
   getSettingSection,
   getSettingDefinitionsBySection,
@@ -20902,6 +20916,15 @@ registerAdminCoreRoutes(app, {
   path,
   appRoot: __dirname,
   automationService: automationApiService
+});
+
+
+registerAutomationOperationsRoutes(app, {
+  ensureAuthenticated,
+  renderAutomationAdmin,
+  isAdminUser,
+  getFriendlyErrorMessage,
+  db
 });
 
 registerAutomationApiRoutes(app, {

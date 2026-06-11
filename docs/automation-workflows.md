@@ -847,3 +847,98 @@ SMART_SUMMARIES_DISABLED
 - O workflow agendado consulta preferências vencidas e marca envio para evitar repetição no mesmo período.
 - WhatsApp não deve virar spam: o usuário pode desligar resumo semanal ou mensal por mensagem.
 - O backend continua sendo a fonte dos números; a IA só escolhe a intenção e o período.
+
+## Etapa 10 — Observabilidade, segurança e escala operacional
+
+A família `9.x` centraliza a operação das automações. Ela não precisa de um workflow conversacional obrigatório no N8N; o controle fica no AcerttaPay em `/admin/automation`, com o registro lógico `9.1 - ACERTTAPAY_OPERACOES_AUTOMACAO` no catálogo interno.
+
+### Dashboard admin
+
+Nova área:
+
+```txt
+/admin/automation
+```
+
+Recursos disponíveis:
+
+- visão geral de workflows ativos, em manutenção e desligados;
+- logs pesquisáveis por workflow, usuário, telefone, operação, código e status;
+- últimos erros de automação;
+- conversas pendentes ainda abertas;
+- preferências por usuário/família de workflow;
+- modo manutenção por workflow;
+- rate limit por workflow;
+- rotação do Bearer token da automação;
+- limpeza de logs por política de retenção.
+
+### Registro dos workflows
+
+Tabela:
+
+```txt
+automation_workflow_registry
+```
+
+Cada família tem seu próprio interruptor. Desligar `4.1`, por exemplo, bloqueia a Central de Acertos pelo WhatsApp sem derrubar `1.1` ou `2.1`.
+
+### Preferências por usuário
+
+Tabela:
+
+```txt
+automation_user_preferences
+```
+
+Permite desligar uma família para um usuário específico, mesmo que o workflow esteja ativo globalmente.
+
+### Observabilidade
+
+Tabelas:
+
+```txt
+automation_intent_logs
+automation_error_events
+```
+
+Essas tabelas complementam `automation_request_logs` e `automation_mutation_events`.
+
+- `automation_intent_logs`: trilha pesquisável para cada chamada da Automation API.
+- `automation_error_events`: eventos de erro e bloqueio operacional.
+- `automation_mutation_events`: permanece como trilha de alterações financeiras relevantes.
+
+### HMAC real
+
+Quando `AUTOMATION_HMAC_REQUIRED=1`, cada chamada do N8N precisa enviar:
+
+```txt
+X-AcerttaPay-Timestamp: <epoch em segundos ou milissegundos>
+X-AcerttaPay-Signature: sha256=<hmac_sha256(timestamp + "." + raw_body)>
+```
+
+O segredo usado é `AUTOMATION_HMAC_SECRET`.
+
+A janela máxima aceita é controlada por:
+
+```txt
+AUTOMATION_HMAC_MAX_SKEW_SECONDS=300
+```
+
+### Rate limit por workflow
+
+Além dos limites já existentes por telefone e por chave, cada workflow passa a ter limite próprio no registro de workflows. Se o campo estiver vazio ou inválido, o fallback é:
+
+```txt
+AUTOMATION_DEFAULT_WORKFLOW_RATE_LIMIT_PER_MINUTE=120
+```
+
+### Retenção
+
+Configurações novas:
+
+```txt
+AUTOMATION_LOG_RETENTION_DAYS=90
+AUTOMATION_ERROR_RETENTION_DAYS=180
+```
+
+A limpeza pode ser acionada pelo dashboard admin. Eventos de mutação financeira não entram nessa limpeza automática leve.

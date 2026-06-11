@@ -17,6 +17,19 @@ function createAutomationApiController(deps = {}) {
     };
   }
 
+  function observeRequest(req, res, next) {
+    const originalJson = res.json.bind(res);
+    res.json = (payload) => {
+      try {
+        service.recordAutomationHttpEvent(req, payload || {}, res.statusCode || 200);
+      } catch (error) {
+        // Observabilidade não pode derrubar a resposta da automação.
+      }
+      return originalJson(payload);
+    };
+    return next();
+  }
+
   function authenticate(req, res, next) {
     const auth = service.verifyAutomationRequest(req);
     if (!auth.ok) {
@@ -29,8 +42,22 @@ function createAutomationApiController(deps = {}) {
     return next();
   }
 
+  function enforceUserPreferences(req, res, next) {
+    const auth = service.verifyWorkflowUserPreference(req);
+    if (!auth.ok) {
+      return res.status(auth.statusCode || 403).json({
+        ok: false,
+        code: auth.code || 'AUTOMATION_USER_WORKFLOW_DISABLED',
+        message: auth.message || 'Essa função está desligada para este usuário.'
+      });
+    }
+    return next();
+  }
+
   return {
+    observeRequest,
     authenticate,
+    enforceUserPreferences,
 
     health(req, res) {
       return res.json({ ok: true, service: 'automation-api', version: 'v1' });

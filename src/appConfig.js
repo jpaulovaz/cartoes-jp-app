@@ -254,6 +254,31 @@ const SETTING_DEFINITIONS = [
     autoReload: true
   },
   {
+    key: 'AUTOMATION_REMINDER_DEFAULT_TIME',
+    section: 'automation',
+    label: 'Horário padrão dos lembretes',
+    helper: 'Usado quando a automação receber apenas uma data, sem horário. Formato 24h, como 09:00.',
+    input: 'text',
+    defaultValue: '09:00',
+    placeholder: '09:00',
+    monospace: true,
+    required: false,
+    autoReload: true
+  },
+  {
+    key: 'AUTOMATION_REMINDER_DUE_BATCH_LIMIT',
+    section: 'automation',
+    label: 'Lembretes por lote de disparo',
+    helper: 'Quantidade máxima de lembretes vencidos retornados para o workflow agendado do N8N.',
+    input: 'number',
+    defaultValue: '50',
+    min: 1,
+    max: 200,
+    step: 1,
+    required: false,
+    autoReload: true
+  },
+  {
     key: 'WELCOME_EMAIL_ENABLED',
     section: 'email',
     label: 'Enviar boas-vindas por e-mail',

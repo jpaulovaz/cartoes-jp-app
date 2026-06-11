@@ -292,3 +292,98 @@ acerttapay-wa-participants:<telefone>
 ```
 
 A memória é apenas conversacional. Estados de confirmação, divisão e mutação ficam no AcerttaPay.
+
+---
+
+# AcerttaPay - Workflows N8N WhatsApp Lembretes e Alertas
+
+## Fluxo 3.1 - Lembretes
+
+Identificador do fluxo:
+
+```txt
+3.1 - ACERTTAPAY_LEMBRETES
+```
+
+Este workflow pertence à família **3.x - Lembretes e Alertas**. Ele permite criar, listar, concluir, cancelar e adiar lembretes financeiros pelo WhatsApp.
+
+Exemplos:
+
+```txt
+Me lembra amanhã de pagar a fatura do Nubank
+Me lembra dia 15 às 10h de cobrar o Bruno
+Quais lembretes tenho essa semana?
+Concluir lembrete #3
+Cancelar lembrete #4
+Adiar lembrete #5 por 1 hora
+```
+
+Webhook de teste:
+
+```txt
+acerttapay-wa-reminders
+```
+
+Endpoints usados:
+
+```txt
+POST /api/automation/v1/reminders
+POST /api/automation/v1/reminders/search
+POST /api/automation/v1/reminders/:id/complete
+POST /api/automation/v1/reminders/:id/cancel
+POST /api/automation/v1/reminders/:id/snooze
+```
+
+Memória do fluxo:
+
+```txt
+acerttapay-wa-reminders:<telefone>
+```
+
+A memória é apenas conversacional. Os lembretes ficam persistidos no AcerttaPay na tabela `automation_reminders`.
+
+## Fluxo 3.2 - Disparos de lembretes
+
+Identificador do fluxo:
+
+```txt
+3.2 - ACERTTAPAY_LEMBRETES_DISPAROS
+```
+
+Este workflow é agendado e consulta periodicamente o AcerttaPay para encontrar lembretes vencidos que ainda não foram enviados por WhatsApp.
+
+Endpoints usados:
+
+```txt
+POST /api/automation/v1/reminders/due
+POST /api/automation/v1/reminders/:id/mark-sent
+```
+
+Fluxo operacional:
+
+```txt
+Schedule Trigger
+↓
+Buscar lembretes vencidos no AcerttaPay
+↓
+Enviar WhatsApp pela Evolution API
+↓
+Marcar lembrete como enviado no AcerttaPay
+```
+
+Variáveis úteis:
+
+```txt
+ACERTTAPAY_URL
+ACERTTAPAY_AUTOMATION_API_TOKEN
+EVOLUTION_INSTANCE_NAME
+AUTOMATION_REMINDER_DUE_BATCH_LIMIT
+```
+
+O lembrete não é concluído automaticamente após o disparo. O usuário pode responder pelo fluxo `3.1` com:
+
+```txt
+Concluir lembrete #3
+Adiar lembrete #3 por 1 hora
+Cancelar lembrete #3
+```

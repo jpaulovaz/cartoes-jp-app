@@ -341,3 +341,70 @@ out_of_scope
 - Contatos locais entram apenas no controle interno.
 - Amigos elegíveis geram rascunho na Central de Acertos.
 - Nada é enviado automaticamente.
+
+---
+
+## Fluxo 3.1 - Lembretes e Alertas
+
+```txt
+3.1 - ACERTTAPAY_LEMBRETES.json
+```
+
+Responsabilidades:
+
+- receber comandos de lembrete pelo WhatsApp;
+- interpretar criação, listagem, conclusão, cancelamento e adiamento;
+- persistir lembretes no AcerttaPay;
+- nunca depender somente da memória do N8N para agendamento;
+- responder com mensagens curtas e amigáveis.
+
+### Intents do fluxo 3.1
+
+```txt
+greeting
+help
+create_reminder
+list_reminders
+complete_reminder
+cancel_reminder
+snooze_reminder
+out_of_scope
+```
+
+### Endpoints da Etapa 4
+
+```txt
+POST /api/automation/v1/reminders
+POST /api/automation/v1/reminders/search
+POST /api/automation/v1/reminders/due
+POST /api/automation/v1/reminders/:id/complete
+POST /api/automation/v1/reminders/:id/cancel
+POST /api/automation/v1/reminders/:id/snooze
+POST /api/automation/v1/reminders/:id/mark-sent
+```
+
+### Códigos de resposta de lembretes
+
+```txt
+REMINDER_CREATED
+REMINDERS_LIST
+REMINDER_COMPLETED
+REMINDER_CANCELLED
+REMINDER_SNOOZED
+DUE_REMINDERS
+REMINDER_MARKED_SENT
+MISSING_REMINDER_TITLE
+MISSING_REMINDER_DATE
+REMINDER_DATE_IN_PAST
+REMINDER_NOT_FOUND
+NEEDS_REMINDER_SELECTION
+```
+
+### Regras da família 3.x
+
+- Lembretes são persistidos em `automation_reminders`.
+- O N8N pode interpretar datas relativas, mas o AcerttaPay valida a data recebida.
+- Se o usuário informar apenas a data, o backend usa `AUTOMATION_REMINDER_DEFAULT_TIME`.
+- Lembrete disparado por WhatsApp continua aberto até o usuário concluir, cancelar ou adiar.
+- O workflow `3.2 - ACERTTAPAY_LEMBRETES_DISPAROS` é responsável pelo disparo agendado.
+- O disparo via WhatsApp cria também uma notificação local simples no AcerttaPay.

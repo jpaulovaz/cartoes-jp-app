@@ -1052,6 +1052,31 @@ function runMigrations() {
     created_at TEXT NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
+
+
+  CREATE TABLE IF NOT EXISTS automation_reminders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    phone_e164 TEXT,
+    whatsapp_number TEXT,
+    channel TEXT NOT NULL DEFAULT 'whatsapp',
+    title TEXT NOT NULL,
+    body TEXT,
+    remind_at TEXT NOT NULL,
+    timezone TEXT NOT NULL DEFAULT 'America/Sao_Paulo',
+    status TEXT NOT NULL DEFAULT 'open',
+    source_kind TEXT NOT NULL DEFAULT 'generic',
+    source_id INTEGER,
+    payload_json TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    completed_at TEXT,
+    cancelled_at TEXT,
+    snoozed_until TEXT,
+    last_sent_at TEXT,
+    sent_count INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
   `);
 
   db.exec(`
@@ -1537,6 +1562,9 @@ function runMigrations() {
   CREATE INDEX IF NOT EXISTS idx_automation_request_logs_user_channel ON automation_request_logs(user_id, channel, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_automation_mutation_events_user ON automation_mutation_events(user_id, entity_type, entity_id, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_automation_mutation_events_operation ON automation_mutation_events(operation, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_automation_reminders_user_status_due ON automation_reminders(user_id, status, remind_at);
+  CREATE INDEX IF NOT EXISTS idx_automation_reminders_due_dispatch ON automation_reminders(status, remind_at, last_sent_at);
+  CREATE INDEX IF NOT EXISTS idx_automation_reminders_phone ON automation_reminders(phone_e164, channel, status);
   `);
 
   ensureIndexWithAliases(

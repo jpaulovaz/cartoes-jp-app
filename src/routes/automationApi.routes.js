@@ -1,11 +1,13 @@
 const express = require('express');
 const { createAutomationApiController } = require('../controllers/automationApi.controller');
 const { createAutomationQueriesController } = require('../controllers/automationQueries.controller');
+const { createAutomationRemindersController } = require('../controllers/automationReminders.controller');
 
 function createAutomationApiRouter(deps = {}) {
   const router = express.Router();
   const controller = createAutomationApiController(deps);
   const queriesController = createAutomationQueriesController(deps);
+  const remindersController = createAutomationRemindersController(deps);
 
   router.use(controller.authenticate);
   router.get('/health', controller.health);
@@ -27,6 +29,14 @@ function createAutomationApiRouter(deps = {}) {
   router.post('/queries/recent-purchases', queriesController.recentPurchases);
   router.post('/queries/person-summary', queriesController.personSummary);
   router.post('/queries/debt-summary', queriesController.debtSummary);
+
+  router.post('/reminders', remindersController.create);
+  router.post('/reminders/search', remindersController.search);
+  router.post('/reminders/due', remindersController.due);
+  router.post('/reminders/:id/complete', remindersController.complete);
+  router.post('/reminders/:id/cancel', remindersController.cancel);
+  router.post('/reminders/:id/snooze', remindersController.snooze);
+  router.post('/reminders/:id/mark-sent', remindersController.markSent);
 
   return router;
 }

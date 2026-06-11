@@ -1,0 +1,267 @@
+{
+  "name": "3.2 - ACERTTAPAY_LEMBRETES_DISPAROS",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "d7ac7407-4b4b-4e5a-9156-b853ce2c8fb0",
+      "name": "Every 5 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -700,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.ACERTTAPAY_URL || 'http://127.0.0.1:3000').replace(/\\/$/, '') + '/api/automation/v1/reminders/due' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.ACERTTAPAY_AUTOMATION_API_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { channel: 'whatsapp', limit: Number($env.AUTOMATION_REMINDER_DUE_BATCH_LIMIT || 50) } }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "ad0defc2-e44b-47ec-8b2d-2f710f6d3e65",
+      "name": "Call Due Reminders",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -460,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $json || {};\nconst reminders = Array.isArray(result.reminders) ? result.reminders : [];\nif (!reminders.length) return [{ json: { has_due: false } }];\nreturn reminders.map((reminder) => ({\n  json: {\n    has_due: true,\n    id: reminder.id,\n    user_id: reminder.user_id,\n    phone: String(reminder.whatsapp_number || reminder.phone_e164 || '').replace(/\\D/g, ''),\n    phone_e164: reminder.phone_e164,\n    whatsapp_number: reminder.whatsapp_number,\n    title: reminder.title,\n    outbound_text: reminder.outbound_text || reminder.whatsapp?.text || `⏰ *Lembrete do AcerttaPay*\\n\\n${reminder.title}`,\n    channel: reminder.channel || 'whatsapp'\n  }\n}));"
+      },
+      "id": "f99a4651-72a5-412d-a3bb-6e4cb6c22e35",
+      "name": "Expand Due Reminders",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -220,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "16623ceb-de53-402b-857e-2e21fdfcc1be",
+              "leftValue": "={{ $json.has_due === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "bfa3edf9-a5a5-4e09-b8bc-e77377dbb606",
+      "name": "Has Due Reminder?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        20,
+        200
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "cda4db7d-8975-4f2f-bb6d-bd8731203bba",
+      "name": "No Due Reminders",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        260,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "={{ $env.EVOLUTION_INSTANCE_NAME || 'ACERTTAPAY' }}",
+        "remoteJid": "={{ $json.phone || String($json.phone_e164 || $json.whatsapp_number || '').replace(/\\D/g, '') }}",
+        "messageText": "={{ $json.outbound_text || ('⏰ *Lembrete do AcerttaPay*\n\n' + $json.title) }}",
+        "options_message": {
+          "delay": 1400,
+          "linkPreview": false
+        }
+      },
+      "id": "88e2b8ac-f6ff-4dd3-be18-21c1c68a0e4d",
+      "name": "Send Due Reminder",
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        260,
+        120
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "40g56cIQ5RrPPK1M",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.ACERTTAPAY_URL || 'http://127.0.0.1:3000').replace(/\\/$/, '') + '/api/automation/v1/reminders/' + $('Expand Due Reminders').item.json.id + '/mark-sent' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.ACERTTAPAY_AUTOMATION_API_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { user_id: $('Expand Due Reminders').item.json.user_id, reminder_id: $('Expand Due Reminders').item.json.id, channel: 'whatsapp', source: { workflow: '3.2 - ACERTTAPAY_LEMBRETES_DISPAROS' } } }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "aafec256-f86a-47f7-ac90-42f354f7f011",
+      "name": "Mark Reminder Sent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        520,
+        120
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every 5 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Call Due Reminders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Due Reminders": {
+      "main": [
+        [
+          {
+            "node": "Expand Due Reminders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Expand Due Reminders": {
+      "main": [
+        [
+          {
+            "node": "Has Due Reminder?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Due Reminder?": {
+      "main": [
+        [
+          {
+            "node": "Send Due Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Due Reminders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Due Reminder": {
+      "main": [
+        [
+          {
+            "node": "Mark Reminder Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "42db1714-d364-4ffa-877d-3ede2b3f924f",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": [
+    {
+      "name": "ACERTTAPAY",
+      "id": "pQ0ytyDUaBKZDloP",
+      "updatedAt": "2026-06-08T17:04:41.481Z",
+      "createdAt": "2026-06-08T17:04:41.481Z"
+    }
+  ]
+}

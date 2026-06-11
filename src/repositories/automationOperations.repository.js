@@ -60,7 +60,17 @@ const WORKFLOW_DEFINITIONS = [
     default_enabled: 1,
     default_rate_limit_per_minute: 300
   },
+
   {
+    workflow_key: '0.0',
+    family_key: '0.x',
+    name: '0.0 - ACERTTAPAY_FLUXO_INICIAL',
+    title: 'Fluxo Inicial WhatsApp',
+    description: 'Orquestrador central: recebe a Evolution API, valida o usuário, monta capacidades, roteia intenção e aciona subfluxos.',
+    risk_level: 'operational',
+    default_enabled: 1,
+    default_rate_limit_per_minute: 240
+  },  {
     workflow_key: '1.1',
     family_key: '1.x',
     name: '1.1 - ACERTTAPAY_COMPRA_ASSISTIDA_CONCIERGE',
@@ -336,6 +346,9 @@ function createAutomationOperationsRepository(deps = {}) {
     if (path === '/health') {
       workflowKey = 'automation-api';
       operation = 'automation.health';
+    } else if (path.startsWith('/router/')) {
+      workflowKey = '0.0';
+      operation = `router.${path.split('/').filter(Boolean).slice(1).join('.') || 'run'}`;
     } else if (path.startsWith('/queries/')) {
       workflowKey = '2.1';
       operation = `query.${path.split('/').filter(Boolean).slice(1).join('.') || 'run'}`;

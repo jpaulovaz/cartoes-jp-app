@@ -942,3 +942,34 @@ AUTOMATION_ERROR_RETENTION_DAYS=180
 ```
 
 A limpeza pode ser acionada pelo dashboard admin. Eventos de mutação financeira não entram nessa limpeza automática leve.
+
+
+## Correção arquitetural 4.13.1 — Fluxo Inicial 0.0
+
+A Evolution API deve apontar somente para o webhook do workflow `0.0 - ACERTTAPAY_FLUXO_INICIAL`. Os workflows funcionais `1.1` a `8.2` passam a ser subfluxos acionados pelo orquestrador via `Execute Workflow` e `EntradaWhatsapp`.
+
+Responsabilidades do `0.0`:
+
+- normalizar payload da Evolution API;
+- ignorar mensagens próprias, grupos e mídias não suportadas;
+- resolver usuário autorizado uma única vez;
+- consultar conversa pendente, preferências do usuário, registry e modo manutenção;
+- priorizar conversa pendente antes de classificar intenção com IA;
+- montar menu dinâmico conforme capacidades liberadas;
+- chamar o subfluxo correto;
+- enviar a resposta final ao WhatsApp;
+- registrar logs de roteamento.
+
+Variáveis N8N obrigatórias:
+
+```txt
+ACERTTAPAY_URL=https://seu-acerttapay.com
+ACERTTAPAY_AUTOMATION_API_TOKEN=<mesmo valor de AUTOMATION_API_TOKEN>
+EVOLUTION_INSTANCE_NAME=<instancia>
+REDIS_URL=redis://redis:6379/0
+ACERTTAPAY_N8N_MEMORY_TTL_SECONDS=86400
+```
+
+Ponto operacional: no AcerttaPay a chave se chama `AUTOMATION_API_TOKEN`; no N8N se chama `ACERTTAPAY_AUTOMATION_API_TOKEN`. Elas devem ter o mesmo valor.
+
+Redis Chat Memory substitui as memórias locais `memoryBufferWindow`. Redis guarda somente contexto conversacional da IA; estados financeiros sensíveis continuam no AcerttaPay em `automation_conversation_states`.

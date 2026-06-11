@@ -167,6 +167,16 @@ const SETTING_DEFINITIONS = [
     autoReload: true
   },
   {
+    key: 'ENABLE_SHARED_PURCHASE_PROJECTIONS',
+    section: 'sharedDebt',
+    label: 'Projeções de compras compartilhadas',
+    helper: 'Liga as projeções estruturais de compras compartilhadas. Mantenha ativo se a Central de Acertos estiver usando os fluxos de participantes e rascunhos.',
+    input: 'switch',
+    defaultValue: '1',
+    required: false,
+    autoReload: true
+  },
+  {
     key: 'AUTOMATION_API_ENABLED',
     section: 'automation',
     label: 'Ativar API do N8N',
@@ -250,6 +260,19 @@ const SETTING_DEFINITIONS = [
     min: 10,
     max: 5000,
     step: 10,
+    required: false,
+    autoReload: true
+  },
+  {
+    key: 'AUTOMATION_PURCHASE_MUTATION_WINDOW_HOURS',
+    section: 'automation',
+    label: 'Janela para corrigir compras (horas)',
+    helper: 'Tempo em horas para a automação corrigir/remover compras recentes que não nasceram do WhatsApp. Compras criadas pela automação continuam passando pelas demais travas financeiras.',
+    input: 'number',
+    defaultValue: '72',
+    min: 1,
+    max: 720,
+    step: 1,
     required: false,
     autoReload: true
   },

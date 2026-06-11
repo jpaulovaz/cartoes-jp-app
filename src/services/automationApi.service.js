@@ -1489,6 +1489,153 @@ function createAutomationApiService(deps = {}) {
     }
   }
 
+
+  function workflowEnabledForUser(userId, workflow = {}) {
+    if (!workflow || !workflow.workflow_key) return false;
+    if (Number(workflow.enabled || 0) === 0) return false;
+    if (Number(workflow.maintenance_mode || 0) !== 0) return false;
+    return operationsRepository.isUserWorkflowEnabled(userId, workflow.workflow_key);
+  }
+
+  function buildRouterCapabilitiesForUser(userId) {
+    return operationsRepository.listWorkflows()
+      .filter((workflow) => !['automation-api', '9.1'].includes(String(workflow.workflow_key || '')))
+      .map((workflow) => ({
+        workflow_key: workflow.workflow_key,
+        family_key: workflow.family_key,
+        name: workflow.name,
+        title: workflow.title || workflow.name,
+        description: workflow.description || '',
+        risk_level: workflow.risk_level || 'medium',
+        enabled: workflowEnabledForUser(userId, workflow),
+        maintenance_mode: Number(workflow.maintenance_mode || 0) !== 0,
+        rate_limit_per_minute: Number(workflow.rate_limit_per_minute || 0) || null
+      }));
+  }
+
+  function buildRouterMenuText(capabilities = []) {
+    const enabled = new Set((capabilities || []).filter((item) => item.enabled).map((item) => item.workflow_key));
+    const sections = [];
+    if (enabled.has('1.1') || enabled.has('1.2') || enabled.has('1.3')) sections.push(['🧾 Compras', '• registrar compra', '• corrigir ou apagar compra recente', '• dividir com amigos ou contatos'].join('\n'));
+    if (enabled.has('2.1')) sections.push(['📊 Consultas', '• gastos do mês', '• fatura do cartão', '• últimas compras'].join('\n'));
+    if (enabled.has('3.1')) sections.push(['⏰ Lembretes', '• criar, listar, concluir ou adiar lembretes'].join('\n'));
+    if (enabled.has('4.1')) sections.push(['🤝 Central de Acertos', '• ver quem deve', '• enviar rascunhos', '• marcar pagamento', '• gerar Pix'].join('\n'));
+    if (enabled.has('5.1')) sections.push(['📒 Finanças mensais', '• lançar aluguel, salário, contas e receitas fora do cartão'].join('\n'));
+    if (enabled.has('6.1')) sections.push(['🔒 Fechamento', '• conferir se o mês pode ser fechado'].join('\n'));
+    if (enabled.has('7.1')) sections.push(['📄 PDF', '• enviar fatura para revisão no app'].join('\n'));
+    if (enabled.has('8.1') || enabled.has('8.2')) sections.push(['🏷️ Inteligência', '• categorizar compras', '• criar regras', '• receber resumos'].join('\n'));
+    const body = sections.length ? sections.join('\n\n') : 'Nenhuma função do WhatsApp está liberada para este usuário agora.';
+    return ['Oi! Eu sou o concierge do AcerttaPay. 🟢', '', 'Posso te ajudar com:', '', body, '', 'Me manda do seu jeito. Ex.: “Quanto gastei esse mês?” ou “Nova compra hoje de R$ 50 no iFood”.'].join('\n');
+  }
+
+  function buildRouterPayloadSource(payload = {}) {
+    const whatsapp = payload.whatsapp && typeof payload.whatsapp === 'object' ? payload.whatsapp : {};
+    return {
+      phone: payload.phone || whatsapp.phone || payload.user_phone || payload.number || '',
+      channel: payload.source?.channel || payload.channel || 'whatsapp',
+      instance: payload.source?.instance || whatsapp.instance || payload.instance || '',
+      message_id: payload.source?.message_id || whatsapp.message_id || payload.message_id || '',
+      push_name: payload.push_name || whatsapp.push_name || ''
+    };
+  }
+
+  function buildRouterContext(payload = {}, meta = {}) {
+    try {
+      assertApiEnabled();
+      const source = buildRouterPayloadSource(payload);
+      const resolved = resolveAuthorizedPhone(source.phone);
+      const base = {
+        ok: true,
+        code: resolved.authorized ? 'ROUTER_CONTEXT_READY' : 'ROUTER_NOT_AUTHORIZED',
+        authorized: resolved.authorized,
+        phone: resolved.normalized ? { e164: resolved.normalized.e164, whatsapp_number: resolved.normalized.whatsappNumber } : null,
+        whatsapp: {
+          phone: resolved.normalized?.whatsappNumber || normalizeDigits(source.phone),
+          phone_e164: resolved.normalized?.e164 || null,
+          instance: source.instance || null,
+          message_id: source.message_id || null,
+          push_name: source.push_name || null
+        }
+      };
+      if (!resolved.authorized) {
+        return makeResult({
+          ...base,
+          ok: false,
+          user: null,
+          conversation: null,
+          capabilities: [],
+          whatsapp: {
+            ...base.whatsapp,
+            text: 'Esse número ainda não está liberado no AcerttaPay. Entra no app e ativa o WhatsApp em Configurações.'
+          }
+        }, 200);
+      }
+      checkRateLimit(resolved.normalized.e164);
+      const conversation = repository.getOpenConversationForUser(resolved.user.id, resolved.normalized.e164);
+      const capabilities = buildRouterCapabilitiesForUser(resolved.user.id);
+      return makeResult({
+        ...base,
+        user: {
+          id: Number(resolved.user.id || 0),
+          name: resolved.user.name || resolved.user.email || 'Usuário AcerttaPay',
+          email: resolved.user.email
+        },
+        conversation: publicConversation(conversation, repository),
+        capabilities,
+        menu: { text: buildRouterMenuText(capabilities) },
+        router: { workflow_key: '0.0', family_key: '0.x' }
+      });
+    } catch (error) {
+      return handleServiceError(error);
+    }
+  }
+
+  function buildRouterCapabilities(payload = {}, meta = {}) {
+    const context = buildRouterContext(payload, meta);
+    if (context.ok === false) return context;
+    return makeResult({
+      ok: true,
+      code: 'ROUTER_CAPABILITIES',
+      user: context.user,
+      phone: context.phone,
+      capabilities: context.capabilities || [],
+      menu: context.menu || { text: buildRouterMenuText(context.capabilities || []) }
+    });
+  }
+
+  function recordRouterIntent(payload = {}, meta = {}) {
+    try {
+      const phone = payload.phone || payload.whatsapp?.phone || payload.source?.phone || '';
+      let phoneE164 = null;
+      let userId = Number(payload.user?.id || payload.user_id || 0) || null;
+      const normalized = phone ? normalizeAutomationPhone(phone) : null;
+      if (normalized?.ok) {
+        phoneE164 = normalized.e164;
+        if (!userId) {
+          const found = operationsRepository.findAutomationUserByPhone(normalized.e164);
+          userId = Number(found?.user_id || 0) || null;
+        }
+      }
+      operationsRepository.logIntentEvent({
+        userId,
+        phoneE164,
+        workflowKey: payload.workflow_key || payload.router?.workflow_key || '0.0',
+        familyKey: payload.family_key || payload.router?.family_key || '0.x',
+        intent: payload.intent || payload.router?.intent || null,
+        operation: payload.operation || 'router.intent',
+        statusCode: payload.status_code || 200,
+        resultCode: payload.result_code || payload.code || 'ROUTER_INTENT_RECORDED',
+        channel: payload.channel || payload.source?.channel || 'whatsapp',
+        sourceMessageId: payload.source_message_id || payload.source?.message_id || payload.whatsapp?.message_id || null,
+        requestMeta: payload.request_meta || payload.requestMeta || {},
+        responseMeta: payload.response_meta || payload.responseMeta || {}
+      });
+      return makeResult({ ok: true, code: 'ROUTER_INTENT_RECORDED' });
+    } catch (error) {
+      return handleServiceError(error);
+    }
+  }
+
   function createPurchaseFromAutomation(payload = {}, meta = {}) {
     const channel = payload.source?.channel || payload.channel || 'whatsapp';
     const sourceMessageId = payload.source?.message_id || payload.source?.messageId || payload.message_id || null;
@@ -2149,6 +2296,9 @@ function createAutomationApiService(deps = {}) {
     verifyWorkflowUserPreference,
     recordAutomationHttpEvent,
     getAutomationRequestContext,
+    buildRouterContext,
+    buildRouterCapabilities,
+    recordRouterIntent,
     resolveWhatsapp,
     createPurchaseFromAutomation,
     getSplitOptionsForPurchase,

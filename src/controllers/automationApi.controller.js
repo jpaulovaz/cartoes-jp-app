@@ -67,6 +67,18 @@ function createAutomationApiController(deps = {}) {
       return sendResult(res, service.resolveWhatsapp(req.body || {}, metaFromRequest(req)));
     },
 
+    routerContext(req, res) {
+      return sendResult(res, service.buildRouterContext(req.body || {}, metaFromRequest(req)));
+    },
+
+    routerCapabilities(req, res) {
+      return sendResult(res, service.buildRouterCapabilities(req.body || {}, metaFromRequest(req)));
+    },
+
+    routerIntentLog(req, res) {
+      return sendResult(res, service.recordRouterIntent(req.body || {}, metaFromRequest(req)));
+    },
+
     createPurchase(req, res) {
       return sendResult(res, service.createPurchaseFromAutomation(req.body || {}, metaFromRequest(req)));
     },

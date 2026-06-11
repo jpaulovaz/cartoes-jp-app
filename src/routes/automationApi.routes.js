@@ -24,6 +24,9 @@ function createAutomationApiRouter(deps = {}) {
   router.use(controller.enforceUserPreferences);
   router.get('/health', controller.health);
   router.post('/whatsapp/resolve', controller.resolveWhatsapp);
+  router.post('/router/context', controller.routerContext);
+  router.post('/router/capabilities', controller.routerCapabilities);
+  router.post('/router/intent-log', controller.routerIntentLog);
   router.post('/purchases', controller.createPurchase);
   router.post('/purchases/recent', controller.listRecentPurchases);
   router.post('/purchases/:id/prepare-edit', controller.preparePurchaseEdit);

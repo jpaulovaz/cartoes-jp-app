@@ -802,3 +802,41 @@ Enquanto `AUTOMATION_HMAC_REQUIRED=0`, os workflows existentes continuam funcion
 ### Rotação de token
 
 Depois de usar `/admin/automation` para rotacionar `AUTOMATION_API_TOKEN`, atualize a variável/credencial equivalente no N8N antes de testar os fluxos. Token velho vira chave sem fechadura.
+
+
+## Fluxo Inicial 0.0 — entrada única da Evolution API
+
+Configure a Evolution API para enviar mensagens apenas para o webhook do workflow:
+
+```txt
+0.0 - ACERTTAPAY_FLUXO_INICIAL
+/webhook/acerttapay-wa-inbound
+```
+
+Os workflows `1.1` a `8.2` não devem ser usados como webhooks públicos em produção. Eles ficam como subfluxos/ferramentas acionados pelo `0.0` por `Execute Workflow`.
+
+Fluxos agendados, como `3.2 - ACERTTAPAY_LEMBRETES_DISPAROS` e o trecho agendado de `8.2`, continuam independentes.
+
+### Token AcerttaPay x N8N
+
+```txt
+AcerttaPay: AUTOMATION_API_TOKEN
+N8N:       ACERTTAPAY_AUTOMATION_API_TOKEN
+```
+
+Eles devem ter exatamente o mesmo valor.
+
+### Redis Chat Memory
+
+Substitua/valide as credenciais Redis nos nós de memória dos agentes. Variáveis sugeridas:
+
+```txt
+REDIS_URL=redis://redis:6379/0
+N8N_REDIS_HOST=redis
+N8N_REDIS_PORT=6379
+N8N_REDIS_PASSWORD=
+N8N_REDIS_DB=0
+ACERTTAPAY_N8N_MEMORY_TTL_SECONDS=86400
+```
+
+Redis é memória conversacional da IA. Confirmações e estados financeiros continuam persistidos no AcerttaPay.

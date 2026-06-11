@@ -175,6 +175,126 @@ function extractGeminiText(response) {
   return '';
 }
 
+function compactLogText(value, limit = 900) {
+  return String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, Math.max(80, Number(limit || 900)));
+}
+
+function extractGeminiMeta(response) {
+  const data = response?.data || {};
+  const candidates = Array.isArray(data.candidates) ? data.candidates : [];
+  return {
+    candidate_count: candidates.length,
+    finish_reasons: candidates.map((candidate) => candidate?.finishReason || null).filter(Boolean),
+    prompt_feedback: data.promptFeedback || null,
+    usage_metadata: data.usageMetadata || null
+  };
+}
+
+function normalizeReceiptPayload(parsed = {}) {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+  const candidates = [
+    parsed,
+    parsed.receipt,
+    parsed.comprovante,
+    parsed.purchase,
+    parsed.compra,
+    parsed.data,
+    parsed.result
+  ].filter((item) => item && typeof item === 'object' && !Array.isArray(item));
+  return candidates.find((item) => Object.keys(item).length) || null;
+}
+
+function parseAmountCentsFromText(text = '') {
+  const normalized = String(text || '');
+  const preferred = normalized.match(/(?:valor|total|credito|cr[eé]dito|debito|d[eé]bito)[^\d]{0,18}(?:r\$)?\s*(\d{1,6}(?:[.,]\d{2}))/i);
+  const generic = preferred || normalized.match(/(?:r\$)\s*(\d{1,6}(?:[.,]\d{2}))/i);
+  if (!generic) return null;
+  const cents = normalizeAmountCents(generic[1]);
+  return cents > 0 ? cents : null;
+}
+
+function parseDateFromText(text = '') {
+  const normalized = String(text || '');
+  const matches = normalized.match(/\b\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}\b/g) || [];
+  for (const match of matches) {
+    const iso = normalizeDate(match);
+    if (iso) return iso;
+  }
+  return '';
+}
+
+function parseCardLast4FromText(text = '') {
+  const normalized = String(text || '');
+  const direct = normalized.match(/(?:cart[aã]o|cartao|card)[^\d]{0,20}(?:x{2,}|[*]{2,}|\.)?[\s.:-]*(\d{4})\b/i);
+  if (direct) return direct[1];
+  const masked = normalized.match(/(?:x{2,}|[*]{2,}|\.)[\s.:-]*(\d{4})\b/i);
+  return masked ? masked[1] : '';
+}
+
+function parseAuthorizationFromText(text = '') {
+  const match = String(text || '').match(/(?:autoriza[cç][aã]o|autorizacao|auth|authorization)[^a-z0-9]{0,10}([a-z0-9-]{3,24})/i);
+  return match ? cleanDisplayText(match[1]) : '';
+}
+
+function parsePaymentMethodFromText(text = '') {
+  const normalized = String(text || '');
+  const parts = [];
+  if (/cr[eé]dito/i.test(normalized)) parts.push('crédito');
+  if (/d[eé]bito/i.test(normalized)) parts.push('débito');
+  if (/mastercard/i.test(normalized)) parts.push('Mastercard');
+  else if (/visa/i.test(normalized)) parts.push('Visa');
+  else if (/elo/i.test(normalized)) parts.push('Elo');
+  else if (/amex|american express/i.test(normalized)) parts.push('American Express');
+  return cleanDisplayText(parts.join(' '));
+}
+
+function parseMerchantFromText(text = '') {
+  const labelMatch = String(text || '').match(/(?:estabelecimento|loja|merchant|nome)[^a-z0-9À-ÿ]{0,12}([a-zÀ-ÿ0-9 .,&'-]{3,120})/i);
+  if (labelMatch) return cleanDisplayText(labelMatch[1]);
+  const forbidden = /cnpj|cpf|comprovante|valor|total|credito|cr[eé]dito|debito|d[eé]bito|cart[aã]o|cartao|mastercard|visa|elo|rede|sitef|autoriz|arqc|aid|pdv|nfc|transa[cç][aã]o|aprovada|emissor|cidade|endere[cç]o|\br\$\b/i;
+  const lines = String(text || '')
+    .split(/\r?\n|\s{2,}/)
+    .map((line) => cleanDisplayText(line))
+    .filter((line) => /[a-zÀ-ÿ]{3,}/i.test(line) && !forbidden.test(line));
+  return lines[0] || '';
+}
+
+function buildReceiptFromPlainText(text = '') {
+  const raw = String(text || '').trim();
+  if (!raw) return null;
+  const merchant = parseMerchantFromText(raw);
+  const amountCents = parseAmountCentsFromText(raw);
+  const date = parseDateFromText(raw);
+  const cardLast4 = parseCardLast4FromText(raw);
+  const paymentMethod = parsePaymentMethodFromText(raw);
+  const authorizationCode = parseAuthorizationFromText(raw);
+  const hasReceiptSignal = /comprovante|valor|total|cr[eé]dito|d[eé]bito|cart[aã]o|cartao|mastercard|visa|elo|autoriz|transa[cç][aã]o|pdv|nfc/i.test(raw);
+  if (!hasReceiptSignal || (!merchant && !amountCents && !date)) return null;
+  return sanitizeExtractedReceipt({
+    is_credit_card_receipt: /cr[eé]dito|cart[aã]o|cartao|mastercard|visa|elo/i.test(raw) || undefined,
+    merchant: merchant || null,
+    date: date || null,
+    amount_cents: amountCents || null,
+    installments: 1,
+    card_hint: cardLast4 ? `final ${cardLast4}` : null,
+    card_last4: cardLast4 || null,
+    authorization_code: authorizationCode || null,
+    raw_payment_method: paymentMethod || null,
+    confidence: merchant && amountCents && date ? 'medium' : 'low',
+    field_confidence: {
+      merchant: merchant ? 'medium' : 'low',
+      date: date ? 'medium' : 'low',
+      amount: amountCents ? 'medium' : 'low',
+      installments: 'low',
+      card: cardLast4 ? 'medium' : 'low'
+    },
+    warnings: ['Extração recuperada do texto livre retornado pela IA; confirme antes de lançar.']
+  });
+}
+
 function sanitizeExtractedReceipt(parsed = {}) {
   const amountCents = normalizeAmountCents(parsed.amount_cents ?? parsed.amountCents ?? parsed.amount ?? parsed.total_amount);
   return {
@@ -318,36 +438,52 @@ function parseCorrections(rawText = {}, reply = {}) {
   return patch;
 }
 
-async function callGeminiForReceipt({ apiKey, model, file, caption }) {
-  const prompt = [
-    'Você é um extrator de dados de comprovantes de cartão de crédito brasileiros.',
-    'Responda somente JSON válido, sem markdown.',
+function buildReceiptExtractionPrompt({ retry = false } = {}) {
+  const base = [
+    'Você é um extrator de dados de comprovantes de cartão brasileiros.',
+    'Responda somente JSON válido, sem markdown e sem texto fora do JSON.',
     'Extraia os dados financeiros do comprovante enviado na imagem.',
     'Nunca invente cartão, parcelamento, valor, estabelecimento ou data.',
     'O valor deve ser o valor total da compra. Ignore troco, subtotal, desconto e saldo.',
     'A data deve ser a data da transação. Se houver data de impressão e data de transação, use a data da transação.',
     'Se não houver parcelamento claro, use 1 apenas quando o comprovante indicar crédito à vista ou não houver pista de parcelas.',
     'Não retorne número completo de cartão. Se houver só final, use card_last4.',
-    'Se a imagem não for comprovante de cartão, retorne is_credit_card_receipt=false.',
-    'Formato exato:',
-    JSON.stringify({
-      is_credit_card_receipt: true,
-      merchant: 'string ou null',
-      date: 'YYYY-MM-DD ou null',
-      amount_cents: 4226,
-      installments: 1,
-      card_hint: 'string ou null',
-      card_last4: 'string ou null',
-      authorization_code: 'string ou null',
-      nsu: 'string ou null',
-      raw_payment_method: 'string ou null',
-      confidence: 'high|medium|low',
-      field_confidence: { merchant: 'high|medium|low', date: 'high|medium|low', amount: 'high|medium|low', installments: 'high|medium|low', card: 'high|medium|low' },
-      warnings: []
-    })
-  ].join('\n');
+    'Se a imagem não for comprovante de cartão, retorne is_credit_card_receipt=false.'
+  ];
+  if (retry) {
+    base.push(
+      'A imagem pode estar amassada, com baixo contraste ou parcialmente borrada.',
+      'Mesmo assim, retorne os campos que estiverem legíveis e use confidence low ou medium quando houver dúvida.',
+      'Não rejeite a imagem apenas por qualidade se valor, data ou estabelecimento estiverem parcialmente legíveis.',
+      'Use warnings para dúvidas e campos incertos.'
+    );
+  }
+  base.push('Formato exato:', JSON.stringify({
+    is_credit_card_receipt: true,
+    merchant: 'string ou null',
+    date: 'YYYY-MM-DD ou null',
+    amount_cents: 4226,
+    installments: 1,
+    card_hint: 'string ou null',
+    card_last4: 'string ou null',
+    authorization_code: 'string ou null',
+    nsu: 'string ou null',
+    raw_payment_method: 'string ou null',
+    confidence: 'high|medium|low',
+    field_confidence: { merchant: 'high|medium|low', date: 'high|medium|low', amount: 'high|medium|low', installments: 'high|medium|low', card: 'high|medium|low' },
+    warnings: []
+  }));
+  return base.join('\n');
+}
 
+async function callGeminiReceiptAttempt({ apiKey, model, file, caption, retry = false } = {}) {
+  const prompt = buildReceiptExtractionPrompt({ retry });
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const generationConfig = {
+    temperature: 0,
+    maxOutputTokens: retry ? 1200 : 900
+  };
+  if (!retry) generationConfig.responseMimeType = 'application/json';
   const response = await axios.post(url, {
     contents: [{
       role: 'user',
@@ -356,21 +492,54 @@ async function callGeminiForReceipt({ apiKey, model, file, caption }) {
         { inline_data: { mime_type: file.mimetype || 'image/jpeg', data: file.buffer.toString('base64') } }
       ]
     }],
-    generationConfig: {
-      temperature: 0,
-      maxOutputTokens: 800,
-      responseMimeType: 'application/json'
-    }
-  }, { timeout: 45000 });
+    generationConfig
+  }, { timeout: retry ? 60000 : 45000 });
   const text = extractGeminiText(response);
-  const parsed = safeJsonParse(text, null);
-  if (!parsed || typeof parsed !== 'object') {
-    throw new ReceiptPurchaseAutomationError('Não consegui ler esse comprovante com segurança. Me manda uma foto mais nítida, pegando o comprovante inteiro, ou registra por texto mesmo.', {
-      code: 'RECEIPT_IMAGE_PARSE_FAILED',
-      statusCode: 422
-    });
-  }
-  return sanitizeExtractedReceipt(parsed);
+  const parsed = normalizeReceiptPayload(safeJsonParse(text, null));
+  return {
+    text,
+    parsed,
+    meta: extractGeminiMeta(response),
+    retry
+  };
+}
+
+function attemptToReceipt(attempt) {
+  if (!attempt) return null;
+  if (attempt.parsed) return sanitizeExtractedReceipt(attempt.parsed);
+  return buildReceiptFromPlainText(attempt.text);
+}
+
+function buildReceiptParseFailureDetails(attempts = []) {
+  return {
+    provider: 'gemini',
+    attempts: attempts.map((attempt, index) => ({
+      index: index + 1,
+      retry: Boolean(attempt?.retry),
+      parsed_json: Boolean(attempt?.parsed),
+      text_excerpt: compactLogText(attempt?.text || '', 700),
+      meta: attempt?.meta || null
+    }))
+  };
+}
+
+async function callGeminiForReceipt({ apiKey, model, file, caption, debugEnabled = false }) {
+  const attempts = [];
+  const first = await callGeminiReceiptAttempt({ apiKey, model, file, caption, retry: false });
+  attempts.push(first);
+  let receipt = attemptToReceipt(first);
+  if (receipt) return receipt;
+
+  const second = await callGeminiReceiptAttempt({ apiKey, model, file, caption, retry: true });
+  attempts.push(second);
+  receipt = attemptToReceipt(second);
+  if (receipt) return receipt;
+
+  throw new ReceiptPurchaseAutomationError('Não consegui ler esse comprovante com segurança. Me manda uma foto mais nítida, pegando o comprovante inteiro, ou registra por texto mesmo.', {
+    code: 'RECEIPT_IMAGE_PARSE_FAILED',
+    statusCode: 422,
+    details: debugEnabled ? buildReceiptParseFailureDetails(attempts) : null
+  });
 }
 
 function buildCardOptions(cards = []) {
@@ -790,9 +959,9 @@ function createAutomationReceiptPurchasesService(deps = {}) {
         });
         let receipt;
         try {
-          receipt = await callGeminiForReceipt({ apiKey, model, file, caption: payload.caption || payload.source?.raw_text || '' });
+          receipt = await callGeminiForReceipt({ apiKey, model, file, caption: payload.caption || payload.source?.raw_text || '', debugEnabled: repository.isDebugEnabled() });
         } catch (error) {
-          repository.updateStagingParsed(resolved.user.id, staging.id, { parsed: { error: error.message }, confidence: 'low', status: 'waiting_details' });
+          repository.updateStagingParsed(resolved.user.id, staging.id, { parsed: { error: error.message, code: error.code || null, details: error.details || null }, confidence: 'low', status: 'waiting_details' });
           throw error;
         }
         return buildConversationForReceipt({ resolved, payload, receipt, staging, statusCode: 202 });

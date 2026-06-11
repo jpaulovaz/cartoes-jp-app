@@ -767,6 +767,44 @@ function createAutomationApiRepository() {
     const limit = Math.max(1, Math.min(20, Number(options.limit || 5) || 5));
     const windowHours = Math.max(1, Math.min(24 * 30, Number(options.windowHours || getIntegerSetting('AUTOMATION_PURCHASE_MUTATION_WINDOW_HOURS', 72)) || 72));
     const hoursModifier = `-${windowHours} hours`;
+    const eligibleOnly = options.eligibleOnly === true || options.onlyEligible === true;
+    const where = [
+      't.user_id = ?',
+      'COALESCE(t.parent_txn_id, 0) = 0'
+    ];
+    const params = [hoursModifier, Number(userId || 0)];
+
+    if (eligibleOnly) {
+      where.push(`(
+        COALESCE(t.raw_json, '') LIKE '%automation_api_v1%'
+        OR datetime(t.created_at) >= datetime('now', ?)
+      )`);
+      params.push(hoursModifier);
+      where.push(`NOT EXISTS (
+        SELECT 1
+        FROM transactions tx
+        LEFT JOIN imports ii ON ii.id = tx.import_id AND ii.user_id = tx.user_id
+        JOIN closed_months cm
+          ON cm.user_id = tx.user_id
+         AND cm.month = COALESCE(tx.due_month, ii.month)
+         AND cm.year = COALESCE(tx.due_year, ii.year)
+        WHERE tx.user_id = t.user_id
+          AND (tx.id = t.id OR tx.parent_txn_id = t.id)
+      )`);
+      where.push(`NOT EXISTS (
+        SELECT 1
+        FROM transactions tx
+        JOIN shared_debt_requests r
+          ON r.requester_user_id = tx.user_id
+         AND r.source_transaction_id = tx.id
+         AND COALESCE(r.request_kind, 'card') = 'card'
+         AND COALESCE(r.status, 'pending') <> 'cancelled'
+        WHERE tx.user_id = t.user_id
+          AND (tx.id = t.id OR tx.parent_txn_id = t.id)
+      )`);
+    }
+
+    params.push(limit);
     return db.prepare(`
       SELECT
         t.id,
@@ -800,15 +838,36 @@ function createAutomationApiRepository() {
           WHEN COALESCE(t.raw_json, '') LIKE '%automation_api_v1%' THEN 1
           WHEN datetime(t.created_at) >= datetime('now', ?) THEN 1
           ELSE 0
-        END AS is_mutation_window_open
+        END AS is_mutation_window_open,
+        (
+          SELECT COUNT(1)
+          FROM transactions tx
+          LEFT JOIN imports ii ON ii.id = tx.import_id AND ii.user_id = tx.user_id
+          JOIN closed_months cm
+            ON cm.user_id = tx.user_id
+           AND cm.month = COALESCE(tx.due_month, ii.month)
+           AND cm.year = COALESCE(tx.due_year, ii.year)
+          WHERE tx.user_id = t.user_id
+            AND (tx.id = t.id OR tx.parent_txn_id = t.id)
+        ) AS closed_month_count,
+        (
+          SELECT COUNT(1)
+          FROM transactions tx
+          JOIN shared_debt_requests r
+            ON r.requester_user_id = tx.user_id
+           AND r.source_transaction_id = tx.id
+           AND COALESCE(r.request_kind, 'card') = 'card'
+           AND COALESCE(r.status, 'pending') <> 'cancelled'
+          WHERE tx.user_id = t.user_id
+            AND (tx.id = t.id OR tx.parent_txn_id = t.id)
+        ) AS protected_shared_debt_count
       FROM transactions t
       LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
       LEFT JOIN cards c ON c.id = t.card_id AND c.user_id = t.user_id
-      WHERE t.user_id = ?
-        AND COALESCE(t.parent_txn_id, 0) = 0
+      WHERE ${where.join('\n        AND ')}
       ORDER BY datetime(t.created_at) DESC, t.id DESC
       LIMIT ?
-    `).all(hoursModifier, Number(userId || 0), limit);
+    `).all(...params);
   }
 
   function getAllocationsForTransactions(userId, transactionIds = []) {

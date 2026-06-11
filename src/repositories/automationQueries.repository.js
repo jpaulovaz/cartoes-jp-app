@@ -275,6 +275,7 @@ function createAutomationQueriesRepository() {
     const month = toInt(options.month, 0);
     const year = toInt(options.year, 0);
     const date = String(options.date || '').slice(0, 10);
+    const orderByCreatedAt = options.orderByCreatedAt === true;
     const params = [Number(userId || 0)];
     const where = ['t.user_id = ?'];
 
@@ -308,7 +309,7 @@ function createAutomationQueriesRepository() {
       LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
       JOIN cards c ON c.id = t.card_id AND c.user_id = t.user_id
       WHERE ${where.join('\n        AND ')}
-      ORDER BY substr(COALESCE(t.txn_date, t.created_at), 1, 10) DESC, t.id DESC
+      ORDER BY ${orderByCreatedAt ? 'datetime(t.created_at) DESC, t.id DESC' : 'substr(COALESCE(t.txn_date, t.created_at), 1, 10) DESC, t.id DESC'}
       LIMIT ?
     `).all(...params);
   }

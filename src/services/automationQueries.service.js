@@ -571,7 +571,7 @@ function createAutomationQueriesService(deps = {}) {
     });
   }
 
-  function buildPurchasesText({ rows, title, emptyText }) {
+  function buildPurchasesText({ rows, title, emptyText, chronological = false }) {
     if (!rows.length) {
       return [title, '', emptyText || 'Não encontrei compras nesse recorte. Nada de fantasma na fatura por aqui.'].join('\n');
     }
@@ -581,9 +581,16 @@ function createAutomationQueriesService(deps = {}) {
       '',
       `Total encontrado: *${formatBRLFromCents(total)}* em ${rows.length} ${plural(rows.length, 'compra', 'compras')}.`,
       '',
-      ...truncateRows(rows, 12).map((purchase, index) => `${index + 1}. ${purchase.description} — *${formatBRLFromCents(purchase.amount_cents)}* · ${purchase.card_name}${purchase.txn_date ? ` · ${formatDateBR(purchase.txn_date)}` : ''}`)
+      ...truncateRows(rows, 12).map((purchase, index) => {
+        const details = [];
+        if (chronological && purchase.created_at) details.push(`lançada em ${formatDateBR(purchase.created_at)}`);
+        if (chronological && purchase.due_month && purchase.due_year) details.push(`fatura ${String(purchase.due_month).padStart(2, '0')}/${purchase.due_year}`);
+        if (!chronological && purchase.txn_date) details.push(formatDateBR(purchase.txn_date));
+        return `${index + 1}. ${purchase.description} — *${formatBRLFromCents(purchase.amount_cents)}* · ${purchase.card_name}${details.length ? ` · ${details.join(' · ')}` : ''}`;
+      })
     ].join('\n');
   }
+
 
   function getRecentPurchases(payload = {}, meta = {}) {
     return withQueryHandling(payload, meta, 'queries.recent_purchases', ({ user }) => {
@@ -599,12 +606,14 @@ function createAutomationQueriesService(deps = {}) {
         if (resolved.status === 'ambiguous') throw new AutomationApiError(`Encontrei mais de um cartão parecido com "${hint}". Me diz o nome certinho?`, { code: 'NEEDS_CARD_CLARIFICATION', statusCode: 200, details: { matches: resolved.matches } });
         cardId = Number(resolved.item.id || 0);
       }
+      const chronological = !date && !hasPeriodFilter;
       const rows = repository.getRecentPurchases(user.id, {
         limit: query.limit || 10,
         date,
         month: hasPeriodFilter ? period.month : 0,
         year: hasPeriodFilter ? period.year : 0,
-        cardId
+        cardId,
+        orderByCreatedAt: chronological
       });
       const title = date
         ? `🧾 *Compras de ${formatDateBR(date)}*${hint ? ` no ${hint}` : ''}`
@@ -614,8 +623,8 @@ function createAutomationQueriesService(deps = {}) {
       return makeResult({
         ok: true,
         code: date ? 'PURCHASES_BY_DAY' : 'RECENT_PURCHASES',
-        data: { period: hasPeriodFilter ? period : null, date, purchases: rows, chronological: !date && !hasPeriodFilter },
-        whatsapp: { text: buildPurchasesText({ rows, title }) }
+        data: { period: hasPeriodFilter ? period : null, date, purchases: rows, chronological },
+        whatsapp: { text: buildPurchasesText({ rows, title, chronological }) }
       });
     });
   }

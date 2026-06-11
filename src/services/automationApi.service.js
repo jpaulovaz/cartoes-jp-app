@@ -80,6 +80,20 @@ function normalizeIntentText(value) {
     .trim();
 }
 
+function formatAutomationDateBR(value) {
+  if (!value) return '';
+  const parsed = dayjs(value);
+  if (!parsed.isValid()) return '';
+  return parsed.format('DD/MM/YYYY');
+}
+
+function formatAutomationPeriod(month, year) {
+  const parsedMonth = Number(month || 0);
+  const parsedYear = Number(year || 0);
+  if (!parsedMonth || !parsedYear) return '';
+  return `${String(parsedMonth).padStart(2, '0')}/${parsedYear}`;
+}
+
 function isAffirmativeText(value) {
   const text = normalizeIntentText(value);
   return /^(sim|s|quero|bora|pode|ok|claro|vamos|dividir|quero dividir|manda|isso|isso mesmo|correto|confere|confirmo|e esse|é esse|esse mesmo)$/i.test(text)
@@ -750,9 +764,12 @@ function createAutomationApiService(deps = {}) {
           statusCode: 403
         });
       }
+      const limit = Math.max(1, Math.min(20, Number(payload.limit || 5) || 5));
+      const purpose = normalizeIntentText(payload.purpose || payload.reason || 'mutation');
       const rows = repository.getRecentPurchasesForAutomation(resolved.user.id, {
-        limit: payload.limit || 5,
-        windowHours: payload.window_hours || payload.windowHours || null
+        limit,
+        windowHours: payload.window_hours || payload.windowHours || null,
+        eligibleOnly: true
       });
       const purchases = rows.map((row, index) => ({
         option: index + 1,
@@ -762,23 +779,46 @@ function createAutomationApiService(deps = {}) {
         card_id: Number(row.card_id || 0),
         card_name: row.card_name,
         date: row.txn_date,
+        created_at: row.created_at || null,
         due_month: Number(row.due_month || 0) || null,
         due_year: Number(row.due_year || 0) || null,
         installments: Number(row.installments || 1) || 1,
         created_by_automation: Number(row.created_by_automation || 0) === 1,
-        mutation_window_open: Number(row.is_mutation_window_open || 0) === 1
+        mutation_window_open: Number(row.is_mutation_window_open || 0) === 1,
+        month_closed: Number(row.closed_month_count || 0) > 0,
+        protected_shared_debt: Number(row.protected_shared_debt_count || 0) > 0
       }));
+      const title = purpose.includes('participant') || purpose.includes('divid')
+        ? '🧾 *Últimas compras lançadas para dividir*'
+        : '🧾 *Últimas compras lançadas para ajustar*';
       const lines = purchases.length
-        ? purchases.map((purchase) => `${purchase.option}. #${purchase.id} — ${purchase.description} — *${formatBRLFromCents(purchase.amount_cents)}* no ${purchase.card_name || 'cartão'}${purchase.date ? ` (${purchase.date})` : ''}`)
-        : ['Não encontrei compras recentes para ajustar por aqui.'];
+        ? purchases.map((purchase) => {
+          const metaParts = [];
+          const createdAt = formatAutomationDateBR(purchase.created_at);
+          const duePeriod = formatAutomationPeriod(purchase.due_month, purchase.due_year);
+          if (createdAt) metaParts.push(`lançada em ${createdAt}`);
+          if (duePeriod) metaParts.push(`fatura ${duePeriod}`);
+          return `${purchase.option}. #${purchase.id} — ${purchase.description} — *${formatBRLFromCents(purchase.amount_cents)}* no ${purchase.card_name || 'cartão'}${metaParts.length ? ` · ${metaParts.join(' · ')}` : ''}`;
+        })
+        : ['Não encontrei compras recentes que dê para mexer pelo WhatsApp.'];
+      const guidance = purpose.includes('participant') || purpose.includes('divid')
+        ? 'Quer dividir alguma? Pode dizer: *dividir #123 com Ana*.'
+        : 'Quer corrigir alguma? Pode dizer: *corrige #123 para R$ 189,90*, *apaga #123* ou *dividir #123 com Ana*.';
+      const appFallback = `Mostrei até ${limit} compras recentes que dá para mexer pelo WhatsApp. Se quiser alterar outra, procure pelo app.`;
+      const emptyFallback = 'Para compras mais antigas, faturas fechadas ou acertos já enviados, faça o ajuste pelo app.';
       const response = makeResult({
         ok: true,
         code: 'RECENT_PURCHASES',
         purchases,
+        criteria: {
+          ordered_by: 'created_at_desc',
+          eligible_only: true,
+          limit
+        },
         whatsapp: {
           text: purchases.length
-            ? [`🧾 *Compras recentes*`, '', ...lines, '', 'Quer corrigir alguma? Pode dizer: *corrige #123 para R$ 189,90*, *apaga #123* ou *dividir #123 com Ana*.'].join('\n')
-            : 'Não encontrei compras recentes para ajustar por aqui. Me manda uma compra nova ou faça o ajuste pelo app.'
+            ? [title, '', ...lines, '', appFallback, guidance].join('\n')
+            : ['Não encontrei compras recentes que dê para mexer pelo WhatsApp.', emptyFallback].join('\n')
         }
       });
       repository.logRequest({

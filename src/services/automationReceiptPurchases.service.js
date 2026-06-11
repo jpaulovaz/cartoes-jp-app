@@ -405,21 +405,42 @@ function createAutomationReceiptPurchasesService(deps = {}) {
     }
   }
 
+  function buildErrorDebug(error) {
+    if (!repository.isDebugEnabled()) return null;
+    return {
+      name: error?.name || 'Error',
+      code: error?.code || null,
+      message: error?.message || null,
+      stack: String(error?.stack || '').split('\n').slice(0, 8).join('\n') || null
+    };
+  }
+
   function handleServiceError(error) {
+    const debug = buildErrorDebug(error);
+    const responseMeta = {
+      error_name: error?.name || 'Error',
+      error_code: error?.code || null,
+      error_message: error?.message || null,
+      debug_enabled: Boolean(debug)
+    };
     if (error instanceof ReceiptPurchaseAutomationError || error instanceof PurchaseCreationError) {
       return makeResult({
         ok: false,
         code: error.code || 'RECEIPT_PURCHASE_VALIDATION_ERROR',
         message: error.message,
         details: error.details || null,
-        whatsapp: { text: error.message }
+        whatsapp: { text: error.message },
+        response_meta: responseMeta,
+        ...(debug ? { debug } : {})
       }, error.statusCode || 400);
     }
     return makeResult({
       ok: false,
       code: error.code || 'RECEIPT_PURCHASE_INTERNAL_ERROR',
       message: error.message || 'A leitura do comprovante tropeçou por aqui. Tenta de novo em instantes.',
-      whatsapp: { text: 'A leitura do comprovante tropeçou por aqui. Tenta de novo em instantes.' }
+      whatsapp: { text: 'A leitura do comprovante tropeçou por aqui. Tenta de novo em instantes.' },
+      response_meta: responseMeta,
+      ...(debug ? { debug } : {})
     }, error.statusCode || 500);
   }
 
@@ -519,7 +540,8 @@ function createAutomationReceiptPurchasesService(deps = {}) {
             statusCode: response.statusCode,
             resultCode: response.code,
             sourceMessageId,
-            ipAddress: meta?.ipAddress || null
+            ipAddress: meta?.ipAddress || null,
+            responseMeta: response.response_meta || {}
           });
           return response;
         });
@@ -546,7 +568,8 @@ function createAutomationReceiptPurchasesService(deps = {}) {
         statusCode: response.statusCode,
         resultCode: response.code,
         sourceMessageId,
-        ipAddress: meta?.ipAddress || null
+        ipAddress: meta?.ipAddress || null,
+        responseMeta: response.response_meta || {}
       });
       return response;
     }

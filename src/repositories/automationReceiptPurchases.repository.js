@@ -158,7 +158,7 @@ function createAutomationReceiptPurchasesRepository() {
         user_id, phone_e164, whatsapp_number, channel, original_filename, mime_type, byte_size,
         sha256, storage_path, source_message_id, source_meta_json, caption, parsed_json,
         provider_key, provider_model, confidence, status, expires_at, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, NULL, ?, ?, NULL, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, NULL, ?, ?, NULL, ?, ?, ?, ?)
     `).run(
       Number(payload.userId || 0),
       payload.phoneE164 || null,

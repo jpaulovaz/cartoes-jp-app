@@ -6,19 +6,18 @@
         "rule": {
           "interval": [
             {
-              "field": "minutes",
-              "minutesInterval": 5
+              "field": "minutes"
             }
           ]
         }
       },
-      "id": "d7ac7407-4b4b-4e5a-9156-b853ce2c8fb0",
+      "id": "c6bbdd3a-a232-4fba-82b1-e376d44f1032",
       "name": "Every 5 Minutes",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
-        -700,
-        200
+        -1296,
+        464
       ]
     },
     {
@@ -50,26 +49,26 @@
           }
         }
       },
-      "id": "ad0defc2-e44b-47ec-8b2d-2f710f6d3e65",
+      "id": "6c3dd8fb-06f9-4317-b190-d45a7a0aef7c",
       "name": "Call Due Reminders",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
-        -460,
-        200
+        -1056,
+        464
       ]
     },
     {
       "parameters": {
         "jsCode": "const result = $json || {};\nconst reminders = Array.isArray(result.reminders) ? result.reminders : [];\nif (!reminders.length) return [{ json: { has_due: false } }];\nreturn reminders.map((reminder) => ({\n  json: {\n    has_due: true,\n    id: reminder.id,\n    user_id: reminder.user_id,\n    phone: String(reminder.whatsapp_number || reminder.phone_e164 || '').replace(/\\D/g, ''),\n    phone_e164: reminder.phone_e164,\n    whatsapp_number: reminder.whatsapp_number,\n    title: reminder.title,\n    outbound_text: reminder.outbound_text || reminder.whatsapp?.text || `⏰ *Lembrete do AcerttaPay*\\n\\n${reminder.title}`,\n    channel: reminder.channel || 'whatsapp'\n  }\n}));"
       },
-      "id": "f99a4651-72a5-412d-a3bb-6e4cb6c22e35",
+      "id": "2b85dc1d-5baf-4dc8-a1d6-f3d19f2c8d6e",
       "name": "Expand Due Reminders",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -220,
-        200
+        -816,
+        464
       ]
     },
     {
@@ -97,24 +96,24 @@
         },
         "options": {}
       },
-      "id": "bfa3edf9-a5a5-4e09-b8bc-e77377dbb606",
+      "id": "d48141c0-a5e6-4acc-9974-6231f34045fc",
       "name": "Has Due Reminder?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        20,
-        200
+        -576,
+        464
       ]
     },
     {
       "parameters": {},
-      "id": "cda4db7d-8975-4f2f-bb6d-bd8731203bba",
+      "id": "176319cd-bae9-4a54-b53d-729aaac80b32",
       "name": "No Due Reminders",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        260,
-        380
+        -336,
+        656
       ]
     },
     {
@@ -128,13 +127,13 @@
           "linkPreview": false
         }
       },
-      "id": "88e2b8ac-f6ff-4dd3-be18-21c1c68a0e4d",
+      "id": "bf6d4368-7c6f-4ddb-965d-1e2f1ee3bfae",
       "name": "Send Due Reminder",
       "type": "n8n-nodes-evolution-api.evolutionApi",
       "typeVersion": 1,
       "position": [
-        260,
-        120
+        -336,
+        384
       ],
       "credentials": {
         "evolutionApi": {
@@ -172,13 +171,13 @@
           }
         }
       },
-      "id": "aafec256-f86a-47f7-ac90-42f354f7f011",
+      "id": "17efaafb-32c1-4ad1-b7e9-a917b0315bca",
       "name": "Mark Reminder Sent",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
-        520,
-        120
+        -80,
+        384
       ]
     }
   ],
@@ -247,21 +246,26 @@
       ]
     }
   },
-  "active": false,
+  "active": true,
   "settings": {
     "executionOrder": "v1",
-    "binaryMode": "separate"
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "lBb6OPLcQWU3v1JX",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
   },
-  "versionId": "42db1714-d364-4ffa-877d-3ede2b3f924f",
+  "versionId": "5f15649f-4dc4-4409-b6af-a2b2c7e825ba",
   "meta": {
-    "templateCredsSetupCompleted": true
+    "instanceId": "54c1e6e642219d63bcca2e850583056b9d4a7efdf129870e6550b48695aa00e1"
   },
+  "id": "fRFKqIsv6HTWVgMh",
   "tags": [
     {
-      "name": "ACERTTAPAY",
-      "id": "pQ0ytyDUaBKZDloP",
       "updatedAt": "2026-06-08T17:04:41.481Z",
-      "createdAt": "2026-06-08T17:04:41.481Z"
+      "createdAt": "2026-06-08T17:04:41.481Z",
+      "id": "pQ0ytyDUaBKZDloP",
+      "name": "ACERTTAPAY"
     }
   ]
 }

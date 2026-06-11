@@ -3,13 +3,13 @@
   "nodes": [
     {
       "parameters": {},
-      "id": "7ce08c92-152d-488d-ad02-31af03ba45a7",
+      "id": "5e23987f-f994-4a3c-909c-94578cd8ca49",
       "name": "WA Incoming",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        -1200,
-        260
+        -2016,
+        432
       ],
       "webhookId": "7bc7c92d-1232-420e-a6f7-59a6d8a823d1"
     },
@@ -17,26 +17,26 @@
       "parameters": {
         "inputSource": "passthrough"
       },
-      "id": "544ef397-9525-43fc-b1f4-9581d9c40ce4",
+      "id": "17e37e41-de1e-4fa1-b7aa-1fa12f6e32b2",
       "name": "EntradaWhatsapp",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1.1,
       "position": [
-        -1200,
-        420
+        -2016,
+        592
       ]
     },
     {
       "parameters": {
         "jsCode": "const routedRoot = $json || {};\nif (routedRoot.whatsapp && (routedRoot.router || routedRoot.user || routedRoot.runtime || routedRoot.media)) {\n  const whatsapp = routedRoot.whatsapp || {};\n  const media = routedRoot.media || {};\n  const rawPhone = String(whatsapp.phone || whatsapp.phone_e164 || routedRoot.phone || '').trim();\n  const digits = rawPhone.split('@')[0].replace(/\\D/g, '');\n  const text = String(whatsapp.message_text || routedRoot.message_text || '').trim();\n  const messageId = String(whatsapp.message_id || routedRoot.message_id || routedRoot.source?.message_id || '').trim() || (digits ? digits + ':' + Date.now() : 'unknown:' + Date.now());\n  return [{ json: {\n    ...whatsapp,\n    phone: digits,\n    remote_jid: whatsapp.remote_jid || (digits ? digits + '@s.whatsapp.net' : ''),\n    message_text: text,\n    message_id: messageId,\n    message_type: whatsapp.message_type || (media.is_pdf ? 'documentMessage' : 'conversation'),\n    push_name: whatsapp.push_name || '',\n    instance: whatsapp.instance || routedRoot.source?.instance || $env.EVOLUTION_INSTANCE_NAME || '',\n    from_me: false,\n    is_group: false,\n    can_reply: Boolean(digits),\n    is_supported_text: Boolean(text || media.is_pdf),\n    is_valid_user_message: Boolean(digits && (text || media.is_pdf)),\n    current_date: routedRoot.runtime?.current_date || new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' }),\n    raw: routedRoot,\n    user: routedRoot.user || {},\n    conversation: routedRoot.conversation || {},\n    router: routedRoot.router || {},\n    media,\n    runtime: routedRoot.runtime || {},\n    capabilities: routedRoot.capabilities || []\n  }}];\n}\nconst root = $json || {};\nconst envelope = root.body && typeof root.body === 'object' ? root.body : root;\nconst data = envelope.data && typeof envelope.data === 'object' ? envelope.data : (root.data || envelope);\nconst key = data.key || envelope.key || root.key || {};\nconst msg = data.message || envelope.message || root.message || {};\n\nfunction onlyDigits(value) {\n  return String(value || '').split('@')[0].replace(/\\D/g, '');\n}\n\nfunction firstPhone(candidates) {\n  for (const candidate of candidates) {\n    const digits = onlyDigits(candidate);\n    if (digits.length >= 10) return digits;\n  }\n  return '';\n}\n\nconst remoteJid = String(\n  key.remoteJid ||\n  key.remoteJidAlt ||\n  data.remoteJid ||\n  data.from ||\n  envelope.from ||\n  root.from ||\n  ''\n).trim();\n\nconst phone = firstPhone([\n  key.remoteJid,\n  key.remoteJidAlt,\n  data.remoteJid,\n  data.number,\n  envelope.number,\n  root.number,\n  data.phone,\n  envelope.phone,\n  root.phone,\n  data.sender,\n  envelope.sender,\n  root.sender\n]);\n\nconst text = String(\n  data.text ||\n  envelope.text ||\n  root.text ||\n  data.bodyText ||\n  envelope.bodyText ||\n  msg.conversation ||\n  msg.extendedTextMessage?.text ||\n  msg.imageMessage?.caption ||\n  msg.videoMessage?.caption ||\n  msg.documentMessage?.caption ||\n  msg.buttonsResponseMessage?.selectedDisplayText ||\n  msg.listResponseMessage?.title ||\n  msg.templateButtonReplyMessage?.selectedDisplayText ||\n  ''\n).trim();\n\nconst messageId = String(\n  key.id ||\n  data.messageId ||\n  data.id ||\n  envelope.message_id ||\n  root.message_id ||\n  root.messageId ||\n  root.id ||\n  ''\n).trim() || `${phone || 'unknown'}:${Date.now()}`;\n\nconst fromMe = Boolean(key.fromMe || data.fromMe || envelope.fromMe || root.fromMe);\nconst messageType = String(data.messageType || envelope.messageType || root.messageType || '').trim();\nconst instance = String(envelope.instance || data.instance || root.instance || $env.EVOLUTION_INSTANCE_NAME || '').trim();\nconst isGroup = remoteJid.includes('@g.us');\nconst canReply = Boolean(phone && !fromMe && !isGroup);\nconst isSupportedText = Boolean(text);\n\nreturn [{\n  json: {\n    phone,\n    remote_jid: remoteJid,\n    message_text: text,\n    message_id: messageId,\n    message_type: messageType,\n    push_name: data.pushName || envelope.pushName || root.pushName || data.push_name || envelope.push_name || '',\n    instance,\n    from_me: fromMe,\n    is_group: isGroup,\n    can_reply: canReply,\n    is_supported_text: isSupportedText,\n    is_valid_user_message: Boolean(canReply && isSupportedText),\n    current_date: new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' }),\n    raw: root\n  }\n}];\n"
       },
-      "id": "4741d4a3-c6b7-4d55-a684-c6dd9d2c8c3e",
+      "id": "ecac6309-98a2-44e9-9c12-25f3328ecf9d",
       "name": "Normalize Evolution Payload",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -960,
-        340
+        -1776,
+        512
       ]
     },
     {
@@ -64,39 +64,39 @@
         },
         "options": {}
       },
-      "id": "cade8302-c983-4370-87e4-a7aef30e46d3",
+      "id": "b4c48cda-ea2e-4718-806c-514798adb19b",
       "name": "Is Valid User Message?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -720,
-        340
+        -1536,
+        512
       ]
     },
     {
       "parameters": {
         "jsCode": "const root = $json || {};\nconst whatsapp = root.whatsapp && typeof root.whatsapp === 'object' ? root.whatsapp : {};\nconst text = String(root.outbound_text || whatsapp.text || root.message || root.reply_text || root.clarifying_question || \"Ainda não consigo ler esse tipo de mensagem por aqui. Me manda em texto? Se for fatura, pode enviar o PDF.\").trim();\nreturn [{ json: { ...root, ok: root.ok !== false, workflow_key: root.workflow_key || \"1.2\", outbound_text: text, send_by_orchestrator: true, whatsapp: { ...whatsapp, text } } }];"
       },
-      "id": "8c6c850b-0ffe-42b5-a8d8-7bc3f1070eda",
+      "id": "bfde2c7e-4237-4a20-b5e7-dda406ba8714",
       "name": "Send Unsupported Message",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -480,
-        520
+        -1296,
+        688
       ]
     },
     {
       "parameters": {
         "jsCode": "const normalized = $('Normalize Evolution Payload').first().json || {};\nconst root = normalized.raw || $json || {};\nconst user = normalized.user || root.user || {};\nconst conversation = normalized.conversation || root.conversation || {};\nconst authorized = user.authorized !== false && Number(user.id || 0) > 0;\nreturn [{ json: { ...root, authorized, code: authorized ? 'AUTHORIZED_BY_ORCHESTRATOR' : 'NOT_AUTHORIZED', user, conversation, phone: normalized.phone, whatsapp: { ...(root.whatsapp || {}), phone: normalized.phone, message_text: normalized.message_text, message_id: normalized.message_id, instance: normalized.instance } } }];"
       },
-      "id": "cea3d11d-1369-4eab-988b-3628918ec7bf",
+      "id": "abcfc708-add9-4058-a210-89484eec6f81",
       "name": "Resolve AcerttaPay User",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -480,
-        220
+        -1296,
+        384
       ]
     },
     {
@@ -124,26 +124,26 @@
         },
         "options": {}
       },
-      "id": "b6f82922-b520-456a-9cb8-3eaa496c8bb4",
+      "id": "9326bda2-4051-4e9e-9d70-608b381e8a88",
       "name": "Authorized?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -240,
-        220
+        -1056,
+        384
       ]
     },
     {
       "parameters": {
         "jsCode": "const root = $json || {};\nconst whatsapp = root.whatsapp && typeof root.whatsapp === 'object' ? root.whatsapp : {};\nconst text = String(root.outbound_text || whatsapp.text || root.message || root.reply_text || root.clarifying_question || \"Esse número ainda não está liberado no AcerttaPay. Ative o WhatsApp nas Configurações do app.\").trim();\nreturn [{ json: { ...root, ok: root.ok !== false, workflow_key: root.workflow_key || \"1.2\", outbound_text: text, send_by_orchestrator: true, whatsapp: { ...whatsapp, text } } }];"
       },
-      "id": "0467dca3-df70-48d2-bd5d-ad1b9d55b1ac",
+      "id": "eebb9f6c-3fbf-4c23-9dcf-fcf9af974487",
       "name": "Send Authorization Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        0,
-        420
+        -816,
+        592
       ]
     },
     {
@@ -171,13 +171,13 @@
         },
         "options": {}
       },
-      "id": "4d1a56c2-2b5f-434d-84b0-7f40a7a97fa3",
+      "id": "7adaa92c-35f1-4a9f-b68c-06815614cba5",
       "name": "Has Pending Conversation?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        0,
-        120
+        -816,
+        288
       ]
     },
     {
@@ -193,10 +193,10 @@
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3.1,
       "position": [
-        280,
-        -80
+        -528,
+        80
       ],
-      "id": "2cda4aed-57c2-46c0-802e-8d4de1dd6620",
+      "id": "d298fdaf-49c6-47a3-bfc6-8410e225f61a",
       "name": "AI Parse Pending Correction Reply"
     },
     {
@@ -209,10 +209,10 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1.1,
       "position": [
-        280,
-        140
+        -528,
+        304
       ],
-      "id": "1ca6b663-2d3b-4c13-88e1-9a403a258674",
+      "id": "5ae0b634-906e-4a9b-afe6-c28afb9eebc4",
       "name": "Gemini Chat Model - Pending Correction",
       "credentials": {
         "googlePalmApi": {
@@ -223,34 +223,34 @@
     },
     {
       "parameters": {},
-      "id": "6a9e50b2-d22d-4fb1-9572-7cebc71cacca",
+      "id": "9c4e1a3f-fcc0-4e69-a948-d286800cb62b",
       "name": "Think Tool - Pending Correction",
       "type": "@n8n/n8n-nodes-langchain.toolThink",
       "typeVersion": 1,
       "position": [
-        460,
-        140
+        -352,
+        304
       ]
     },
     {
       "parameters": {
         "sessionIdType": "customKey",
         "sessionKey": "={{ 'acerttapay:wa:1.2:' + ($('Normalize Evolution Payload').first().json.phone || $json.whatsapp?.phone || $json.phone || 'unknown') }}",
-        "contextWindowLength": 10,
-        "sessionTTL": "={{ Number($env.ACERTTAPAY_N8N_MEMORY_TTL_SECONDS || 86400) }}"
+        "sessionTTL": "={{ Number($env.ACERTTAPAY_N8N_MEMORY_TTL_SECONDS || 86400) }}",
+        "contextWindowLength": 10
       },
-      "id": "628dc691-a8e2-4d64-b717-fd0c872ef0f8",
+      "id": "533300f9-7542-49c3-8895-030d173135ef",
       "name": "WhatsApp Correction Memory",
       "type": "@n8n/n8n-nodes-langchain.memoryRedisChat",
       "typeVersion": 1.4,
       "position": [
-        620,
-        140
+        -192,
+        304
       ],
       "credentials": {
         "redis": {
-          "id": "REPLACE_REDIS_CREDENTIAL",
-          "name": "Redis Memory"
+          "id": "hicC02g2XH1Cr95P",
+          "name": "Redis account"
         }
       }
     },
@@ -258,26 +258,26 @@
       "parameters": {
         "jsCode": "function cleanJsonContent(value) {\n  if (value && typeof value === 'object') return value;\n  const raw = String(value || '').trim();\n  if (!raw) return '';\n  const withoutFence = raw.replace(/^```(?:json)?\\s*/i, '').replace(/```$/i, '').trim();\n  const first = withoutFence.indexOf('{');\n  const last = withoutFence.lastIndexOf('}');\n  if (first >= 0 && last > first) return withoutFence.slice(first, last + 1);\n  return withoutFence;\n}\nconst content = $json.output ?? $json.text ?? $json.response ?? $json.choices?.[0]?.message?.content ?? '';\nlet parsed;\ntry {\n  const cleaned = cleanJsonContent(content);\n  parsed = typeof cleaned === 'object' ? cleaned : JSON.parse(cleaned);\n} catch (error) {\n  parsed = null;\n}\nif (!parsed || typeof parsed !== 'object') {\n  parsed = { intent: 'clarification', confidence: 0, needs_backend: false, reply_text: 'Não consegui entender com segurança. Me fala de novo, tipo: corrige a última compra para R$ 189,90.' };\n}\nreturn [{ json: parsed }];"
       },
-      "id": "d4e420a7-cff1-459f-8075-3950b3c7121c",
+      "id": "5df20225-88fd-4f90-8a0b-9da784b261f2",
       "name": "Parse Pending Correction JSON",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        560,
-        -80
+        -256,
+        80
       ]
     },
     {
       "parameters": {
         "jsCode": "const parsed = $json || {};\nconst conversation = $('Resolve AcerttaPay User').first().json.conversation || {};\nconst state = String(conversation.state || '').trim();\nconst payload = conversation.payload || {};\nconst phone = $('Normalize Evolution Payload').first().json.phone;\nconst source = {\n  channel: 'whatsapp',\n  instance: $('Normalize Evolution Payload').first().json.instance,\n  message_id: $('Normalize Evolution Payload').first().json.message_id,\n  raw_text: $('Normalize Evolution Payload').first().json.message_text\n};\nlet endpoint = '/api/automation/v1/conversations/reply';\nlet body = { phone, source, reply: parsed };\nif (state === 'awaiting_purchase_edit_confirmation') {\n  endpoint = `/api/automation/v1/purchases/${payload.purchase_id || conversation.related_purchase_id || 'last'}/confirm-edit`;\n  body = { phone, source, reply: parsed, patch: payload.patch || {}, confirm: parsed.confirm === true };\n}\nif (state === 'awaiting_purchase_delete_confirmation') {\n  endpoint = `/api/automation/v1/purchases/${payload.purchase_id || conversation.related_purchase_id || 'last'}/confirm-delete`;\n  body = { phone, source, reply: parsed, confirm: parsed.confirm === true };\n}\nreturn [{ json: { endpoint, body, idempotency_key: `whatsapp-correction-reply:${source.instance}:${source.message_id}` } }];"
       },
-      "id": "24d8bd28-c0ad-4f55-981f-2b1efece1cea",
+      "id": "d8a047c5-93de-4711-aaa3-3894902be54f",
       "name": "Prepare Pending Mutation Request",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        800,
-        -80
+        -16,
+        80
       ]
     },
     {
@@ -313,39 +313,39 @@
           }
         }
       },
-      "id": "f329ba63-6831-4dbd-9621-98526c044b05",
+      "id": "349a91e5-7a26-4220-9fce-7b83ecdaab98",
       "name": "Call AcerttaPay Pending Mutation",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
-        1040,
-        -80
+        240,
+        80
       ]
     },
     {
       "parameters": {
         "jsCode": "const res = $json || {};\nlet text = res.whatsapp?.text || res.message || 'Pedido processado no AcerttaPay.';\nif (res.code === 'PURCHASE_EDITED' && res.purchase) {\n  text = res.whatsapp?.text || [\n    '✅ *Compra corrigida!*',\n    '',\n    `🧾 ${res.purchase.description || 'Compra'} — *R$ ${(Number(res.purchase.amount_cents || 0) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}*`,\n    res.purchase.card_name ? `💳 Cartão: *${res.purchase.card_name}*` : '',\n    res.purchase.installments ? `🔢 Parcelas: *${res.purchase.installments}x*` : ''\n  ].filter(Boolean).join('\\n');\n}\nif (res.code === 'PURCHASE_DELETED') text = res.whatsapp?.text || '🗑️ Compra apagada com sucesso.';\nreturn [{ json: { ...res, outbound_text: text } }];"
       },
-      "id": "7770fff4-46bd-44b8-998d-5c031c4c8b4b",
+      "id": "9f62d08e-4033-4cfb-94e3-31d243083d5c",
       "name": "Style Mutation Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1280,
-        -80
+        480,
+        80
       ]
     },
     {
       "parameters": {
         "jsCode": "const root = $json || {};\nconst whatsapp = root.whatsapp && typeof root.whatsapp === 'object' ? root.whatsapp : {};\nconst text = String(root.outbound_text || whatsapp.text || root.message || root.reply_text || root.clarifying_question || \"Pedido processado no AcerttaPay.\").trim();\nreturn [{ json: { ...root, ok: root.ok !== false, workflow_key: root.workflow_key || \"1.2\", outbound_text: text, send_by_orchestrator: true, whatsapp: { ...whatsapp, text } } }];"
       },
-      "id": "499c2d8c-e258-4dbb-b386-72655503fe7b",
+      "id": "4ca3b71f-8716-498f-8bb4-37c2b652da4a",
       "name": "Send Mutation Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1520,
-        -80
+        720,
+        80
       ]
     },
     {
@@ -361,10 +361,10 @@
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3.1,
       "position": [
-        280,
-        300
+        -528,
+        464
       ],
-      "id": "f258ead1-36f0-4f3d-b08e-f4fcefbfa834",
+      "id": "6b259043-827d-4c2c-be0d-1d346aacbf83",
       "name": "AI Purchase Correction Router"
     },
     {
@@ -377,10 +377,10 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1.1,
       "position": [
-        280,
-        520
+        -528,
+        688
       ],
-      "id": "f40478e2-c896-4c62-b070-d03c38016d4c",
+      "id": "170439f6-6720-4613-9183-58d4e0e1956b",
       "name": "Gemini Chat Model - Corrections",
       "credentials": {
         "googlePalmApi": {
@@ -391,26 +391,26 @@
     },
     {
       "parameters": {},
-      "id": "5df3250c-ceac-4819-ab3c-a4d4e67329e2",
+      "id": "56669163-7ad9-4dee-98ba-f250dcd78898",
       "name": "Think Tool - Corrections",
       "type": "@n8n/n8n-nodes-langchain.toolThink",
       "typeVersion": 1,
       "position": [
-        460,
-        520
+        -352,
+        688
       ]
     },
     {
       "parameters": {
         "jsCode": "function cleanJsonContent(value) {\n  if (value && typeof value === 'object') return value;\n  const raw = String(value || '').trim();\n  if (!raw) return '';\n  const withoutFence = raw.replace(/^```(?:json)?\\s*/i, '').replace(/```$/i, '').trim();\n  const first = withoutFence.indexOf('{');\n  const last = withoutFence.lastIndexOf('}');\n  if (first >= 0 && last > first) return withoutFence.slice(first, last + 1);\n  return withoutFence;\n}\nconst content = $json.output ?? $json.text ?? $json.response ?? $json.choices?.[0]?.message?.content ?? '';\nlet parsed;\ntry {\n  const cleaned = cleanJsonContent(content);\n  parsed = typeof cleaned === 'object' ? cleaned : JSON.parse(cleaned);\n} catch (error) {\n  parsed = null;\n}\nif (!parsed || typeof parsed !== 'object') {\n  parsed = { intent: 'clarification', confidence: 0, needs_backend: false, reply_text: 'Não consegui entender com segurança. Me fala de novo, tipo: corrige a última compra para R$ 189,90.' };\n}\nreturn [{ json: parsed }];"
       },
-      "id": "5d616f41-16ab-4585-8441-e2c68ca7e5cb",
+      "id": "c8d4c628-fa1e-432c-84c5-6f29f13b8d60",
       "name": "Parse Correction JSON",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        560,
-        300
+        -256,
+        464
       ]
     },
     {
@@ -438,39 +438,39 @@
         },
         "options": {}
       },
-      "id": "257d153f-77af-4611-a903-f64192c03ee7",
+      "id": "10fbeda5-1318-44de-9ec5-83d1f46ec813",
       "name": "Needs Backend Action?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        800,
-        300
+        -16,
+        464
       ]
     },
     {
       "parameters": {
         "jsCode": "const root = $json || {};\nconst whatsapp = root.whatsapp && typeof root.whatsapp === 'object' ? root.whatsapp : {};\nconst text = String(root.outbound_text || whatsapp.text || root.message || root.reply_text || root.clarifying_question || \"Pedido processado no AcerttaPay.\").trim();\nreturn [{ json: { ...root, ok: root.ok !== false, workflow_key: root.workflow_key || \"1.2\", outbound_text: text, send_by_orchestrator: true, whatsapp: { ...whatsapp, text } } }];"
       },
-      "id": "4c1827d6-7d4e-4715-871d-89127d697059",
+      "id": "7dafc9bd-81a2-4a5b-ac3e-8f18d00c02ba",
       "name": "Send AI Correction Reply",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1040,
-        480
+        240,
+        640
       ]
     },
     {
       "parameters": {
         "jsCode": "const parsed = $json || {};\nconst intent = String(parsed.intent || '').trim();\nconst phone = $('Normalize Evolution Payload').first().json.phone;\nconst source = {\n  channel: 'whatsapp',\n  instance: $('Normalize Evolution Payload').first().json.instance,\n  message_id: $('Normalize Evolution Payload').first().json.message_id,\n  raw_text: $('Normalize Evolution Payload').first().json.message_text\n};\nconst target = parsed.target && typeof parsed.target === 'object' ? parsed.target : {};\nconst purchaseId = target.purchase_id || parsed.purchase_id || parsed.id || 'last';\nlet endpoint = '/api/automation/v1/purchases/recent';\nlet body = { phone, source, limit: 5 };\nif (intent === 'show_last_purchase') {\n  endpoint = '/api/automation/v1/purchases/recent';\n} else if (intent === 'delete_last_purchase') {\n  endpoint = `/api/automation/v1/purchases/${purchaseId}/prepare-delete`;\n  body = { phone, source };\n} else if (intent === 'set_participants_later') {\n  endpoint = `/api/automation/v1/purchases/${purchaseId}/participants/reopen`;\n  body = { phone, source };\n} else if (intent.startsWith('edit_last_purchase_')) {\n  endpoint = `/api/automation/v1/purchases/${purchaseId}/prepare-edit`;\n  body = { phone, source, patch: parsed.patch || {} };\n} else {\n  return [{ json: { reply_text: parsed.reply_text || 'Posso mostrar, corrigir ou apagar compras recentes. Me manda do seu jeito.' } }];\n}\nreturn [{ json: { intent, endpoint, body, idempotency_key: `whatsapp-correction-prepare:${source.instance}:${source.message_id}` } }];"
       },
-      "id": "848932eb-3289-4602-9e76-c08e90a922d7",
+      "id": "4daf1fb3-1e4e-402b-9039-f86463a145fa",
       "name": "Prepare Mutation Request",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1040,
-        220
+        240,
+        384
       ]
     },
     {
@@ -506,39 +506,39 @@
           }
         }
       },
-      "id": "030ee356-7ac7-43ad-a315-d35fdeca5a78",
+      "id": "2fde15ee-9232-42ff-99ad-74467ee3c01f",
       "name": "Call AcerttaPay Mutation",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
-        1280,
-        220
+        480,
+        384
       ]
     },
     {
       "parameters": {
         "jsCode": "const res = $json || {};\nlet text = res.whatsapp?.text || res.message || 'Pedido processado no AcerttaPay.';\nif (res.code === 'PURCHASE_EDITED' && res.purchase) {\n  text = res.whatsapp?.text || [\n    '✅ *Compra corrigida!*',\n    '',\n    `🧾 ${res.purchase.description || 'Compra'} — *R$ ${(Number(res.purchase.amount_cents || 0) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}*`,\n    res.purchase.card_name ? `💳 Cartão: *${res.purchase.card_name}*` : '',\n    res.purchase.installments ? `🔢 Parcelas: *${res.purchase.installments}x*` : ''\n  ].filter(Boolean).join('\\n');\n}\nif (res.code === 'PURCHASE_DELETED') text = res.whatsapp?.text || '🗑️ Compra apagada com sucesso.';\nreturn [{ json: { ...res, outbound_text: text } }];"
       },
-      "id": "fcbc8154-51a2-4b47-a713-86424262cf62",
+      "id": "3c64ef32-3a2b-45cb-9677-b4559103cc7d",
       "name": "Style Prepared Mutation Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1520,
-        220
+        720,
+        384
       ]
     },
     {
       "parameters": {
         "jsCode": "const root = $json || {};\nconst whatsapp = root.whatsapp && typeof root.whatsapp === 'object' ? root.whatsapp : {};\nconst text = String(root.outbound_text || whatsapp.text || root.message || root.reply_text || root.clarifying_question || \"Pedido processado no AcerttaPay.\").trim();\nreturn [{ json: { ...root, ok: root.ok !== false, workflow_key: root.workflow_key || \"1.2\", outbound_text: text, send_by_orchestrator: true, whatsapp: { ...whatsapp, text } } }];"
       },
-      "id": "123b0e59-e14e-4c1e-b0cc-60386710a11a",
+      "id": "17f0cda1-816c-4ff2-bc27-c3dafaa136c1",
       "name": "Send Prepared Mutation Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1760,
-        220
+        960,
+        384
       ]
     }
   ],
@@ -800,13 +800,6 @@
             "type": "ai_memory",
             "index": 0
           }
-        ],
-        [
-          {
-            "node": "AI Purchase Correction Router",
-            "type": "ai_memory",
-            "index": 0
-          }
         ]
       ]
     },
@@ -833,18 +826,26 @@
       ]
     }
   },
-  "active": false,
+  "active": true,
   "settings": {
     "executionOrder": "v1",
-    "binaryMode": "separate"
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "lBb6OPLcQWU3v1JX",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
   },
-  "versionId": "5d654036-0c35-43fe-bd13-8cf6a35234cd",
+  "versionId": "ff60f048-c2f2-4e8e-9dbe-4a4f4c1e4fc6",
   "meta": {
-    "templateCredsSetupCompleted": true
+    "templateCredsSetupCompleted": true,
+    "instanceId": "54c1e6e642219d63bcca2e850583056b9d4a7efdf129870e6550b48695aa00e1"
   },
-  "id": "acerttapay-corrections-12",
+  "id": "bRPTKY7haGfArUZu",
   "tags": [
     {
+      "updatedAt": "2026-06-08T17:04:41.481Z",
+      "createdAt": "2026-06-08T17:04:41.481Z",
+      "id": "pQ0ytyDUaBKZDloP",
       "name": "ACERTTAPAY"
     }
   ]

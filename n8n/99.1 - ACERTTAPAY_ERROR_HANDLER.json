@@ -1,0 +1,282 @@
+{
+  "name": "99.1 - ACERTTAPAY_ERROR_HANDLER",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1488,
+        496
+      ],
+      "id": "af02690f-62ba-48b4-ba3c-3bd691be392d",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "function asText(value) {\n  if (value === undefined || value === null) return '';\n  if (typeof value === 'string') return value;\n  try {\n    return JSON.stringify(value);\n  } catch (error) {\n    return String(value);\n  }\n}\n\nfunction clip(value, limit = 1200) {\n  const text = asText(value).trim();\n  if (!text) return '';\n  return text.length > limit ? text.slice(0, limit - 3) + '...' : text;\n}\n\nfunction redact(value) {\n  return asText(value)\n    .replace(/(x-plex-token|x-api-key|api[_-]?key|apikey|token|password|senha|secret|authorization|cookie)(\\s*[:=]\\s*)([^\\s,;\\n]+)/gi, '$1$2[redigido]')\n    .replace(/Bearer\\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redigido]')\n    .replace(/SID=[^;\\s]+/gi, 'SID=[redigido]');\n}\n\nfunction formatDate(value) {\n  if (!value) return new Date().toISOString();\n  if (typeof value === 'number') return new Date(value).toISOString();\n  const parsed = Date.parse(value);\n  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : String(value);\n}\n\nconst payload = $json || {};\nconst workflow = payload.workflow || {};\nconst execution = payload.execution || {};\nconst trigger = payload.trigger || {};\nconst error = execution.error || trigger.error || payload.error || {};\nconst cause = error.cause || {};\n\nconst workflowName = workflow.name || payload.workflowName || 'Workflow desconhecido';\nconst workflowId = workflow.id || payload.workflowId || 'sem id';\nconst executionId = execution.id || payload.executionId || 'indisponivel';\nconst executionMode = execution.mode || trigger.mode || payload.mode || 'desconhecido';\nconst executionUrl = execution.url || payload.executionUrl || '';\nconst retryOf = execution.retryOf || '';\n\nconst nodeFromError = error.node || payload.node || {};\nconst nodeName = execution.lastNodeExecuted || nodeFromError.name || nodeFromError.id || payload.lastNodeExecuted || 'desconhecido';\nconst nodeType = nodeFromError.type || payload.nodeType || 'nao informado';\n\nconst errorName = error.name || cause.name || payload.errorName || 'Erro';\nconst errorMessage = error.message || cause.message || payload.message || 'Erro sem mensagem retornada pelo n8n.';\nconst errorDescription = error.description || cause.description || payload.description || '';\nconst stack = error.stack || cause.stack || payload.stack || '';\nconst timestamp = formatDate(error.timestamp || trigger.timestamp || execution.startedAt || payload.timestamp);\n\nconst stackResumo = clip(redact(stack), 1200) || 'Stack trace nao disponivel.';\nconst descricaoResumo = errorDescription ? `\\n*Descricao:* ${clip(redact(errorDescription), 700)}` : '';\nconst retryLine = retryOf ? `\\n*Retry de:* ${retryOf}` : '';\nconst urlLine = executionUrl ? `\\n*Abrir execucao:* ${executionUrl}` : '\\n*Abrir execucao:* indisponivel. Confirme se salvar execucoes esta ativo no n8n.';\n\nconst text = clip(`🚨 *Erro no n8n - JohnFlix*\\n\\n*Workflow:* ${workflowName}\\n*Workflow ID:* ${workflowId}\\n*Execucao:* ${executionId}\\n*Modo:* ${executionMode}\\n*No com erro:* ${nodeName}\\n*Tipo do no:* ${nodeType}\\n*Erro:* ${errorName}\\n*Mensagem:* ${clip(redact(errorMessage), 900)}${descricaoResumo}\\n*Horario:* ${timestamp}${retryLine}${urlLine}\\n\\n*Stack resumida:*\\n${stackResumo}`, 3900);\n\nconst adminRaw = String($env.JOHNFLIX_ADMIN_PHONES || $env.JOHNFLIX_ADMIN_PHONE || '').trim();\nconst admins = adminRaw\n  .split(',')\n  .map(v => String(v || '').replace(/\\D/g, ''))\n  .filter(Boolean);\n\nif (!admins.length) {\n  return [{\n    json: {\n      skip_send: true,\n      reason: 'JOHNFLIX_ADMIN_PHONES ou JOHNFLIX_ADMIN_PHONE nao configurado',\n      workflow_name: workflowName,\n      node_name: nodeName,\n      error_name: errorName,\n      error_message: clip(redact(errorMessage), 900),\n      text\n    }\n  }];\n}\n\nreturn admins.map(number => ({\n  json: {\n    skip_send: false,\n    number,\n    text,\n    workflow_name: workflowName,\n    workflow_id: workflowId,\n    execution_id: executionId,\n    execution_url: executionUrl || null,\n    node_name: nodeName,\n    node_type: nodeType,\n    error_name: errorName,\n    error_message: clip(redact(errorMessage), 900),\n    timestamp\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1200,
+        496
+      ],
+      "id": "556f9627-7c92-4a2a-aea7-8523cdcc7260",
+      "name": "formatarAlertaErroAdmin"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "8b400331-d83a-407a-b7f2-ab328a2bb915",
+              "leftValue": "={{ $json.skip_send }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -976,
+        384
+      ],
+      "id": "318653c1-ad56-4be4-99cc-74ae82e7ca0e",
+      "name": "temAdminConfigurado"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.johnflix.com.br/message/sendText/JOHNFLIX",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.JOHNFLIX_EVOLUTION_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\"number\": $json.number, \"text\": $json.text} }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -688,
+        256
+      ],
+      "id": "1cb0b382-eaea-4ca7-acc3-ea59ac05a7bf",
+      "name": "enviarAlertaErroAdmin",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all().map(item => item.json);\n\nreturn [{\n  json: {\n    success: true,\n    alertas_processados: items.length,\n    destino: items.map(item => item.number || item.to || null).filter(Boolean),\n    resumo: 'Fluxo de erro executado. Verifique as respostas do node enviarAlertaErroAdmin para confirmar o envio pela Evolution API.',\n    respostas: items\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -400,
+        256
+      ],
+      "id": "0ce6d4ec-547f-4670-b83a-68933c47828c",
+      "name": "finalizarAlertaErro"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    success: false,\n    reason: $json.reason || 'Nenhum telefone de administrador configurado.',\n    orientacao: 'Configure JOHNFLIX_ADMIN_PHONES com um ou mais numeros separados por virgula, ou JOHNFLIX_ADMIN_PHONE com um numero unico.',\n    workflow_name: $json.workflow_name || null,\n    node_name: $json.node_name || null,\n    error_name: $json.error_name || null,\n    error_message: $json.error_message || null\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -688,
+        496
+      ],
+      "id": "3e09872f-5b99-4e37-95ce-f7effd585e3c",
+      "name": "semAdminConfigurado"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE TABLE IF NOT EXISTS johnflix_error_log (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,\n  workflow_name VARCHAR(255) NULL,\n  workflow_id VARCHAR(120) NULL,\n  execution_id VARCHAR(120) NULL,\n  execution_url TEXT NULL,\n  node_name VARCHAR(255) NULL,\n  node_type VARCHAR(255) NULL,\n  error_name VARCHAR(255) NULL,\n  error_message TEXT NULL,\n  error_timestamp DATETIME NULL,\n  admin_notified TINYINT(1) NOT NULL DEFAULT 0,\n  payload_json LONGTEXT NULL,\n  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  PRIMARY KEY (id),\n  KEY ix_johnflix_error_workflow_created (workflow_name, created_at),\n  KEY ix_johnflix_error_execution (execution_id),\n  KEY ix_johnflix_error_node (node_name, created_at)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        -976,
+        656
+      ],
+      "id": "937b279f-860c-4ce9-83d1-4d9b96c40938",
+      "name": "criarTabelaErrorLogMySQL",
+      "alwaysOutputData": true,
+      "credentials": {
+        "mySql": {
+          "id": "rEPCXMbutQiE9Cx7",
+          "name": "MySQL account 2"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst item = $input.item.json || {};\nfunction sql(value) {\n  if (value === undefined || value === null || value === '') return 'NULL';\n  return \"'\" + String(value).replace(/\\\\/g, '\\\\\\\\').replace(/'/g, \"''\") + \"'\";\n}\nfunction sqlJson(value) { return sql(JSON.stringify(value ?? null)); }\nfunction mysqlDate(value) {\n  const d = value ? new Date(value) : new Date();\n  const ok = Number.isFinite(d.getTime()) ? d : new Date();\n  return ok.toISOString().slice(0,19).replace('T',' ');\n}\nconst query = `INSERT INTO johnflix_error_log (workflow_name, workflow_id, execution_id, execution_url, node_name, node_type, error_name, error_message, error_timestamp, admin_notified, payload_json) VALUES (${sql(item.workflow_name)}, ${sql(item.workflow_id)}, ${sql(item.execution_id)}, ${sql(item.execution_url)}, ${sql(item.node_name)}, ${sql(item.node_type)}, ${sql(item.error_name)}, ${sql(item.error_message)}, ${sql(mysqlDate(item.timestamp))}, ${item.skip_send ? 0 : 1}, ${sqlJson(item)});`;\nreturn { ...item, mysql_query: query };\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -688,
+        656
+      ],
+      "id": "f94e1839-623d-4362-8329-9b0b557dac5b",
+      "name": "prepararLogErroMySQL"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.mysql_query }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        -480,
+        656
+      ],
+      "id": "2469e9de-b327-4a43-b0f7-9c7eccf6a931",
+      "name": "salvarLogErroMySQL",
+      "alwaysOutputData": true,
+      "credentials": {
+        "mySql": {
+          "id": "rEPCXMbutQiE9Cx7",
+          "name": "MySQL account 2"
+        }
+      },
+      "continueOnFail": true
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "formatarAlertaErroAdmin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "formatarAlertaErroAdmin": {
+      "main": [
+        [
+          {
+            "node": "temAdminConfigurado",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "criarTabelaErrorLogMySQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "temAdminConfigurado": {
+      "main": [
+        [
+          {
+            "node": "enviarAlertaErroAdmin",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "semAdminConfigurado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "enviarAlertaErroAdmin": {
+      "main": [
+        [
+          {
+            "node": "finalizarAlertaErro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "criarTabelaErrorLogMySQL": {
+      "main": [
+        [
+          {
+            "node": "prepararLogErroMySQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "prepararLogErroMySQL": {
+      "main": [
+        [
+          {
+            "node": "salvarLogErroMySQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "timezone": "America/Sao_Paulo",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "errorWorkflow": "Cq2guaX5Tz5Q8bcG"
+  },
+  "versionId": "8ddf053d-4733-4de7-91e8-bb9ad8cf4a08",
+  "meta": {
+    "instanceId": "54c1e6e642219d63bcca2e850583056b9d4a7efdf129870e6550b48695aa00e1"
+  },
+  "id": "lBb6OPLcQWU3v1JX",
+  "tags": [
+    {
+      "updatedAt": "2026-06-08T17:04:41.481Z",
+      "createdAt": "2026-06-08T17:04:41.481Z",
+      "id": "pQ0ytyDUaBKZDloP",
+      "name": "ACERTTAPAY"
+    }
+  ]
+}

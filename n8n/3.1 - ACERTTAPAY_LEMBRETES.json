@@ -3,39 +3,39 @@
   "nodes": [
     {
       "parameters": {},
-      "id": "3305b28f-0d16-4894-8f8a-155d7cd682ed",
+      "id": "9adfa3ad-c8d7-4720-9cf3-44493ec13f00",
       "name": "WA Incoming",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        -1200,
-        260
+        -1824,
+        832
       ]
     },
     {
       "parameters": {
         "inputSource": "passthrough"
       },
-      "id": "b5e037f6-fbc9-4ada-b610-0a668dd4c475",
+      "id": "e86d853a-9325-4fff-8317-24faadc65cf2",
       "name": "EntradaWhatsapp",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1.1,
       "position": [
-        -1200,
-        440
+        -1824,
+        1008
       ]
     },
     {
       "parameters": {
         "jsCode": "const routedRoot = $json || {};\nif (routedRoot.whatsapp && (routedRoot.router || routedRoot.user || routedRoot.runtime || routedRoot.media)) {\n  const whatsapp = routedRoot.whatsapp || {};\n  const media = routedRoot.media || {};\n  const rawPhone = String(whatsapp.phone || whatsapp.phone_e164 || routedRoot.phone || '').trim();\n  const digits = rawPhone.split('@')[0].replace(/\\D/g, '');\n  const text = String(whatsapp.message_text || routedRoot.message_text || '').trim();\n  const messageId = String(whatsapp.message_id || routedRoot.message_id || routedRoot.source?.message_id || '').trim() || (digits ? digits + ':' + Date.now() : 'unknown:' + Date.now());\n  return [{ json: {\n    ...whatsapp,\n    phone: digits,\n    remote_jid: whatsapp.remote_jid || (digits ? digits + '@s.whatsapp.net' : ''),\n    message_text: text,\n    message_id: messageId,\n    message_type: whatsapp.message_type || (media.is_pdf ? 'documentMessage' : 'conversation'),\n    push_name: whatsapp.push_name || '',\n    instance: whatsapp.instance || routedRoot.source?.instance || $env.EVOLUTION_INSTANCE_NAME || '',\n    from_me: false,\n    is_group: false,\n    can_reply: Boolean(digits),\n    is_supported_text: Boolean(text || media.is_pdf),\n    is_valid_user_message: Boolean(digits && (text || media.is_pdf)),\n    current_date: routedRoot.runtime?.current_date || new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' }),\n    raw: routedRoot,\n    user: routedRoot.user || {},\n    conversation: routedRoot.conversation || {},\n    router: routedRoot.router || {},\n    media,\n    runtime: routedRoot.runtime || {},\n    capabilities: routedRoot.capabilities || []\n  }}];\n}\nconst root = $json || {};\nconst envelope = root.body && typeof root.body === 'object' ? root.body : root;\nconst data = envelope.data && typeof envelope.data === 'object' ? envelope.data : (root.data || envelope);\nconst key = data.key || envelope.key || root.key || {};\nconst msg = data.message || envelope.message || root.message || {};\n\nfunction onlyDigits(value) {\n  return String(value || '').split('@')[0].replace(/\\D/g, '');\n}\n\nfunction firstPhone(candidates) {\n  for (const candidate of candidates) {\n    const digits = onlyDigits(candidate);\n    if (digits.length >= 10) return digits;\n  }\n  return '';\n}\n\nconst remoteJid = String(\n  key.remoteJid || key.remoteJidAlt || data.remoteJid || data.from || envelope.from || root.from || ''\n).trim();\nconst phone = firstPhone([\n  key.remoteJid, key.remoteJidAlt, data.remoteJid, data.number, envelope.number,\n  root.number, data.phone, envelope.phone, root.phone, data.sender, envelope.sender, root.sender\n]);\nconst text = String(\n  data.text || envelope.text || root.text || data.bodyText || envelope.bodyText ||\n  msg.conversation || msg.extendedTextMessage?.text || msg.imageMessage?.caption ||\n  msg.videoMessage?.caption || msg.documentMessage?.caption ||\n  msg.buttonsResponseMessage?.selectedDisplayText || msg.listResponseMessage?.title ||\n  msg.templateButtonReplyMessage?.selectedDisplayText || ''\n).trim();\nconst messageId = String(\n  key.id || data.messageId || data.id || envelope.message_id || root.message_id ||\n  root.messageId || root.id || ''\n).trim() || `${phone || 'unknown'}:${Date.now()}`;\nconst fromMe = Boolean(key.fromMe || data.fromMe || envelope.fromMe || root.fromMe);\nconst messageType = String(data.messageType || envelope.messageType || root.messageType || '').trim();\nconst instance = String(envelope.instance || data.instance || root.instance || $env.EVOLUTION_INSTANCE_NAME || '').trim();\nconst isGroup = remoteJid.includes('@g.us');\nconst canReply = Boolean(phone && !fromMe && !isGroup);\nconst isSupportedText = Boolean(text);\nreturn [{ json: {\n  phone,\n  remote_jid: remoteJid,\n  message_text: text,\n  message_id: messageId,\n  message_type: messageType,\n  push_name: data.pushName || envelope.pushName || root.pushName || data.push_name || envelope.push_name || '',\n  instance,\n  from_me: fromMe,\n  is_group: isGroup,\n  can_reply: canReply,\n  is_supported_text: isSupportedText,\n  is_valid_user_message: Boolean(canReply && isSupportedText),\n  current_date: new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' }),\n  current_datetime: new Date().toLocaleString('sv-SE', { timeZone: 'America/Sao_Paulo', hour12: false }).replace(' ', 'T'),\n  raw: root\n} }];"
       },
-      "id": "bdf1e70e-5e30-4708-a18f-c176e0199c58",
+      "id": "94352114-b6e8-438d-986a-4b2b439c256f",
       "name": "Normalize Evolution Payload",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -960,
-        340
+        -1584,
+        912
       ]
     },
     {
@@ -63,13 +63,13 @@
         },
         "options": {}
       },
-      "id": "650bd6d9-ad9b-4cef-b5ad-5dd53125b920",
+      "id": "068dc1d8-ad0e-4a6f-a457-f95bc12f497c",
       "name": "Is Valid User Message?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -720,
-        340
+        -1344,
+        912
       ]
     },
     {
@@ -97,50 +97,50 @@
         },
         "options": {}
       },
-      "id": "daaaadd3-8c5f-4416-ba58-b979a34b8158",
+      "id": "097b4d5f-2d09-4c5a-be7a-90d8f2c1bf85",
       "name": "Can Reply Unsupported?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -480,
-        520
+        -1104,
+        1088
       ]
     },
     {
       "parameters": {
         "jsCode": "const root = $json || {};\nconst whatsapp = root.whatsapp && typeof root.whatsapp === 'object' ? root.whatsapp : {};\nconst text = String(root.outbound_text || whatsapp.text || root.message || root.reply_text || root.clarifying_question || \"Ainda não consigo ler esse tipo de mensagem por aqui. Me manda em texto? Se for fatura, pode enviar o PDF.\").trim();\nreturn [{ json: { ...root, ok: root.ok !== false, workflow_key: root.workflow_key || \"3.1\", outbound_text: text, send_by_orchestrator: true, whatsapp: { ...whatsapp, text } } }];"
       },
-      "id": "f212ff05-61b7-4c52-bd83-02d2a8a6cc76",
+      "id": "c233eac3-5423-4488-8546-197f94db4bb2",
       "name": "Send Unsupported Message",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -240,
-        520
+        -864,
+        1088
       ]
     },
     {
       "parameters": {},
-      "id": "4bacf086-d437-4f59-97ec-fdd7297bfef2",
+      "id": "d1489491-747c-4e76-914a-b979a0f7a04a",
       "name": "Ignore Message",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        -240,
-        700
+        -864,
+        1280
       ]
     },
     {
       "parameters": {
         "jsCode": "const normalized = $('Normalize Evolution Payload').first().json || {};\nconst root = normalized.raw || $json || {};\nconst user = normalized.user || root.user || {};\nconst conversation = normalized.conversation || root.conversation || {};\nconst authorized = user.authorized !== false && Number(user.id || 0) > 0;\nreturn [{ json: { ...root, authorized, code: authorized ? 'AUTHORIZED_BY_ORCHESTRATOR' : 'NOT_AUTHORIZED', user, conversation, phone: normalized.phone, whatsapp: { ...(root.whatsapp || {}), phone: normalized.phone, message_text: normalized.message_text, message_id: normalized.message_id, instance: normalized.instance } } }];"
       },
-      "id": "f2dbdf95-d009-4819-9ba1-6a4ab4cbcc16",
+      "id": "54391c9b-5115-4c56-8d85-b8559d867fba",
       "name": "Resolve AcerttaPay User",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -480,
-        220
+        -1104,
+        800
       ]
     },
     {
@@ -168,26 +168,26 @@
         },
         "options": {}
       },
-      "id": "2fa74606-4c19-4ce0-a014-71ca49248955",
+      "id": "a8a7cd8e-43f4-4e34-b2b1-a2851d5ebd7a",
       "name": "Authorized?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -240,
-        220
+        -864,
+        800
       ]
     },
     {
       "parameters": {
         "jsCode": "const root = $json || {};\nconst whatsapp = root.whatsapp && typeof root.whatsapp === 'object' ? root.whatsapp : {};\nconst text = String(root.outbound_text || whatsapp.text || root.message || root.reply_text || root.clarifying_question || \"Esse número ainda não está liberado no AcerttaPay. Ative o WhatsApp nas Configurações do app.\").trim();\nreturn [{ json: { ...root, ok: root.ok !== false, workflow_key: root.workflow_key || \"3.1\", outbound_text: text, send_by_orchestrator: true, whatsapp: { ...whatsapp, text } } }];"
       },
-      "id": "acd24be6-fbe8-41a8-aac8-225952fdb9fc",
+      "id": "76f9d45e-d692-45a4-985c-b83b491bcc25",
       "name": "Send Authorization Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        0,
-        420
+        -640,
+        1120
       ]
     },
     {
@@ -200,13 +200,13 @@
           "returnIntermediateSteps": false
         }
       },
-      "id": "051668cd-741c-4be5-892b-7f5dc5f6c227",
+      "id": "14beaaa2-7af2-453a-991e-fe431c4afeb0",
       "name": "AI Reminder Router",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3.1,
       "position": [
-        40,
-        120
+        -592,
+        688
       ]
     },
     {
@@ -216,13 +216,13 @@
           "temperature": 0
         }
       },
-      "id": "b080b8b1-029d-4ced-b6aa-5ad98addc54b",
+      "id": "7f0f5f1a-0c7e-4b4e-bd7d-b55e51a83c45",
       "name": "Gemini Chat Model - Reminders",
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1.1,
       "position": [
-        40,
-        360
+        -592,
+        928
       ],
       "credentials": {
         "googlePalmApi": {
@@ -235,46 +235,46 @@
       "parameters": {
         "sessionIdType": "customKey",
         "sessionKey": "={{ 'acerttapay:wa:3.1:' + ($('Normalize Evolution Payload').first().json.phone || $json.whatsapp?.phone || $json.phone || 'unknown') }}",
-        "contextWindowLength": 10,
-        "sessionTTL": "={{ Number($env.ACERTTAPAY_N8N_MEMORY_TTL_SECONDS || 86400) }}"
+        "sessionTTL": "={{ Number($env.ACERTTAPAY_N8N_MEMORY_TTL_SECONDS || 86400) }}",
+        "contextWindowLength": 10
       },
-      "id": "c6df04db-8a2a-4737-b285-438f03068956",
+      "id": "56557c5e-0af3-4de9-8506-b18ba6367c68",
       "name": "WhatsApp Reminder Memory",
       "type": "@n8n/n8n-nodes-langchain.memoryRedisChat",
       "typeVersion": 1.4,
       "position": [
-        220,
-        360
+        -400,
+        928
       ],
       "credentials": {
         "redis": {
-          "id": "REPLACE_REDIS_CREDENTIAL",
-          "name": "Redis Memory"
+          "id": "hicC02g2XH1Cr95P",
+          "name": "Redis account"
         }
       }
     },
     {
       "parameters": {},
-      "id": "90c7b8e2-8054-45d8-a9c6-f4f808e08493",
+      "id": "bb529491-ac6b-499c-8742-cac9219822f1",
       "name": "Think Tool - Reminders",
       "type": "@n8n/n8n-nodes-langchain.toolThink",
       "typeVersion": 1,
       "position": [
-        400,
-        360
+        -224,
+        928
       ]
     },
     {
       "parameters": {
         "jsCode": "function cleanJsonContent(value) {\n  if (value && typeof value === 'object') return value;\n  const raw = String(value || '').trim();\n  if (!raw) return '';\n  const withoutFence = raw.replace(/^```(?:json)?\\s*/i, '').replace(/```$/i, '').trim();\n  const first = withoutFence.indexOf('{');\n  const last = withoutFence.lastIndexOf('}');\n  if (first >= 0 && last > first) return withoutFence.slice(first, last + 1);\n  return withoutFence;\n}\nconst content = $json.output ?? $json.text ?? $json.response ?? $json.choices?.[0]?.message?.content ?? '';\nlet parsed;\ntry {\n  const cleaned = cleanJsonContent(content);\n  parsed = typeof cleaned === 'object' ? cleaned : JSON.parse(cleaned);\n} catch (error) {\n  parsed = {\n    intent: 'help',\n    confidence: 0,\n    needs_clarification: false,\n    reply_text: 'Posso criar, listar, concluir, cancelar e adiar lembretes financeiros. Ex.: *me lembra amanhã de pagar a fatura do Nubank*.',\n    reminder: {},\n    query: {},\n    target: {},\n    snooze: {}\n  };\n}\nif (!parsed || typeof parsed !== 'object') parsed = { intent: 'help', confidence: 0, query: {}, target: {}, reminder: {}, snooze: {} };\nparsed.intent = String(parsed.intent || 'help').trim();\nparsed.confidence = Number(parsed.confidence || 0);\nparsed.needs_clarification = parsed.needs_clarification === true;\nparsed.reminder = parsed.reminder && typeof parsed.reminder === 'object' ? parsed.reminder : {};\nparsed.query = parsed.query && typeof parsed.query === 'object' ? parsed.query : {};\nparsed.target = parsed.target && typeof parsed.target === 'object' ? parsed.target : {};\nparsed.snooze = parsed.snooze && typeof parsed.snooze === 'object' ? parsed.snooze : {};\nif (parsed.query.limit) parsed.query.limit = Number(parsed.query.limit || 0);\nif (parsed.snooze.minutes) parsed.snooze.minutes = Number(parsed.snooze.minutes || 0);\nif (parsed.snooze.hours) parsed.snooze.hours = Number(parsed.snooze.hours || 0);\nconst actionable = new Set(['create_reminder', 'list_reminders', 'complete_reminder', 'cancel_reminder', 'snooze_reminder']);\nparsed.should_call_api = !parsed.needs_clarification && actionable.has(parsed.intent);\nif (!parsed.should_call_api && !parsed.reply_text) {\n  parsed.reply_text = parsed.clarifying_question || 'Me diz qual lembrete você quer criar ou consultar. Ex.: *me lembra amanhã às 9h de pagar a fatura*.';\n}\nreturn [{ json: parsed }];"
       },
-      "id": "855299e6-bca7-4da7-84b0-cabe2952d681",
+      "id": "2b034db0-12c6-4798-8c4f-f36e74565617",
       "name": "Parse Reminder JSON",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        360,
-        120
+        -272,
+        688
       ]
     },
     {
@@ -302,39 +302,39 @@
         },
         "options": {}
       },
-      "id": "bae01012-c5b3-4ed3-b608-b362814f913f",
+      "id": "22abc1fe-e28b-49b8-8f15-3a96ecea6de6",
       "name": "Should Call Reminder API?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        620,
-        120
+        0,
+        688
       ]
     },
     {
       "parameters": {
         "jsCode": "const root = $json || {};\nconst whatsapp = root.whatsapp && typeof root.whatsapp === 'object' ? root.whatsapp : {};\nconst text = String(root.outbound_text || whatsapp.text || root.message || root.reply_text || root.clarifying_question || \"Pedido processado no AcerttaPay.\").trim();\nreturn [{ json: { ...root, ok: root.ok !== false, workflow_key: root.workflow_key || \"3.1\", outbound_text: text, send_by_orchestrator: true, whatsapp: { ...whatsapp, text } } }];"
       },
-      "id": "c31a331d-31a6-4f54-a706-15bff28aba23",
+      "id": "81cf11e8-a3cb-429f-b245-1ff990f63019",
       "name": "Send AI Reminder Reply",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        880,
-        300
+        256,
+        880
       ]
     },
     {
       "parameters": {
         "jsCode": "const parsed = $json || {};\nconst intent = String(parsed.intent || '').trim();\nconst phone = $('Normalize Evolution Payload').first().json.phone;\nconst source = {\n  channel: 'whatsapp',\n  instance: $('Normalize Evolution Payload').first().json.instance,\n  message_id: $('Normalize Evolution Payload').first().json.message_id,\n  raw_text: $('Normalize Evolution Payload').first().json.message_text\n};\nlet endpoint = '/api/automation/v1/reminders/search';\nlet body = { phone, source };\nlet idempotencySuffix = intent;\nif (intent === 'create_reminder') {\n  endpoint = '/api/automation/v1/reminders';\n  body.reminder = parsed.reminder || {};\n} else if (intent === 'list_reminders') {\n  endpoint = '/api/automation/v1/reminders/search';\n  body.query = parsed.query || {};\n} else if (intent === 'complete_reminder') {\n  const id = String(parsed.target?.reminder_id || parsed.target?.id || '0').replace(/[^0-9]/g, '') || '0';\n  endpoint = `/api/automation/v1/reminders/${id}/complete`;\n  body.target = parsed.target || {};\n} else if (intent === 'cancel_reminder') {\n  const id = String(parsed.target?.reminder_id || parsed.target?.id || '0').replace(/[^0-9]/g, '') || '0';\n  endpoint = `/api/automation/v1/reminders/${id}/cancel`;\n  body.target = parsed.target || {};\n} else if (intent === 'snooze_reminder') {\n  const id = String(parsed.target?.reminder_id || parsed.target?.id || '0').replace(/[^0-9]/g, '') || '0';\n  endpoint = `/api/automation/v1/reminders/${id}/snooze`;\n  body.target = parsed.target || {};\n  body.snooze = parsed.snooze || {};\n}\nreturn [{ json: { intent, endpoint, body, idempotency_key: `whatsapp-reminder:${$('Normalize Evolution Payload').first().json.instance}:${$('Normalize Evolution Payload').first().json.message_id}:${idempotencySuffix}` } }];"
       },
-      "id": "dc43e03d-4c9e-4306-9ac7-d5cd99ca0cec",
+      "id": "a8a1ff9d-c4cc-4d1a-afa6-adfb9cc1fc20",
       "name": "Prepare Reminder Request",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        880,
-        40
+        256,
+        608
       ]
     },
     {
@@ -370,39 +370,39 @@
           }
         }
       },
-      "id": "269ae688-e240-455e-954a-0febb6ceb7ae",
+      "id": "78102086-4750-4b49-9eb7-d691c2021746",
       "name": "Call AcerttaPay Reminder",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
-        1140,
-        40
+        528,
+        608
       ]
     },
     {
       "parameters": {
         "jsCode": "const result = $json || {};\nlet text = result.whatsapp?.text || result.message || result.reply_text || '';\nif (!text) text = 'Lembrete processado no AcerttaPay, mas a resposta veio tímida. Tenta de novo em instantes.';\nreturn [{ json: { ...result, outbound_text: text } }];"
       },
-      "id": "3b86bba4-41ec-4c65-9294-78ac6b648dc8",
+      "id": "b7c4ac3c-8384-4d97-b234-5077ce191407",
       "name": "Style Reminder Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1400,
-        40
+        784,
+        608
       ]
     },
     {
       "parameters": {
         "jsCode": "const root = $json || {};\nconst whatsapp = root.whatsapp && typeof root.whatsapp === 'object' ? root.whatsapp : {};\nconst text = String(root.outbound_text || whatsapp.text || root.message || root.reply_text || root.clarifying_question || \"Pedido processado no AcerttaPay.\").trim();\nreturn [{ json: { ...root, ok: root.ok !== false, workflow_key: root.workflow_key || \"3.1\", outbound_text: text, send_by_orchestrator: true, whatsapp: { ...whatsapp, text } } }];"
       },
-      "id": "afa20331-5b45-4f8a-8e3a-5c97daad0482",
+      "id": "7c0dff23-ef22-4da2-b56e-b31769ce5394",
       "name": "Send Reminder Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1660,
-        40
+        1040,
+        608
       ]
     }
   ],
@@ -613,21 +613,27 @@
       ]
     }
   },
-  "active": false,
+  "active": true,
   "settings": {
     "executionOrder": "v1",
-    "binaryMode": "separate"
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "lBb6OPLcQWU3v1JX",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
   },
-  "versionId": "e1b91ebb-450d-486d-a35f-62b28e94621d",
+  "versionId": "a1914b98-58ca-40f0-a325-2b6dc21dedf0",
   "meta": {
-    "templateCredsSetupCompleted": true
+    "templateCredsSetupCompleted": true,
+    "instanceId": "54c1e6e642219d63bcca2e850583056b9d4a7efdf129870e6550b48695aa00e1"
   },
+  "id": "yE3YCD9V8F05XCUC",
   "tags": [
     {
-      "name": "ACERTTAPAY",
-      "id": "pQ0ytyDUaBKZDloP",
       "updatedAt": "2026-06-08T17:04:41.481Z",
-      "createdAt": "2026-06-08T17:04:41.481Z"
+      "createdAt": "2026-06-08T17:04:41.481Z",
+      "id": "pQ0ytyDUaBKZDloP",
+      "name": "ACERTTAPAY"
     }
   ]
 }

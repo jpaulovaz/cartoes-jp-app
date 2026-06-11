@@ -3,39 +3,39 @@
   "nodes": [
     {
       "parameters": {},
-      "id": "234eab7a-e91a-4431-998f-06f21c3195d0",
+      "id": "3c1bb385-28a1-4a87-be2e-736f259a7e37",
       "name": "WA Incoming",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        -1380,
-        240
+        -2192,
+        1008
       ]
     },
     {
       "parameters": {
         "inputSource": "passthrough"
       },
-      "id": "94511f38-6921-49c0-b5e4-ae6b0cf1cd8b",
+      "id": "beaf7050-6943-4b46-85ec-a6ef3b361ac5",
       "name": "EntradaWhatsapp",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1.1,
       "position": [
-        -1380,
-        420
+        -2192,
+        1184
       ]
     },
     {
       "parameters": {
         "jsCode": "const routedRoot = $json || {};\nif (routedRoot.whatsapp && (routedRoot.router || routedRoot.user || routedRoot.runtime || routedRoot.media)) {\n  const whatsapp = routedRoot.whatsapp || {};\n  const media = routedRoot.media || {};\n  const rawPhone = String(whatsapp.phone || whatsapp.phone_e164 || routedRoot.phone || '').trim();\n  const digits = rawPhone.split('@')[0].replace(/\\D/g, '');\n  const text = String(whatsapp.message_text || routedRoot.message_text || '').trim();\n  const messageId = String(whatsapp.message_id || routedRoot.message_id || routedRoot.source?.message_id || '').trim() || (digits ? digits + ':' + Date.now() : 'unknown:' + Date.now());\n  return [{ json: {\n    ...whatsapp,\n    phone: digits,\n    remote_jid: whatsapp.remote_jid || (digits ? digits + '@s.whatsapp.net' : ''),\n    message_text: text,\n    message_id: messageId,\n    message_type: whatsapp.message_type || (media.is_pdf ? 'documentMessage' : 'conversation'),\n    push_name: whatsapp.push_name || '',\n    instance: whatsapp.instance || routedRoot.source?.instance || $env.EVOLUTION_INSTANCE_NAME || '',\n    from_me: false,\n    is_group: false,\n    can_reply: Boolean(digits),\n    is_supported_text: Boolean(text || media.is_pdf),\n    is_valid_user_message: Boolean(digits && (text || media.is_pdf)),\n    current_date: routedRoot.runtime?.current_date || new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' }),\n    raw: routedRoot,\n    user: routedRoot.user || {},\n    conversation: routedRoot.conversation || {},\n    router: routedRoot.router || {},\n    media,\n    runtime: routedRoot.runtime || {},\n    capabilities: routedRoot.capabilities || []\n  }}];\n}\nconst root = $json.body || $json || {};\nconst data = root.data || root;\nconst key = data.key || {};\nconst msg = data.message || root.message || {};\nconst documentMessage = msg.documentMessage || msg.documentWithCaptionMessage?.message?.documentMessage || msg.ephemeralMessage?.message?.documentMessage || null;\nconst extended = msg.extendedTextMessage || msg.ephemeralMessage?.message?.extendedTextMessage || null;\nconst remoteJid = String(key.remoteJid || data.remoteJid || data.from || root.from || data.sender || root.sender || '').trim();\nconst isGroup = /@g\\.us$/i.test(remoteJid);\nlet phone = String(data.number || data.phone || root.number || remoteJid.split('@')[0] || data.sender || root.sender || '').replace(/\\D/g, '');\nif (phone.startsWith('0') && phone.length > 11) phone = phone.replace(/^0+/, '');\nconst caption = String(documentMessage?.caption || msg.imageMessage?.caption || msg.videoMessage?.caption || '').trim();\nconst text = String(\n  data.text || root.text || data.body || root.body || msg.conversation || extended?.text || caption || ''\n).trim();\nconst messageId = String(key.id || data.messageId || data.id || root.messageId || root.id || '').trim() || `${phone}:${Date.now()}`;\nconst fromMe = Boolean(key.fromMe || data.fromMe || root.fromMe);\nconst filename = String(documentMessage?.fileName || documentMessage?.filename || data.fileName || data.filename || 'fatura.pdf').trim() || 'fatura.pdf';\nconst mimetype = String(documentMessage?.mimetype || data.mimetype || data.mimeType || '').trim();\nconst isDocument = Boolean(documentMessage || data.messageType === 'documentMessage' || data.messageType === 'document');\nconst isPdf = Boolean(isDocument && (/pdf/i.test(mimetype) || /\\.pdf$/i.test(filename)));\nconst isText = Boolean(text && !isPdf);\nreturn [{ json: {\n  phone,\n  remote_jid: remoteJid,\n  message_text: text,\n  message_id: messageId,\n  push_name: data.pushName || root.pushName || data.push_name || '',\n  instance: root.instance || data.instance || $env.EVOLUTION_INSTANCE_NAME || '',\n  from_me: fromMe,\n  is_group: isGroup,\n  is_document: isDocument,\n  is_pdf: isPdf,\n  is_text: isText,\n  filename,\n  mimetype,\n  caption,\n  media_message: msg,\n  is_valid_user_message: Boolean(phone && !fromMe && !isGroup && (text || isPdf)),\n  should_reply_unsupported: Boolean(phone && !fromMe && !isGroup),\n  current_date: new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' }),\n  raw: root\n}}];"
       },
-      "id": "a0eef950-c7fe-452d-b73f-dd82c9953bd7",
+      "id": "4d39fa00-4423-4ab4-bd52-1bb2f24fabcf",
       "name": "Normalize Evolution Payload",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1120,
-        320
+        -1936,
+        1088
       ]
     },
     {
@@ -63,13 +63,13 @@
         },
         "options": {}
       },
-      "id": "1f74d782-4188-4eba-86dd-cdf1af5bb3ce",
+      "id": "ce4a0bed-fe8d-496a-b6b3-a5d4f063645a",
       "name": "Is Valid User Message?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -900,
-        320
+        -1712,
+        1088
       ]
     },
     {
@@ -97,39 +97,39 @@
         },
         "options": {}
       },
-      "id": "e9064061-ec67-4daa-ab8b-d3d0d25c0a91",
+      "id": "fa11da64-8709-4bb4-a287-5b76d8ed77a8",
       "name": "Should Reply Unsupported?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -680,
-        520
+        -1488,
+        1296
       ]
     },
     {
       "parameters": {
         "jsCode": "const root = $json || {};\nconst whatsapp = root.whatsapp && typeof root.whatsapp === 'object' ? root.whatsapp : {};\nconst text = String(root.outbound_text || whatsapp.text || root.message || root.reply_text || root.clarifying_question || \"Ainda não consigo ler esse tipo de mensagem por aqui. Me manda em texto? Se for fatura, pode enviar o PDF.\").trim();\nreturn [{ json: { ...root, ok: root.ok !== false, workflow_key: root.workflow_key || \"7.1\", outbound_text: text, send_by_orchestrator: true, whatsapp: { ...whatsapp, text } } }];"
       },
-      "id": "f4cda7be-45b3-4161-addc-085ae19143b1",
+      "id": "73f85293-48c3-4259-9206-0bed854a6afa",
       "name": "Send Unsupported Message",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -460,
-        560
+        -1280,
+        1328
       ]
     },
     {
       "parameters": {
         "jsCode": "const normalized = $('Normalize Evolution Payload').first().json || {};\nconst root = normalized.raw || $json || {};\nconst user = normalized.user || root.user || {};\nconst conversation = normalized.conversation || root.conversation || {};\nconst authorized = user.authorized !== false && Number(user.id || 0) > 0;\nreturn [{ json: { ...root, authorized, code: authorized ? 'AUTHORIZED_BY_ORCHESTRATOR' : 'NOT_AUTHORIZED', user, conversation, phone: normalized.phone, whatsapp: { ...(root.whatsapp || {}), phone: normalized.phone, message_text: normalized.message_text, message_id: normalized.message_id, instance: normalized.instance } } }];"
       },
-      "id": "ee526704-5d42-400c-a0db-f1f91b6ad9e9",
+      "id": "5cd7cc8e-c70e-48ef-9558-2b9cbfc61b28",
       "name": "Resolve AcerttaPay User",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -680,
-        220
+        -1488,
+        992
       ]
     },
     {
@@ -157,26 +157,26 @@
         },
         "options": {}
       },
-      "id": "55883114-a454-4820-8cc1-1ef17a86240e",
+      "id": "e4d7bd81-e869-4e12-ad2d-1902005ab7f2",
       "name": "Authorized?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -460,
-        220
+        -1280,
+        992
       ]
     },
     {
       "parameters": {
         "jsCode": "const root = $json || {};\nconst whatsapp = root.whatsapp && typeof root.whatsapp === 'object' ? root.whatsapp : {};\nconst text = String(root.outbound_text || whatsapp.text || root.message || root.reply_text || root.clarifying_question || \"Esse número ainda não está liberado no AcerttaPay. Ative o WhatsApp nas Configurações do app.\").trim();\nreturn [{ json: { ...root, ok: root.ok !== false, workflow_key: root.workflow_key || \"7.1\", outbound_text: text, send_by_orchestrator: true, whatsapp: { ...whatsapp, text } } }];"
       },
-      "id": "93cdfd3a-8e51-41d9-b504-84027651ff86",
+      "id": "2324ac8f-d19b-412c-9017-dd8ecd278b1d",
       "name": "Send Authorization Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -220,
-        420
+        -1040,
+        1184
       ]
     },
     {
@@ -204,13 +204,13 @@
         },
         "options": {}
       },
-      "id": "ac2e4daa-14b4-470d-91b2-56f55e61dcb4",
+      "id": "d55c96db-a25f-4d5f-b164-00235c3c83ac",
       "name": "Has Pending PDF Details?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -220,
-        120
+        -1040,
+        896
       ]
     },
     {
@@ -238,13 +238,13 @@
         },
         "options": {}
       },
-      "id": "ebb9d7ff-270e-4d7a-bd89-10b01e7caad1",
+      "id": "01a9b527-1306-426d-8036-b33f3f2f5ec5",
       "name": "Has PDF Document?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        40,
-        280
+        -768,
+        1056
       ]
     },
     {
@@ -254,13 +254,13 @@
           "temperature": 0
         }
       },
-      "id": "9389e199-8e21-456b-830b-aa125d4ead73",
+      "id": "100dc60a-7049-4f1a-9da5-a83b1b46a15b",
       "name": "Gemini Chat Model - PDF Details",
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1.1,
       "position": [
-        60,
-        -220
+        -752,
+        544
       ],
       "credentials": {
         "googlePalmApi": {
@@ -273,33 +273,33 @@
       "parameters": {
         "sessionIdType": "customKey",
         "sessionKey": "={{ 'acerttapay:wa:7.1:' + ($('Normalize Evolution Payload').first().json.phone || $json.whatsapp?.phone || $json.phone || 'unknown') }}",
-        "contextWindowLength": 10,
-        "sessionTTL": "={{ Number($env.ACERTTAPAY_N8N_MEMORY_TTL_SECONDS || 86400) }}"
+        "sessionTTL": "={{ Number($env.ACERTTAPAY_N8N_MEMORY_TTL_SECONDS || 86400) }}",
+        "contextWindowLength": 10
       },
-      "id": "da14d224-c9c2-437a-9d87-b728cca3c9ee",
+      "id": "0e40cc98-5780-4314-8fcf-964ab02c5b4b",
       "name": "WhatsApp PDF Import Memory",
       "type": "@n8n/n8n-nodes-langchain.memoryRedisChat",
       "typeVersion": 1.4,
       "position": [
-        240,
-        -220
+        -672,
+        960
       ],
       "credentials": {
         "redis": {
-          "id": "REPLACE_REDIS_CREDENTIAL",
-          "name": "Redis Memory"
+          "id": "hicC02g2XH1Cr95P",
+          "name": "Redis account"
         }
       }
     },
     {
       "parameters": {},
-      "id": "1dff4e69-8d0f-48e6-92ea-f00057483189",
+      "id": "22b0ca51-cbb5-45a7-9dd5-04cdd4e91c1c",
       "name": "Think Tool - PDF Details",
       "type": "@n8n/n8n-nodes-langchain.toolThink",
       "typeVersion": 1,
       "position": [
-        420,
-        -220
+        -400,
+        544
       ]
     },
     {
@@ -312,26 +312,26 @@
           "returnIntermediateSteps": false
         }
       },
-      "id": "619ef07a-abac-4238-99b9-0053831eb8d5",
+      "id": "e5543fbb-b757-465b-9c67-7388d6d393f5",
       "name": "AI Parse PDF Details",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3.1,
       "position": [
-        40,
-        -40
+        -768,
+        736
       ]
     },
     {
       "parameters": {
         "jsCode": "function cleanJson(value) {\n  if (value && typeof value === 'object') return value;\n  const raw = String(value || '').trim();\n  const withoutFence = raw.replace(/^```(?:json)?\\s*/i, '').replace(/```$/i, '').trim();\n  const first = withoutFence.indexOf('{');\n  const last = withoutFence.lastIndexOf('}');\n  if (first >= 0 && last > first) return withoutFence.slice(first, last + 1);\n  return withoutFence;\n}\nlet parsed;\ntry {\n  const content = $json.output ?? $json.text ?? $json.response ?? '';\n  const cleaned = cleanJson(content);\n  parsed = typeof cleaned === 'object' ? cleaned : JSON.parse(cleaned);\n} catch (error) {\n  parsed = { intent: 'complete_pdf_import_details', confidence: 0, card_hint: $('Normalize Evolution Payload').first().json.message_text };\n}\nparsed.month = parsed.month == null ? null : Number(parsed.month);\nparsed.year = parsed.year == null ? null : Number(parsed.year);\nreturn [{ json: parsed }];"
       },
-      "id": "a33d5782-88e6-4f8d-93e2-e5bce622d2df",
+      "id": "17848b52-234e-448e-8f0b-48341e5d0688",
       "name": "Parse PDF Details JSON",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        340,
-        -40
+        -480,
+        736
       ]
     },
     {
@@ -356,7 +356,6 @@
           ]
         },
         "sendBody": true,
-        "contentType": "json",
         "specifyBody": "json",
         "jsonBody": "={{ { phone: $('Normalize Evolution Payload').first().json.phone, source: { channel: 'whatsapp', instance: $('Normalize Evolution Payload').first().json.instance, message_id: $('Normalize Evolution Payload').first().json.message_id, raw_text: $('Normalize Evolution Payload').first().json.message_text }, reply: $json } }}",
         "options": {
@@ -368,26 +367,26 @@
           }
         }
       },
-      "id": "4c108970-aa3f-4580-b559-4fc244b2d7a6",
+      "id": "c4fc0771-fc3d-4f63-b03c-f5d503a08d9c",
       "name": "Send PDF Details Reply",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
-        600,
-        -40
+        -208,
+        736
       ]
     },
     {
       "parameters": {
         "jsCode": "const root = $json || {};\nconst whatsapp = root.whatsapp && typeof root.whatsapp === 'object' ? root.whatsapp : {};\nconst text = String(root.outbound_text || whatsapp.text || root.message || root.reply_text || root.clarifying_question || \"Pedido processado no AcerttaPay.\").trim();\nreturn [{ json: { ...root, ok: root.ok !== false, workflow_key: root.workflow_key || \"7.1\", outbound_text: text, send_by_orchestrator: true, whatsapp: { ...whatsapp, text } } }];"
       },
-      "id": "a5bdf8ba-7688-4cac-8f35-ee99bf60331e",
+      "id": "8e14de50-9fa9-4784-beab-e87e7dc596c7",
       "name": "Send PDF Conversation Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        860,
-        -40
+        48,
+        736
       ]
     },
     {
@@ -397,13 +396,13 @@
           "temperature": 0
         }
       },
-      "id": "679011a4-a894-453f-8795-080ee3ac08f3",
+      "id": "3d805109-c6d9-4e1e-90a8-817ecb73cdc3",
       "name": "Gemini Chat Model - PDF Caption",
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1.1,
       "position": [
-        300,
-        500
+        -512,
+        1264
       ],
       "credentials": {
         "googlePalmApi": {
@@ -422,37 +421,37 @@
           "returnIntermediateSteps": false
         }
       },
-      "id": "895a5b21-2178-433c-93cd-1383871d9c3d",
+      "id": "68bafc27-b0fc-4ebb-9e8d-99b240014300",
       "name": "AI Parse PDF Caption",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3.1,
       "position": [
-        300,
-        280
+        -512,
+        1056
       ]
     },
     {
       "parameters": {},
-      "id": "0bd81c18-870a-4fcc-94cf-ef6d6551c105",
+      "id": "8f654e00-a870-4627-b1ab-bf58d833104f",
       "name": "Think Tool - PDF Caption",
       "type": "@n8n/n8n-nodes-langchain.toolThink",
       "typeVersion": 1,
       "position": [
-        480,
-        500
+        -336,
+        1264
       ]
     },
     {
       "parameters": {
         "jsCode": "function cleanJson(value) {\n  if (value && typeof value === 'object') return value;\n  const raw = String(value || '').trim();\n  const withoutFence = raw.replace(/^```(?:json)?\\s*/i, '').replace(/```$/i, '').trim();\n  const first = withoutFence.indexOf('{');\n  const last = withoutFence.lastIndexOf('}');\n  if (first >= 0 && last > first) return withoutFence.slice(first, last + 1);\n  return withoutFence;\n}\nlet parsed;\ntry {\n  const content = $json.output ?? $json.text ?? $json.response ?? '';\n  const cleaned = cleanJson(content);\n  parsed = typeof cleaned === 'object' ? cleaned : JSON.parse(cleaned);\n} catch (error) {\n  parsed = { intent: 'import_pdf_statement', confidence: 0, card_hint: null, month: null, year: null };\n}\nparsed.month = parsed.month == null ? null : Number(parsed.month);\nparsed.year = parsed.year == null ? null : Number(parsed.year);\nreturn [{ json: parsed }];"
       },
-      "id": "dd2320f4-bf79-494d-881b-098e220d34f6",
+      "id": "bab5ff9f-a3b2-4116-8a8f-ab44a640e104",
       "name": "Parse PDF Caption JSON",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        600,
-        280
+        -208,
+        1056
       ]
     },
     {
@@ -473,7 +472,6 @@
           ]
         },
         "sendBody": true,
-        "contentType": "json",
         "specifyBody": "json",
         "jsonBody": "={{ { message: $('Normalize Evolution Payload').first().json.media_message, convertToMp4: false } }}",
         "options": {
@@ -485,26 +483,26 @@
           }
         }
       },
-      "id": "2f61ca0c-2b02-40fa-bad4-b35c646c3f5e",
+      "id": "d6205ef9-e763-4d43-9257-645957a6deb8",
       "name": "Download PDF From Evolution",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
-        860,
-        280
+        48,
+        1056
       ]
     },
     {
       "parameters": {
         "jsCode": "function findBase64(value) {\n  if (!value || typeof value !== 'object') return '';\n  const candidates = [\n    value.base64,\n    value.data?.base64,\n    value.result?.base64,\n    value.media?.base64,\n    value.file?.base64,\n    value.base64Data,\n    value.message?.base64,\n    value.response?.base64\n  ];\n  for (const candidate of candidates) {\n    const text = String(candidate || '').trim();\n    if (text) return text.replace(/^data:[^;]+;base64,/i, '').replace(/\\s+/g, '');\n  }\n  return '';\n}\nconst base64 = findBase64($json);\nconst caption = $('Parse PDF Caption JSON').first().json || {};\nconst normalized = $('Normalize Evolution Payload').first().json;\nif (!base64) {\n  return [{ json: { ok: false, code: 'MEDIA_DOWNLOAD_FAILED', whatsapp: { text: 'Recebi o PDF, mas não consegui baixar a mídia pela Evolution API. Confere a instância e tenta reenviar a fatura. 📄' } } }];\n}\nreturn [{ json: {\n  phone: normalized.phone,\n  filename: normalized.filename || 'fatura.pdf',\n  mime_type: normalized.mimetype || 'application/pdf',\n  file_base64: base64,\n  card_hint: caption.card_hint || null,\n  month: caption.month || null,\n  year: caption.year || null,\n  source: {\n    channel: 'whatsapp',\n    instance: normalized.instance,\n    message_id: normalized.message_id,\n    raw_text: normalized.message_text || normalized.caption || '',\n    filename: normalized.filename,\n    mimetype: normalized.mimetype\n  }\n}}];"
       },
-      "id": "9f327872-6b66-48fc-a57e-b1a1a6abc5ed",
+      "id": "4ba2d19a-52f2-4f26-a6e1-03ec0d2fddd4",
       "name": "Build PDF Import Payload",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1120,
-        280
+        320,
+        1056
       ]
     },
     {
@@ -532,13 +530,13 @@
         },
         "options": {}
       },
-      "id": "f03e949d-2626-4649-9be5-f6b6e6fd8ec7",
+      "id": "a2e31891-f6ac-4ab3-8cfd-afd209f5a188",
       "name": "Media Download OK?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        1340,
-        280
+        528,
+        1056
       ]
     },
     {
@@ -563,7 +561,6 @@
           ]
         },
         "sendBody": true,
-        "contentType": "json",
         "specifyBody": "json",
         "jsonBody": "={{ $json }}",
         "options": {
@@ -575,26 +572,26 @@
           }
         }
       },
-      "id": "4b914327-bb59-4e2a-877d-de783fe12a83",
+      "id": "f56dedb3-de07-435a-961b-b4bf2b7a5cb5",
       "name": "Create PDF Import Job",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
-        1580,
-        160
+        768,
+        928
       ]
     },
     {
       "parameters": {
         "jsCode": "const root = $json || {};\nconst whatsapp = root.whatsapp && typeof root.whatsapp === 'object' ? root.whatsapp : {};\nconst text = String(root.outbound_text || whatsapp.text || root.message || root.reply_text || root.clarifying_question || \"Pedido processado no AcerttaPay.\").trim();\nreturn [{ json: { ...root, ok: root.ok !== false, workflow_key: root.workflow_key || \"7.1\", outbound_text: text, send_by_orchestrator: true, whatsapp: { ...whatsapp, text } } }];"
       },
-      "id": "a73bc218-b6ab-48c5-9e7e-f97bedbec87e",
+      "id": "d38b2d18-c158-4a57-b1be-ab8df81bb539",
       "name": "Send PDF Import Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1840,
-        260
+        1040,
+        1024
       ]
     },
     {
@@ -604,13 +601,13 @@
           "temperature": 0
         }
       },
-      "id": "4abc3a39-1e5e-4cc7-a43c-dc1d6ce7a4d0",
+      "id": "96a80288-9710-4ac1-95c4-eb2c445aabb6",
       "name": "Gemini Chat Model - PDF Commands",
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1.1,
       "position": [
-        300,
-        900
+        -512,
+        1664
       ],
       "credentials": {
         "googlePalmApi": {
@@ -629,50 +626,50 @@
           "returnIntermediateSteps": false
         }
       },
-      "id": "2064f509-c11a-42ee-80e6-dab7a0b53065",
+      "id": "72e45ee3-cc2f-46cd-b036-d9e4c279ecf6",
       "name": "AI PDF Import Router",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3.1,
       "position": [
-        300,
-        660
+        -512,
+        1424
       ]
     },
     {
       "parameters": {},
-      "id": "a493c91f-0781-4988-bdec-5a8073f1b1f7",
+      "id": "bb9ce313-a3c2-4e08-92f3-902689bec984",
       "name": "Think Tool - PDF Commands",
       "type": "@n8n/n8n-nodes-langchain.toolThink",
       "typeVersion": 1,
       "position": [
-        480,
-        900
+        -336,
+        1664
       ]
     },
     {
       "parameters": {
         "jsCode": "function cleanJson(value) {\n  if (value && typeof value === 'object') return value;\n  const raw = String(value || '').trim();\n  const withoutFence = raw.replace(/^```(?:json)?\\s*/i, '').replace(/```$/i, '').trim();\n  const first = withoutFence.indexOf('{');\n  const last = withoutFence.lastIndexOf('}');\n  if (first >= 0 && last > first) return withoutFence.slice(first, last + 1);\n  return withoutFence;\n}\nlet parsed;\ntry {\n  const content = $json.output ?? $json.text ?? $json.response ?? '';\n  const cleaned = cleanJson(content);\n  parsed = typeof cleaned === 'object' ? cleaned : JSON.parse(cleaned);\n} catch (error) {\n  parsed = { intent: 'help', confidence: 0, job_id: null, reply_text: null };\n}\nconst text = $('Normalize Evolution Payload').first().json.message_text || '';\nif (!parsed.job_id) {\n  const match = String(text).match(/#?\\s*(\\d{1,8})/);\n  if (match && /status|importa|pdf|cancel/i.test(text)) parsed.job_id = Number(match[1]);\n}\nreturn [{ json: parsed }];"
       },
-      "id": "6b9625f2-e81e-475c-a339-c4912afe59c9",
+      "id": "72786830-1117-47bd-8351-bd3f515634c0",
       "name": "Parse PDF Command JSON",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        600,
-        660
+        -208,
+        1424
       ]
     },
     {
       "parameters": {
         "jsCode": "const intent = String($json.intent || 'help');\nconst jobId = Number($json.job_id || 0);\nconst base = String($env.ACERTTAPAY_URL || 'http://127.0.0.1:3000').replace(/\\/$/, '');\nconst norm = $('Normalize Evolution Payload').first().json;\nconst commonBody = { phone: norm.phone, source: { channel: 'whatsapp', instance: norm.instance, message_id: norm.message_id, raw_text: norm.message_text } };\nif (intent === 'list_pdf_imports') {\n  return [{ json: { needs_backend: true, url: `${base}/api/automation/v1/imports/pdf/jobs/list`, body: { ...commonBody, limit: 5 }, idempotency_key: `whatsapp-pdf-list:${norm.instance}:${norm.message_id}` } }];\n}\nif (intent === 'status_pdf_import') {\n  if (!jobId) return [{ json: { needs_backend: false, reply_text: 'Me manda o número do job para eu consultar. Ex.: *status da importação #12*.' } }];\n  return [{ json: { needs_backend: true, url: `${base}/api/automation/v1/imports/pdf/jobs/${jobId}/status`, body: commonBody, idempotency_key: `whatsapp-pdf-status:${norm.instance}:${norm.message_id}` } }];\n}\nif (intent === 'cancel_pdf_import') {\n  if (!jobId) return [{ json: { needs_backend: false, reply_text: 'Me diz qual importação cancelar. Ex.: *cancelar importação #12*.' } }];\n  return [{ json: { needs_backend: true, url: `${base}/api/automation/v1/imports/pdf/jobs/${jobId}/cancel`, body: commonBody, idempotency_key: `whatsapp-pdf-cancel:${norm.instance}:${norm.message_id}` } }];\n}\nconst defaultText = '📄 *Importação de fatura PDF*\\n\\nMe manda o PDF da fatura por aqui. Se puder, coloca uma legenda assim:\\n*fatura Nubank junho/2026*\\n\\nTambém posso acompanhar:\\n• *status da importação #12*\\n• *cancelar importação #12*\\n• *listar importações*\\n\\nNada entra direto no app: eu só preparo a revisão, você confere e confirma pelo AcerttaPay.';\nreturn [{ json: { needs_backend: false, reply_text: $json.reply_text || defaultText } }];"
       },
-      "id": "4dc54bbd-639a-4258-8f50-a7850aae770e",
+      "id": "3ae67e84-454b-462c-9d1f-620f626ab8e2",
       "name": "Build PDF Command Request",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        860,
-        660
+        48,
+        1424
       ]
     },
     {
@@ -700,13 +697,13 @@
         },
         "options": {}
       },
-      "id": "2fd0e23e-617b-4067-9fb9-7f5af4f52090",
+      "id": "b06517ab-f2ce-4719-be2a-725f0e392181",
       "name": "Needs Backend PDF Command?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        1120,
-        660
+        320,
+        1424
       ]
     },
     {
@@ -731,7 +728,6 @@
           ]
         },
         "sendBody": true,
-        "contentType": "json",
         "specifyBody": "json",
         "jsonBody": "={{ $json.body }}",
         "options": {
@@ -743,39 +739,39 @@
           }
         }
       },
-      "id": "72df4ada-3d4d-4d82-928e-e4a3c120f902",
+      "id": "e38d4c82-f348-4b1e-8abd-b18974e2c055",
       "name": "Execute PDF Command",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
-        1360,
-        560
+        560,
+        1328
       ]
     },
     {
       "parameters": {
         "jsCode": "const root = $json || {};\nconst whatsapp = root.whatsapp && typeof root.whatsapp === 'object' ? root.whatsapp : {};\nconst text = String(root.outbound_text || whatsapp.text || root.message || root.reply_text || root.clarifying_question || \"Pedido processado no AcerttaPay.\").trim();\nreturn [{ json: { ...root, ok: root.ok !== false, workflow_key: root.workflow_key || \"7.1\", outbound_text: text, send_by_orchestrator: true, whatsapp: { ...whatsapp, text } } }];"
       },
-      "id": "f79a286e-5b6a-4edc-b3e3-9973244b2f71",
+      "id": "5424a134-aafb-44d9-84cb-c315abec481b",
       "name": "Send PDF Command Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1600,
-        560
+        800,
+        1328
       ]
     },
     {
       "parameters": {
         "jsCode": "const root = $json || {};\nconst whatsapp = root.whatsapp && typeof root.whatsapp === 'object' ? root.whatsapp : {};\nconst text = String(root.outbound_text || whatsapp.text || root.message || root.reply_text || root.clarifying_question || \"Pedido processado no AcerttaPay.\").trim();\nreturn [{ json: { ...root, ok: root.ok !== false, workflow_key: root.workflow_key || \"7.1\", outbound_text: text, send_by_orchestrator: true, whatsapp: { ...whatsapp, text } } }];"
       },
-      "id": "c6c36992-8c7c-4b04-b3c1-db255f8990db",
+      "id": "03f04a52-34e4-45f7-ae36-212b8b802977",
       "name": "Send AI PDF Import Reply",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1360,
-        780
+        560,
+        1552
       ]
     }
   ],
@@ -1159,23 +1155,27 @@
       ]
     }
   },
-  "active": false,
+  "active": true,
   "settings": {
     "executionOrder": "v1",
-    "binaryMode": "separate"
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "lBb6OPLcQWU3v1JX",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
   },
-  "versionId": "ebeb888c-66f7-47b2-938c-afdd552752e6",
+  "versionId": "bf8c97fc-1bee-4981-8959-3ed25451af5c",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "54c1e6e642219d63bcca2e850583056b9d4a7efdf129870e6550b48695aa00e1"
   },
-  "id": "acerttapay_pdf_import_71",
+  "id": "P8gk42Ccgrsw7imb",
   "tags": [
     {
-      "name": "ACERTTAPAY",
+      "updatedAt": "2026-06-08T17:04:41.481Z",
+      "createdAt": "2026-06-08T17:04:41.481Z",
       "id": "pQ0ytyDUaBKZDloP",
-      "updatedAt": "2026-06-11T00:00:00.000Z",
-      "createdAt": "2026-06-11T00:00:00.000Z"
+      "name": "ACERTTAPAY"
     }
   ]
 }

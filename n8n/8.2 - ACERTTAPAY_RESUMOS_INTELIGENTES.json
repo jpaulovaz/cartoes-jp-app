@@ -1,0 +1,903 @@
+{
+  "name": "8.2 - ACERTTAPAY_RESUMOS_INTELIGENTES",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "acerttapay-wa-smart-summaries",
+        "responseMode": "onReceived",
+        "responseData": "firstEntryJson",
+        "options": {}
+      },
+      "id": "52795ced-204d-4146-941c-78c6bfd63e3a",
+      "name": "WA Incoming",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -1200,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "32f7291a-0714-4525-bbbe-5988683f8812",
+      "name": "Schedule Smart Summaries",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1200,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "5fc2bff9-6ecc-44d9-bf80-9d81cfade9af",
+      "name": "EntradaWhatsapp",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1200,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const root = $json.body || $json || {};\nconst data = root.data || root;\nconst key = data.key || {};\nconst msg = data.message || root.message || {};\nconst documentMessage = msg.documentMessage || msg.documentWithCaptionMessage?.message?.documentMessage || msg.ephemeralMessage?.message?.documentMessage || null;\nconst extended = msg.extendedTextMessage || msg.ephemeralMessage?.message?.extendedTextMessage || null;\nconst remoteJid = String(key.remoteJid || data.remoteJid || data.from || root.from || data.sender || root.sender || '').trim();\nconst isGroup = /@g\\.us$/i.test(remoteJid);\nlet phone = String(data.number || data.phone || root.number || remoteJid.split('@')[0] || data.sender || root.sender || '').replace(/\\D/g, '');\nif (phone.startsWith('0') && phone.length > 11) phone = phone.replace(/^0+/, '');\nconst caption = String(documentMessage?.caption || msg.imageMessage?.caption || msg.videoMessage?.caption || '').trim();\nconst text = String(\n  data.text || root.text || data.body || root.body || msg.conversation || extended?.text || caption || ''\n).trim();\nconst messageId = String(key.id || data.messageId || data.id || root.messageId || root.id || '').trim() || `${phone}:${Date.now()}`;\nconst fromMe = Boolean(key.fromMe || data.fromMe || root.fromMe);\nconst filename = String(documentMessage?.fileName || documentMessage?.filename || data.fileName || data.filename || 'fatura.pdf').trim() || 'fatura.pdf';\nconst mimetype = String(documentMessage?.mimetype || data.mimetype || data.mimeType || '').trim();\nconst isDocument = Boolean(documentMessage || data.messageType === 'documentMessage' || data.messageType === 'document');\nconst isPdf = Boolean(isDocument && (/pdf/i.test(mimetype) || /\\.pdf$/i.test(filename)));\nconst isText = Boolean(text && !isPdf);\nreturn [{ json: {\n  phone,\n  remote_jid: remoteJid,\n  message_text: text,\n  message_id: messageId,\n  push_name: data.pushName || root.pushName || data.push_name || '',\n  instance: root.instance || data.instance || $env.EVOLUTION_INSTANCE_NAME || '',\n  from_me: fromMe,\n  is_group: isGroup,\n  is_document: isDocument,\n  is_pdf: isPdf,\n  is_text: isText,\n  filename,\n  mimetype,\n  caption,\n  media_message: msg,\n  is_valid_user_message: Boolean(phone && !fromMe && !isGroup && (text || isPdf)),\n  should_reply_unsupported: Boolean(phone && !fromMe && !isGroup),\n  current_date: new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' }),\n  raw: root\n}}];"
+      },
+      "id": "6ecfcfa4-09fa-4c7d-bef7-7c60980cce31",
+      "name": "Normalize Evolution Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -960,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d51b10a7-de7d-4b57-a72a-69832916a537",
+              "leftValue": "={{ $json.is_valid_user_message === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e9eec2f4-9df2-4404-ab9a-c877b858faf4",
+      "name": "Is Valid User Message?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -720,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c0b27cc4-e13a-4269-9c23-d92563757d05",
+              "leftValue": "={{ $json.can_reply === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "3fe080c4-cb52-4008-a79d-78592972a77d",
+      "name": "Can Reply Unsupported?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -500,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "={{ $('Normalize Evolution Payload').first().json.instance || $env.EVOLUTION_INSTANCE_NAME || 'ACERTTAPAY' }}",
+        "remoteJid": "={{ $('Normalize Evolution Payload').first().json.phone || String($('Normalize Evolution Payload').first().json.remote_jid || '').split('@')[0].replace(/\\D/g, '') }}",
+        "messageText": "={{ 'Ainda não consigo ler esse tipo de mensagem por aqui. Me manda em texto?\n\nEx.: *resumo do mês*, *resumo da semana*, *ativar resumo semanal* ou *desligar resumo mensal*.' }}",
+        "options_message": {
+          "delay": 1400,
+          "linkPreview": false
+        }
+      },
+      "id": "8fb3ac6f-ab89-4416-aebc-f551578bc76f",
+      "name": "Send Unsupported Message",
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        -260,
+        560
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "40g56cIQ5RrPPK1M",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "f9375fbf-c574-4a00-a7c2-2902a1052f9c",
+      "name": "Ignore Message",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -260,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.ACERTTAPAY_URL || 'http://127.0.0.1:3000').replace(/\\/$/, '') + '/api/automation/v1/whatsapp/resolve' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.ACERTTAPAY_AUTOMATION_API_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ { phone: $('Normalize Evolution Payload').first().json.phone, channel: 'whatsapp', instance: $('Normalize Evolution Payload').first().json.instance, message_id: $('Normalize Evolution Payload').first().json.message_id, push_name: $('Normalize Evolution Payload').first().json.push_name } }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "43276289-4679-475b-8c8f-f88c880a9045",
+      "name": "Resolve AcerttaPay User",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -500,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "24c08e53-8c04-4fe8-9d97-78ae926ea25a",
+              "leftValue": "={{ $json.authorized === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c22186ff-4704-4bd8-a503-43593bf5c9ba",
+      "name": "Authorized?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -260,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "={{ $('Normalize Evolution Payload').first().json.instance || $env.EVOLUTION_INSTANCE_NAME || 'ACERTTAPAY' }}",
+        "remoteJid": "={{ $('Normalize Evolution Payload').first().json.phone || String($('Normalize Evolution Payload').first().json.remote_jid || '').split('@')[0].replace(/\\D/g, '') }}",
+        "messageText": "={{ $json.whatsapp?.text || 'Esse número ainda não está liberado no AcerttaPay. Ative o WhatsApp nas Configurações do app.' }}",
+        "options_message": {
+          "delay": 1400,
+          "linkPreview": false
+        }
+      },
+      "id": "86bf719a-b68f-48c8-91e2-ea793da663fd",
+      "name": "Send Authorization Result",
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        0,
+        360
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "40g56cIQ5RrPPK1M",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ JSON.stringify({ current_date: $('Normalize Evolution Payload').first().json.current_date, timezone: 'America/Sao_Paulo', user_message: $('Normalize Evolution Payload').first().json.message_text }) }}",
+        "options": {
+          "systemMessage": "Você é o concierge de resumos inteligentes do AcerttaPay no WhatsApp.\n\nNesta família 8.2 você responde pedidos de resumo semanal, resumo mensal, maiores gastos e preferências de resumo automático. Responda SOMENTE JSON válido.\n\nIntents:\n- monthly_intelligent_summary\n- weekly_summary\n- spending_insights\n- enable_auto_summary\n- disable_auto_summary\n- help\n- out_of_scope\n\nRegras:\n- Para \"esse mês\" use period=current_month.\n- Para \"semana\" use weekly_summary.\n- Para ativar/desligar automático, summary_kind deve ser weekly ou monthly.\n- Não invente números financeiros; o AcerttaPay calcula tudo.\n\nSchema:\n{\n  \"intent\": \"monthly_intelligent_summary\",\n  \"confidence\": 0.0,\n  \"summary_kind\": \"monthly\",\n  \"period\": \"current_month\",\n  \"month\": null,\n  \"year\": null,\n  \"enabled\": true,\n  \"schedule_day\": 1,\n  \"schedule_hour\": 9,\n  \"reply_text\": null\n}\n",
+          "maxIterations": 2,
+          "returnIntermediateSteps": false
+        }
+      },
+      "id": "2cbfd808-6851-461a-bcc8-aade14f349c5",
+      "name": "AI Summary Router",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        0,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0
+        }
+      },
+      "id": "e4205c21-f2dc-474e-bc0d-8794abb55c3b",
+      "name": "Gemini Chat Model - Smart Summaries",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        340
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "mZ7rvYR2BFrE4r9l",
+          "name": "Google Gemini Geral"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "=acerttapay-wa-smart-summaries:{{$('Normalize Evolution Payload').first().json.phone}}",
+        "contextWindowLength": 10
+      },
+      "id": "aebea25c-3206-4073-a7ee-1b04f183a933",
+      "name": "WhatsApp Smart Summary Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        180,
+        340
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "31a5d3c6-8c48-4e9d-a762-75e5ed7a6ded",
+      "name": "Think Tool - Smart Summaries",
+      "type": "@n8n/n8n-nodes-langchain.toolThink",
+      "typeVersion": 1,
+      "position": [
+        360,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function cleanJsonContent(value) {\n  if (value && typeof value === 'object') return value;\n  const raw = String(value || '').trim();\n  if (!raw) return '';\n  const withoutFence = raw.replace(/^```(?:json)?\\s*/i, '').replace(/```$/i, '').trim();\n  const first = withoutFence.indexOf('{');\n  const last = withoutFence.lastIndexOf('}');\n  if (first >= 0 && last > first) return withoutFence.slice(first, last + 1);\n  return withoutFence;\n}\nlet parsed;\ntry {\n  const cleaned = cleanJsonContent($json.output ?? $json.text ?? $json.response ?? '');\n  parsed = typeof cleaned === 'object' ? cleaned : JSON.parse(cleaned);\n} catch (error) {\n  parsed = { intent: 'help', reply_text: 'Posso mandar resumo do mês, resumo da semana ou ativar resumo automático.' };\n}\nconst phone = $('Normalize Evolution Payload').first().json.phone;\nconst source = { channel: 'whatsapp', instance: $('Normalize Evolution Payload').first().json.instance, message_id: $('Normalize Evolution Payload').first().json.message_id, raw_text: $('Normalize Evolution Payload').first().json.message_text };\nlet endpoint = '/api/automation/v1/insights/monthly';\nlet body = { phone, source, month: parsed.month, year: parsed.year, period: parsed.period };\nif (parsed.intent === 'weekly_summary') {\n  endpoint = '/api/automation/v1/insights/weekly';\n} else if (parsed.intent === 'spending_insights' || parsed.intent === 'monthly_intelligent_summary') {\n  endpoint = '/api/automation/v1/insights/monthly';\n} else if (parsed.intent === 'enable_auto_summary') {\n  endpoint = '/api/automation/v1/insights/preferences';\n  body = { phone, source, summary_kind: parsed.summary_kind || 'weekly', enabled: true, schedule_day: parsed.schedule_day || 1, schedule_hour: parsed.schedule_hour || 9 };\n} else if (parsed.intent === 'disable_auto_summary') {\n  endpoint = '/api/automation/v1/insights/preferences';\n  body = { phone, source, summary_kind: parsed.summary_kind || 'weekly', enabled: false };\n} else if (parsed.intent === 'help') {\n  return [{ json: { send_direct: true, reply_text: parsed.reply_text || '📊 Posso mandar *resumo do mês*, *resumo da semana* e ativar resumo automático. Ex.: *ativar resumo semanal*.' } }];\n} else if (parsed.intent === 'out_of_scope') {\n  return [{ json: { send_direct: true, reply_text: parsed.reply_text || 'Aqui eu cuido dos resumos inteligentes. Para compra, lembrete ou acerto, use o fluxo correspondente.' } }];\n}\nreturn [{ json: { endpoint, body, idempotency_key: `whatsapp-summary:${source.instance}:${source.message_id}` } }];"
+      },
+      "id": "676445d0-ef15-4522-8060-71a2312990be",
+      "name": "Build Summary Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        360,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "377d28a9-f09b-4a15-9c6a-48553bb49ea4",
+              "leftValue": "={{ $json.send_direct === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "4c8bb3df-eff9-4786-a972-6cc68423b089",
+      "name": "Send Direct Reply?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        620,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "={{ $('Normalize Evolution Payload').first().json.instance || $env.EVOLUTION_INSTANCE_NAME || 'ACERTTAPAY' }}",
+        "remoteJid": "={{ $('Normalize Evolution Payload').first().json.phone || String($('Normalize Evolution Payload').first().json.remote_jid || '').split('@')[0].replace(/\\D/g, '') }}",
+        "messageText": "={{ $json.reply_text || 'Posso te mandar resumos inteligentes do AcerttaPay. 📊' }}",
+        "options_message": {
+          "delay": 1400,
+          "linkPreview": false
+        }
+      },
+      "id": "83eb6474-f1b3-4b3d-b965-441bb71c6ae5",
+      "name": "Send AI Summary Reply",
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        880,
+        300
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "40g56cIQ5RrPPK1M",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.ACERTTAPAY_URL || 'http://127.0.0.1:3000').replace(/\\/$/, '') + $json.endpoint }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.ACERTTAPAY_AUTOMATION_API_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Idempotency-Key",
+              "value": "={{ $json.idempotency_key || ('whatsapp-summary:' + $('Normalize Evolution Payload').first().json.instance + ':' + $('Normalize Evolution Payload').first().json.message_id) }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "479b7716-26f6-4b99-8760-fd2e315e880d",
+      "name": "Call AcerttaPay Summary API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        880,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "={{ $('Normalize Evolution Payload').first().json.instance || $env.EVOLUTION_INSTANCE_NAME || 'ACERTTAPAY' }}",
+        "remoteJid": "={{ $('Normalize Evolution Payload').first().json.phone || String($('Normalize Evolution Payload').first().json.remote_jid || '').split('@')[0].replace(/\\D/g, '') }}",
+        "messageText": "={{ $json.whatsapp?.text || $json.message || 'Resumo processado no AcerttaPay.' }}",
+        "options_message": {
+          "delay": 1400,
+          "linkPreview": false
+        }
+      },
+      "id": "f90de973-0c26-42e1-8046-60ef92ce76e4",
+      "name": "Send Summary Result",
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        1140,
+        40
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "40g56cIQ5RrPPK1M",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.ACERTTAPAY_URL || 'http://127.0.0.1:3000').replace(/\\/$/, '') + '/api/automation/v1/insights/due-summaries' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.ACERTTAPAY_AUTOMATION_API_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ { limit: Number($env.AUTOMATION_SMART_SUMMARY_DUE_BATCH_LIMIT || 50) } }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "0a660d42-c8d4-4040-b85c-88077f5b78e8",
+      "name": "Get Due Smart Summaries",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -960,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const summaries = Array.isArray($json.summaries) ? $json.summaries : [];\nreturn summaries.map((summary) => ({ json: summary }));"
+      },
+      "id": "194f3519-7112-4294-ba20-acbda8f24c3d",
+      "name": "Expand Due Summaries",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -720,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.ACERTTAPAY_URL || 'http://127.0.0.1:3000').replace(/\\/$/, '') + '/api/automation/v1/insights/send-summary' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.ACERTTAPAY_AUTOMATION_API_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Idempotency-Key",
+              "value": "={{ 'whatsapp-summary-scheduled:' + $json.preference_id + ':' + Date.now() }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ { phone: $json.phone, summary_kind: $json.summary_kind, source: { channel: 'whatsapp_schedule', message_id: 'smart-summary:' + $json.preference_id + ':' + Date.now(), raw_text: 'scheduled summary' } } }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "11c73da1-4de8-4b97-bd1b-520460a630a6",
+      "name": "Build Due Summary Text",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -480,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "={{ $env.EVOLUTION_INSTANCE_NAME || 'ACERTTAPAY' }}",
+        "remoteJid": "={{ $('Expand Due Summaries').item.json.phone }}",
+        "messageText": "={{ $json.whatsapp?.text || 'Seu resumo inteligente do AcerttaPay está pronto. 📊' }}",
+        "options_message": {
+          "delay": 1400,
+          "linkPreview": false
+        }
+      },
+      "id": "28f092be-570d-44c0-a989-2101bff8b9e9",
+      "name": "Send Due Summary",
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        560
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "40g56cIQ5RrPPK1M",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.ACERTTAPAY_URL || 'http://127.0.0.1:3000').replace(/\\/$/, '') + '/api/automation/v1/insights/preferences/' + $('Expand Due Summaries').item.json.preference_id + '/mark-sent' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.ACERTTAPAY_AUTOMATION_API_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Idempotency-Key",
+              "value": "={{ 'whatsapp-summary-mark-sent:' + $('Expand Due Summaries').item.json.preference_id + ':' + Date.now() }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ { summary_kind: $('Expand Due Summaries').item.json.summary_kind } }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "1012ef31-71f0-4020-b612-7a36e03be2eb",
+      "name": "Mark Smart Summary Sent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        0,
+        560
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "WA Incoming": {
+      "main": [
+        [
+          {
+            "node": "Normalize Evolution Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "EntradaWhatsapp": {
+      "main": [
+        [
+          {
+            "node": "Normalize Evolution Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Evolution Payload": {
+      "main": [
+        [
+          {
+            "node": "Is Valid User Message?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Valid User Message?": {
+      "main": [
+        [
+          {
+            "node": "Resolve AcerttaPay User",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Can Reply Unsupported?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Can Reply Unsupported?": {
+      "main": [
+        [
+          {
+            "node": "Send Unsupported Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ignore Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve AcerttaPay User": {
+      "main": [
+        [
+          {
+            "node": "Authorized?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Authorized?": {
+      "main": [
+        [
+          {
+            "node": "AI Summary Router",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Authorization Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Summary Router": {
+      "main": [
+        [
+          {
+            "node": "Build Summary Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Summary Request": {
+      "main": [
+        [
+          {
+            "node": "Send Direct Reply?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Direct Reply?": {
+      "main": [
+        [
+          {
+            "node": "Send AI Summary Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call AcerttaPay Summary API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call AcerttaPay Summary API": {
+      "main": [
+        [
+          {
+            "node": "Send Summary Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Chat Model - Smart Summaries": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Summary Router",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp Smart Summary Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Summary Router",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Think Tool - Smart Summaries": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Summary Router",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Smart Summaries": {
+      "main": [
+        [
+          {
+            "node": "Get Due Smart Summaries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Due Smart Summaries": {
+      "main": [
+        [
+          {
+            "node": "Expand Due Summaries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Expand Due Summaries": {
+      "main": [
+        [
+          {
+            "node": "Build Due Summary Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Due Summary Text": {
+      "main": [
+        [
+          {
+            "node": "Send Due Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Due Summary": {
+      "main": [
+        [
+          {
+            "node": "Mark Smart Summary Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "89135109-251f-4c06-9506-b6040324c712",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "acerttapay-82-resumos",
+  "tags": [
+    {
+      "name": "ACERTTAPAY",
+      "id": "pQ0ytyDUaBKZDloP",
+      "updatedAt": "2026-06-08T17:04:41.481Z",
+      "createdAt": "2026-06-08T17:04:41.481Z"
+    }
+  ]
+}

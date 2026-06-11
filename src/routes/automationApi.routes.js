@@ -6,6 +6,7 @@ const { createAutomationSharedDebtsController } = require('../controllers/automa
 const { createAutomationMonthlyFinancesController } = require('../controllers/automationMonthlyFinances.controller');
 const { createAutomationMonthCloseController } = require('../controllers/automationMonthClose.controller');
 const { createAutomationPdfImportsController } = require('../controllers/automationPdfImports.controller');
+const { createAutomationIntelligenceController } = require('../controllers/automationIntelligence.controller');
 
 function createAutomationApiRouter(deps = {}) {
   const router = express.Router();
@@ -16,6 +17,7 @@ function createAutomationApiRouter(deps = {}) {
   const monthlyFinancesController = createAutomationMonthlyFinancesController(deps);
   const monthCloseController = createAutomationMonthCloseController(deps);
   const pdfImportsController = createAutomationPdfImportsController(deps);
+  const intelligenceController = createAutomationIntelligenceController(deps);
 
   router.use(controller.authenticate);
   router.get('/health', controller.health);
@@ -81,6 +83,19 @@ function createAutomationApiRouter(deps = {}) {
   router.post('/imports/pdf/jobs/:id/status', pdfImportsController.jobStatus);
   router.post('/imports/pdf/jobs/:id/cancel', pdfImportsController.cancelJob);
   router.post('/imports/pdf/conversations/reply', pdfImportsController.conversationReply);
+
+
+  router.post('/categories/options', intelligenceController.categoryOptions);
+  router.post('/categories/uncategorized', intelligenceController.uncategorizedPurchases);
+  router.post('/categories/apply-to-purchase', intelligenceController.applyCategoryToPurchase);
+  router.post('/categories/create-merchant-rule', intelligenceController.createMerchantRule);
+  router.post('/categories/conversations/reply', intelligenceController.categoryConversationReply);
+  router.post('/insights/monthly', intelligenceController.monthlyInsights);
+  router.post('/insights/weekly', intelligenceController.weeklyInsights);
+  router.post('/insights/send-summary', intelligenceController.sendSummary);
+  router.post('/insights/preferences', intelligenceController.summaryPreferences);
+  router.post('/insights/due-summaries', intelligenceController.dueSummaries);
+  router.post('/insights/preferences/:id/mark-sent', intelligenceController.markSummarySent);
 
   return router;
 }

@@ -22,6 +22,16 @@ function safeJsonStringify(value, fallback = '{}') {
   }
 }
 
+function normalizeAutomationText(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function createAutomationApiRepository() {
   function getAppSetting(key, fallback = '') {
     const row = db.prepare('SELECT value FROM app_settings WHERE key = ? LIMIT 1').get(String(key || '').trim());
@@ -184,6 +194,51 @@ function createAutomationApiRepository() {
       WHERE id = ? AND user_id = ?
       LIMIT 1
     `).get(Number(categoryId || 0), Number(userId || 0));
+  }
+
+  function getPurchaseCategoryByName(userId, categoryName) {
+    const normalized = normalizeAutomationText(categoryName);
+    if (!normalized) return null;
+    return db.prepare(`
+      SELECT id, name, active
+      FROM purchase_categories
+      WHERE user_id = ? AND normalized_name = ?
+      LIMIT 1
+    `).get(Number(userId || 0), normalized);
+  }
+
+  function findMerchantCategoryRuleForDescription(userId, description) {
+    const normalized = normalizeAutomationText(description);
+    if (!normalized) return null;
+    try {
+      const rows = db.prepare(`
+        SELECT r.*, pc.name AS category_name, pc.active AS category_active
+        FROM automation_merchant_category_rules r
+        JOIN purchase_categories pc ON pc.id = r.category_id AND pc.user_id = r.user_id
+        WHERE r.user_id = ?
+          AND COALESCE(r.enabled, 1) = 1
+          AND COALESCE(pc.active, 1) = 1
+        ORDER BY length(r.normalized_pattern) DESC, datetime(r.updated_at) DESC, r.id DESC
+      `).all(Number(userId || 0));
+      return rows.find((row) => normalized.includes(String(row.normalized_pattern || '')) || String(row.normalized_pattern || '').includes(normalized)) || null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function markMerchantCategoryRuleApplied(ruleId, userId) {
+    if (!Number(ruleId || 0)) return;
+    try {
+      db.prepare(`
+        UPDATE automation_merchant_category_rules
+        SET apply_count = COALESCE(apply_count, 0) + 1,
+            last_applied_at = ?,
+            updated_at = ?
+        WHERE id = ? AND user_id = ?
+      `).run(nowIso(), nowIso(), Number(ruleId || 0), Number(userId || 0));
+    } catch (error) {
+      // aprendizado nao deve impedir criacao de compra
+    }
   }
 
   function isMonthClosed(userId, month, year) {
@@ -952,6 +1007,9 @@ function createAutomationApiRepository() {
     getActiveCards,
     getActiveCardById,
     getPurchaseCategory,
+    getPurchaseCategoryByName,
+    findMerchantCategoryRuleForDescription,
+    markMerchantCategoryRuleApplied,
     isMonthClosed,
     insertRecurringRule,
     insertTransaction,

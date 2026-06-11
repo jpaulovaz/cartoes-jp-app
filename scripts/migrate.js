@@ -1053,7 +1053,40 @@ function runMigrations() {
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
 
+  CREATE TABLE IF NOT EXISTS automation_merchant_category_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    normalized_pattern TEXT NOT NULL,
+    merchant_label TEXT NOT NULL,
+    category_id INTEGER NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    source TEXT NOT NULL DEFAULT 'whatsapp',
+    apply_count INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    last_applied_at TEXT,
+    UNIQUE(user_id, normalized_pattern),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (category_id) REFERENCES purchase_categories(id)
+  );
 
+  CREATE TABLE IF NOT EXISTS automation_smart_summary_preferences (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    phone_e164 TEXT,
+    whatsapp_number TEXT,
+    summary_kind TEXT NOT NULL DEFAULT 'weekly',
+    enabled INTEGER NOT NULL DEFAULT 0,
+    schedule_day INTEGER NOT NULL DEFAULT 1,
+    schedule_hour INTEGER NOT NULL DEFAULT 9,
+    timezone TEXT NOT NULL DEFAULT 'America/Sao_Paulo',
+    last_sent_period TEXT,
+    last_sent_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(user_id, summary_kind),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
 
 
   CREATE TABLE IF NOT EXISTS automation_pdf_import_staging (
@@ -1593,6 +1626,10 @@ function runMigrations() {
   CREATE INDEX IF NOT EXISTS idx_automation_reminders_user_status_due ON automation_reminders(user_id, status, remind_at);
   CREATE INDEX IF NOT EXISTS idx_automation_reminders_due_dispatch ON automation_reminders(status, remind_at, last_sent_at);
   CREATE INDEX IF NOT EXISTS idx_automation_reminders_phone ON automation_reminders(phone_e164, channel, status);
+  CREATE INDEX IF NOT EXISTS idx_automation_merchant_rules_user_enabled ON automation_merchant_category_rules(user_id, enabled, updated_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_automation_merchant_rules_category ON automation_merchant_category_rules(user_id, category_id, enabled);
+  CREATE INDEX IF NOT EXISTS idx_automation_summary_prefs_due ON automation_smart_summary_preferences(enabled, summary_kind, schedule_day, schedule_hour, updated_at);
+  CREATE INDEX IF NOT EXISTS idx_automation_summary_prefs_user ON automation_smart_summary_preferences(user_id, enabled);
 
   CREATE INDEX IF NOT EXISTS idx_automation_pdf_staging_user_status ON automation_pdf_import_staging(user_id, status, expires_at);
   CREATE INDEX IF NOT EXISTS idx_automation_pdf_staging_message ON automation_pdf_import_staging(user_id, source_message_id);

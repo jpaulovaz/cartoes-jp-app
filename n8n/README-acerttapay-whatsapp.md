@@ -685,3 +685,81 @@ STATEMENT_PDF_GEMINI_API_KEY=...
 - O usuário precisa revisar no app antes de confirmar.
 - Se faltarem cartão, mês ou ano, o PDF fica em staging temporário até o usuário responder.
 - O staging expira para evitar retenção desnecessária de arquivo.
+
+---
+
+# AcerttaPay - Workflows N8N de Inteligência, Categorias e Resumos
+
+## Fluxo 8.1 - Categorias e Aprendizado
+
+Identificador do fluxo:
+
+```txt
+8.1 - ACERTTAPAY_CATEGORIAS_E_APRENDIZADO
+```
+
+Webhook:
+
+```txt
+acerttapay-wa-categories
+```
+
+Exemplos suportados:
+
+```txt
+compras sem categoria
+compra #123 é Alimentação
+essa compra da Amazon é Casa
+sempre classifique iFood como Alimentação
+```
+
+A regra permanente de estabelecimento pede confirmação antes de ser criada. Depois de confirmada, compras futuras criadas pela automação podem receber a categoria aprendida automaticamente.
+
+## Fluxo 8.2 - Resumos Inteligentes
+
+Identificador do fluxo:
+
+```txt
+8.2 - ACERTTAPAY_RESUMOS_INTELIGENTES
+```
+
+Webhook:
+
+```txt
+acerttapay-wa-smart-summaries
+```
+
+O mesmo workflow também possui um gatilho agendado para buscar resumos automáticos opt-in.
+
+Exemplos suportados:
+
+```txt
+resumo do mês
+resumo da semana
+o que mais gastei esse mês?
+ativar resumo semanal
+desligar resumo mensal
+```
+
+## Variáveis adicionais
+
+```txt
+AUTOMATION_SMART_SUMMARIES_ENABLED=1
+AUTOMATION_SMART_SUMMARY_DUE_BATCH_LIMIT=50
+```
+
+## Endpoints usados na Etapa 9
+
+```txt
+POST /api/automation/v1/categories/options
+POST /api/automation/v1/categories/uncategorized
+POST /api/automation/v1/categories/apply-to-purchase
+POST /api/automation/v1/categories/create-merchant-rule
+POST /api/automation/v1/categories/conversations/reply
+POST /api/automation/v1/insights/monthly
+POST /api/automation/v1/insights/weekly
+POST /api/automation/v1/insights/send-summary
+POST /api/automation/v1/insights/preferences
+POST /api/automation/v1/insights/due-summaries
+POST /api/automation/v1/insights/preferences/:id/mark-sent
+```

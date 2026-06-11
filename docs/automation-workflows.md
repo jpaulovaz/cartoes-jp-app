@@ -725,3 +725,125 @@ PDF_IMPORT_RUNNING
 - Se faltarem dados, o arquivo fica em staging temporário controlado por `AUTOMATION_PDF_STAGING_TTL_MINUTES`.
 - Arquivos maiores que `AUTOMATION_PDF_MAX_FILE_BYTES` são recusados.
 - Jobs em processamento não são cancelados pelo WhatsApp para evitar estado intermediário inconsistente.
+
+---
+
+## Fluxo 8.1 - Categorias e Aprendizado
+
+```txt
+8.1 - ACERTTAPAY_CATEGORIAS_E_APRENDIZADO.json
+```
+
+Responsabilidades:
+
+- listar categorias de compra disponíveis;
+- listar compras sem categoria;
+- aplicar categoria a uma compra recente ou indicada por código;
+- criar regra permanente de estabelecimento com confirmação;
+- registrar aprendizado também em `merchant_learning_feedback`;
+- aplicar regra futura automaticamente em novas compras quando houver correspondência segura.
+
+### Intents do fluxo 8.1
+
+```txt
+category_options
+show_uncategorized_purchases
+set_purchase_category
+set_merchant_category_rule
+help
+out_of_scope
+```
+
+### Endpoints da Etapa 9 - Categorias
+
+```txt
+POST /api/automation/v1/categories/options
+POST /api/automation/v1/categories/uncategorized
+POST /api/automation/v1/categories/apply-to-purchase
+POST /api/automation/v1/categories/create-merchant-rule
+POST /api/automation/v1/categories/conversations/reply
+```
+
+### Códigos de resposta de categorias
+
+```txt
+CATEGORY_OPTIONS
+UNCATEGORIZED_PURCHASES
+PURCHASE_CATEGORY_APPLIED
+NEEDS_CATEGORY_RULE_CONFIRMATION
+MERCHANT_CATEGORY_RULE_CREATED
+CATEGORY_RULE_CANCELLED
+CATEGORY_NOT_FOUND
+PURCHASE_NOT_FOUND
+PURCHASE_AMBIGUOUS
+MONTH_CLOSED
+```
+
+### Regras da família 8.1
+
+- Categorizar uma compra é escrita leve, mas ainda exige `Idempotency-Key`.
+- O backend valida se a compra pertence ao usuário e se a fatura não está fechada.
+- Quando a compra for parcelada, a categoria é aplicada em todas as parcelas do escopo.
+- Criar regra permanente de estabelecimento sempre pede confirmação.
+- Regras permanentes entram em `automation_merchant_category_rules` e também alimentam `merchant_learning_feedback`.
+- Compras futuras criadas pela automação usam a regra aprendida quando o estabelecimento bater com segurança.
+
+---
+
+## Fluxo 8.2 - Resumos Inteligentes
+
+```txt
+8.2 - ACERTTAPAY_RESUMOS_INTELIGENTES.json
+```
+
+Responsabilidades:
+
+- entregar resumo inteligente mensal sob demanda;
+- entregar resumo semanal sob demanda;
+- destacar maiores categorias, estabelecimentos e cartões;
+- informar compras sem categoria;
+- ativar/desativar resumo automático por WhatsApp com opt-in;
+- disparar resumos automáticos apenas para usuários que aceitaram.
+
+### Intents do fluxo 8.2
+
+```txt
+monthly_intelligent_summary
+weekly_summary
+spending_insights
+enable_auto_summary
+disable_auto_summary
+help
+out_of_scope
+```
+
+### Endpoints da Etapa 9 - Resumos
+
+```txt
+POST /api/automation/v1/insights/monthly
+POST /api/automation/v1/insights/weekly
+POST /api/automation/v1/insights/send-summary
+POST /api/automation/v1/insights/preferences
+POST /api/automation/v1/insights/due-summaries
+POST /api/automation/v1/insights/preferences/:id/mark-sent
+```
+
+### Códigos de resposta de resumos
+
+```txt
+MONTHLY_INTELLIGENT_SUMMARY
+WEEKLY_INTELLIGENT_SUMMARY
+SMART_SUMMARY_OPT_IN_SAVED
+SMART_SUMMARY_OPT_OUT_SAVED
+DUE_SMART_SUMMARIES
+SMART_SUMMARY_MARKED_SENT
+SMART_SUMMARIES_DISABLED
+```
+
+### Regras da família 8.2
+
+- Resumos sob demanda são read-only.
+- Resumos automáticos são enviados somente para usuário opt-in.
+- O workflow agendado consulta preferências vencidas e marca envio para evitar repetição no mesmo período.
+- WhatsApp não deve virar spam: o usuário pode desligar resumo semanal ou mensal por mensagem.
+- O backend continua sendo a fonte dos números; a IA só escolhe a intenção e o período.

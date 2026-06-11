@@ -146,6 +146,7 @@ function createPurchaseCreationService(deps = {}) {
     const installments = Math.min(120, normalizePositiveInteger(purchase.installments, 1));
     const isRecurring = parseBooleanLike(purchase.is_recurring ?? purchase.isRecurring ?? false);
     const purchaseCategoryId = Number(purchase.purchase_category_id || purchase.purchaseCategoryId || 0) || null;
+    const purchaseCategoryHint = normalizeDescription(purchase.category_hint || purchase.categoryHint || purchase.purchase_category_hint || purchase.purchaseCategoryHint || '');
 
     if (!description) {
       throw new PurchaseCreationError('Faltou a descrição da compra. Me conta onde foi esse gasto?', {
@@ -175,6 +176,7 @@ function createPurchaseCreationService(deps = {}) {
       installments,
       isRecurring,
       purchaseCategoryId,
+      purchaseCategoryHint,
       firstDue: purchase.first_due || purchase.firstDue || purchase.due_month || purchase.dueMonth || ''
     };
   }
@@ -216,7 +218,20 @@ function createPurchaseCreationService(deps = {}) {
       });
     }
 
-    const purchaseCategoryId = validatePurchaseCategory(safeUserId, normalized.purchaseCategoryId);
+    let purchaseCategoryId = validatePurchaseCategory(safeUserId, normalized.purchaseCategoryId);
+    if (!purchaseCategoryId && normalized.purchaseCategoryHint && repository.getPurchaseCategoryByName) {
+      const hintedCategory = repository.getPurchaseCategoryByName(safeUserId, normalized.purchaseCategoryHint);
+      if (hintedCategory && Number(hintedCategory.active || 0) !== 0) purchaseCategoryId = Number(hintedCategory.id || 0) || null;
+    }
+    if (!purchaseCategoryId && repository.findMerchantCategoryRuleForDescription) {
+      const rule = repository.findMerchantCategoryRuleForDescription(safeUserId, normalized.description);
+      if (rule && Number(rule.category_id || 0)) {
+        purchaseCategoryId = Number(rule.category_id || 0);
+        if (repository.markMerchantCategoryRuleApplied) {
+          repository.markMerchantCategoryRuleApplied(rule.id, safeUserId);
+        }
+      }
+    }
     const resolvedFirstDue = resolveFirstDueMonth({
       firstDue: normalized.firstDue,
       purchaseDate: normalized.date,

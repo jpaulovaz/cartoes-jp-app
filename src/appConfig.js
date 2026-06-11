@@ -306,6 +306,29 @@ const SETTING_DEFINITIONS = [
     autoReload: true
   },
   {
+    key: 'AUTOMATION_SMART_SUMMARIES_ENABLED',
+    section: 'automation',
+    label: 'Resumos inteligentes automáticos',
+    helper: 'Permite que o N8N busque usuários opt-in para enviar resumos semanais ou mensais pelo WhatsApp.',
+    input: 'switch',
+    defaultValue: '1',
+    required: false,
+    autoReload: true
+  },
+  {
+    key: 'AUTOMATION_SMART_SUMMARY_DUE_BATCH_LIMIT',
+    section: 'automation',
+    label: 'Resumos inteligentes por lote',
+    helper: 'Quantidade máxima de resumos automáticos retornados para o workflow agendado do N8N.',
+    input: 'number',
+    defaultValue: '50',
+    min: 1,
+    max: 200,
+    step: 1,
+    required: false,
+    autoReload: true
+  },
+  {
     key: 'WELCOME_EMAIL_ENABLED',
     section: 'email',
     label: 'Enviar boas-vindas por e-mail',

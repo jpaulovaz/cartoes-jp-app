@@ -267,17 +267,22 @@ function createAutomationQueriesService(deps = {}) {
     };
   }
 
-  function buildMonthSummaryText({ month, year, cards, people, topPurchases, debt, monthlyFinances }) {
-    const totalCards = sumBy(cards, 'total_cents');
-    const paidCards = sumBy(cards, 'paid_cents');
-    const openCards = Math.max(0, totalCards - paidCards);
+  function buildMonthSummaryText({ month, year, cards, people, topPurchases, debt, monthlyFinances, personalSummary, fullCardSummary }) {
+    const cardsTotal = Number(fullCardSummary?.total_cents ?? sumBy(cards, 'total_cents'));
+    const cardsPaid = Number(fullCardSummary?.paid_cents ?? sumBy(cards, 'paid_cents'));
+    const cardsOpen = Math.max(0, Number(fullCardSummary?.open_cents ?? (cardsTotal - cardsPaid)));
     const finances = Array.isArray(monthlyFinances) ? monthlyFinances : [];
     const incomeFinances = finances.filter((row) => row.type === 'income');
     const expenseFinances = finances.filter((row) => row.type !== 'income');
     const incomeTotal = sumBy(incomeFinances, 'amount_cents');
     const expenseTotal = sumBy(expenseFinances, 'amount_cents');
     const openExpenseTotal = sumBy(expenseFinances, 'open_cents');
-    const generalTotal = totalCards + expenseTotal;
+    const selfCardTotal = Math.max(0, Number(personalSummary?.self_card_total_cents || 0));
+    const selfCardPaid = Math.max(0, Number(personalSummary?.self_card_paid_cents || 0));
+    const selfCardOpen = Math.max(0, Number(personalSummary?.self_card_open_cents ?? (selfCardTotal - selfCardPaid)));
+    const sharedReceivedTotal = Math.max(0, Number(personalSummary?.shared_received_total_cents || 0));
+    const personalCommittedTotal = Math.max(0, Number(personalSummary?.personal_committed_cents ?? (selfCardTotal + expenseTotal + sharedReceivedTotal)));
+    const forecastBalance = Number(personalSummary?.forecast_balance_cents ?? (incomeTotal - personalCommittedTotal));
     const cardLines = cards.length
       ? truncateRows(cards, 5).map((card) => `• ${card.name}: *${formatBRLFromCents(card.total_cents)}*${card.due_date ? ` · vence ${formatDateBR(card.due_date)}` : ''}`)
       : ['• Nenhuma compra de cartão nesse período.'];
@@ -296,20 +301,33 @@ function createAutomationQueriesService(deps = {}) {
     const outgoing = Number(debt?.outgoing_open_cents || 0);
     const incoming = Number(debt?.incoming_open_cents || 0);
     const drafts = Number(debt?.draft_cents || 0);
+    const personalIntro = personalSummary?.self_name
+      ? `Sua parte em cartões considera o participante *${personalSummary.self_name}* em /detalhamento.`
+      : 'Sua parte em cartões considera o participante principal em /detalhamento.';
+    const sharedReceivedLine = sharedReceivedTotal > 0
+      ? [`🤝 Compras compartilhadas aceitas: *${formatBRLFromCents(sharedReceivedTotal)}*`]
+      : [];
 
     return [
       `📊 *Resumo de ${periodLabel(month, year)}*`,
       '',
-      `💳 Cartões: *${formatBRLFromCents(totalCards)}*`,
-      `📒 Saídas fora do cartão: *${formatBRLFromCents(expenseTotal)}*`,
+      '*Seu mês*',
       `✨ Entradas do mês: *${formatBRLFromCents(incomeTotal)}*`,
-      `🧮 Total de gastos do mês: *${formatBRLFromCents(generalTotal)}*`,
-      `✅ Pago registrado em cartões: *${formatBRLFromCents(paidCards)}*`,
-      `🧾 Aberto em cartões: *${formatBRLFromCents(openCards)}*`,
-      `⏳ Saídas mensais em aberto: *${formatBRLFromCents(openExpenseTotal)}*`,
+      `📒 Despesas do mês: *${formatBRLFromCents(expenseTotal)}*`,
+      `💳 Sua parte nos cartões: *${formatBRLFromCents(selfCardTotal)}*`,
+      ...sharedReceivedLine,
+      `🧮 Total dos seus gastos: *${formatBRLFromCents(personalCommittedTotal)}*`,
+      `💰 Saldo previsto: *${formatBRLFromCents(forecastBalance)}*`,
+      `✅ Sua parte paga nos cartões: *${formatBRLFromCents(selfCardPaid)}*`,
+      `🧾 Sua parte em aberto nos cartões: *${formatBRLFromCents(selfCardOpen)}*`,
+      `⏳ Despesas mensais em aberto: *${formatBRLFromCents(openExpenseTotal)}*`,
+      `_ ${personalIntro}_`,
       '',
-      '*Por cartão*',
+      '*Por cartão — fatura cheia*',
       ...cardLines,
+      `💳 Total das faturas: *${formatBRLFromCents(cardsTotal)}*`,
+      `✅ Pago nas faturas: *${formatBRLFromCents(cardsPaid)}*`,
+      `🧾 Faturas em aberto: *${formatBRLFromCents(cardsOpen)}*`,
       '',
       '*Entradas do mês*',
       ...incomeLines,
@@ -317,7 +335,7 @@ function createAutomationQueriesService(deps = {}) {
       '*Despesas fora do cartão*',
       ...expenseLines,
       '',
-      '*Por participante*',
+      '*Por participante — cartões*',
       ...personLines,
       '',
       '*Maiores compras no cartão*',
@@ -341,16 +359,51 @@ function createAutomationQueriesService(deps = {}) {
       const incoming = repository.getSharedDebtIncoming(user.id, period.month, period.year);
       const drafts = repository.getDraftQueues(user.id, period.month, period.year);
       const monthlyFinances = repository.getMonthlyFinancesSummary(user.id, period.month, period.year);
+      const selfPerson = repository.getSelfPerson(user.id);
+      const selfCardTotal = repository.getSelfCardMonthTotal(user.id, period.month, period.year, selfPerson?.id);
+      const selfCardPayment = repository.getPersonPaymentBreakdownForMonth(user.id, period.month, period.year, selfPerson?.id);
+      const sharedProjection = repository.getSharedPurchaseProjectionSummary(user.id, period.month, period.year);
       const debt = {
         outgoing_open_cents: sumBy(outgoing, 'open_cents'),
         incoming_open_cents: sumBy(incoming, 'open_cents'),
         draft_cents: sumBy(drafts, 'total_cents')
       };
+      const fullCardSummary = {
+        total_cents: sumBy(cards, 'total_cents'),
+        paid_cents: sumBy(cards, 'paid_cents')
+      };
+      fullCardSummary.open_cents = Math.max(0, fullCardSummary.total_cents - fullCardSummary.paid_cents);
+
+      const incomeTotal = sumBy(monthlyFinances.filter((row) => row.type === 'income'), 'amount_cents');
+      const expenseTotal = sumBy(monthlyFinances.filter((row) => row.type !== 'income'), 'amount_cents');
+      const selfCardTotalCents = Math.max(0, Number(selfCardTotal?.total_cents || 0));
+      const selfCardPaidCents = Math.min(selfCardTotalCents, Math.max(0, Number(selfCardPayment?.total_paid_cents || 0)));
+      const sharedReceivedTotalCents = Math.max(0, Number(sharedProjection?.total_cents || 0));
+      const personalCommittedCents = selfCardTotalCents + expenseTotal + sharedReceivedTotalCents;
+      const personalSummary = {
+        self_person_id: Number(selfPerson?.id || 0) || null,
+        self_name: selfPerson?.name || user.name || user.email || 'Você',
+        self_card_total_cents: selfCardTotalCents,
+        self_card_paid_cents: selfCardPaidCents,
+        self_card_open_cents: Math.max(0, selfCardTotalCents - selfCardPaidCents),
+        self_card_purchase_count: Number(selfCardTotal?.purchase_count || 0),
+        self_card_manual_paid_cents: Math.max(0, Number(selfCardPayment?.manual_cents || 0)),
+        self_card_auto_paid_cents: Math.max(0, Number(selfCardPayment?.auto_cents || 0)),
+        shared_received_total_cents: sharedReceivedTotalCents,
+        shared_received_paid_cents: Math.max(0, Number(sharedProjection?.confirmed_paid_cents || 0)),
+        shared_received_open_cents: Math.max(0, Number(sharedProjection?.open_cents || 0)),
+        shared_received_count: Number(sharedProjection?.item_count || 0),
+        income_cents: incomeTotal,
+        expense_cents: expenseTotal,
+        personal_committed_cents: personalCommittedCents,
+        forecast_balance_cents: incomeTotal - personalCommittedCents
+      };
+
       return makeResult({
         ok: true,
         code: 'MONTH_SUMMARY',
-        data: { period, cards, people, top_purchases: topPurchases, debt, monthly_finances: monthlyFinances },
-        whatsapp: { text: buildMonthSummaryText({ ...period, cards, people, topPurchases, debt, monthlyFinances }) }
+        data: { period, cards, people, top_purchases: topPurchases, debt, monthly_finances: monthlyFinances, personal_summary: personalSummary, full_card_summary: fullCardSummary },
+        whatsapp: { text: buildMonthSummaryText({ ...period, cards, people, topPurchases, debt, monthlyFinances, personalSummary, fullCardSummary }) }
       });
     });
   }

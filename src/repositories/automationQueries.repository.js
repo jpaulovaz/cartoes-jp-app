@@ -51,6 +51,124 @@ function createAutomationQueriesRepository() {
     `).all(Number(userId || 0));
   }
 
+
+  function getSelfPerson(userId) {
+    return db.prepare(`
+      SELECT id, name, email, phone, active, is_owner, profile_kind, status
+      FROM people
+      WHERE user_id = ?
+        AND COALESCE(status, CASE WHEN COALESCE(active, 1) = 0 THEN 'inactive' ELSE 'active' END) <> 'deleted'
+      ORDER BY COALESCE(profile_kind, CASE WHEN COALESCE(is_owner, 0) = 1 THEN 'self' ELSE 'contact' END) = 'self' DESC,
+               COALESCE(is_owner, 0) DESC,
+               id ASC
+      LIMIT 1
+    `).get(Number(userId || 0));
+  }
+
+  function getSelfCardMonthTotal(userId, month, year, personId) {
+    const safePersonId = Number(personId || 0);
+    if (!safePersonId) return { total_cents: 0, purchase_count: 0 };
+    return db.prepare(`
+      SELECT
+        COALESCE(SUM(COALESCE(a.share_cents, 0)), 0) AS total_cents,
+        COUNT(DISTINCT t.id) AS purchase_count
+      FROM allocations a
+      JOIN transactions t ON t.id = a.transaction_id AND t.user_id = a.user_id
+      LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
+      WHERE a.user_id = ?
+        AND a.person_id = ?
+        AND COALESCE(t.due_month, i.month) = ?
+        AND COALESCE(t.due_year, i.year) = ?
+    `).get(Number(userId || 0), safePersonId, Number(month || 0), Number(year || 0)) || { total_cents: 0, purchase_count: 0 };
+  }
+
+  function getManualPersonPaymentForMonth(userId, month, year, personId) {
+    const safePersonId = Number(personId || 0);
+    if (!safePersonId) return 0;
+    const row = db.prepare(`
+      SELECT COALESCE(paid_cents, 0) AS paid_cents
+      FROM person_payments
+      WHERE user_id = ? AND person_id = ? AND month = ? AND year = ?
+      LIMIT 1
+    `).get(Number(userId || 0), safePersonId, Number(month || 0), Number(year || 0));
+    return Math.max(0, Number(row?.paid_cents || 0));
+  }
+
+  function getConfirmedSharedDebtCardPaymentForPerson(userId, month, year, personId) {
+    const safePersonId = Number(personId || 0);
+    if (!safePersonId) return 0;
+    const row = db.prepare(`
+      SELECT COALESCE(SUM(COALESCE(a.allocated_cents, 0)), 0) AS total_cents
+      FROM shared_debt_payment_allocations a
+      JOIN shared_debt_payment_intents pi ON pi.id = a.intent_id
+      JOIN shared_debt_monthly_settlements s ON s.id = a.settlement_id
+      JOIN shared_debt_requests r ON r.id = a.request_id
+      WHERE s.requester_user_id = ?
+        AND s.request_kind = 'card'
+        AND s.month = ?
+        AND s.year = ?
+        AND pi.status = 'confirmed'
+        AND COALESCE(r.request_kind, 'card') = 'card'
+        AND r.source_person_id = ?
+    `).get(Number(userId || 0), Number(month || 0), Number(year || 0), safePersonId);
+    return Math.max(0, Number(row?.total_cents || 0));
+  }
+
+  function getPersonPaymentBreakdownForMonth(userId, month, year, personId) {
+    const manualCents = getManualPersonPaymentForMonth(userId, month, year, personId);
+    const autoCents = getConfirmedSharedDebtCardPaymentForPerson(userId, month, year, personId);
+    return {
+      person_id: Number(personId || 0),
+      manual_cents: manualCents,
+      auto_cents: autoCents,
+      total_paid_cents: manualCents + autoCents
+    };
+  }
+
+  function getSharedPurchaseProjectionSummary(userId, month, year) {
+    const row = db.prepare(`
+      SELECT
+        COUNT(*) AS item_count,
+        COALESCE(SUM(COALESCE(r.amount_cents, 0)), 0) AS total_cents,
+        COALESCE(SUM(
+          CASE
+            WHEN r.status = 'settled' THEN COALESCE(r.amount_cents, 0)
+            WHEN COALESCE(r.amount_paid_cents, 0) >= COALESCE(r.amount_cents, 0) THEN COALESCE(r.amount_cents, 0)
+            ELSE COALESCE(r.amount_paid_cents, 0)
+          END
+        ), 0) AS confirmed_paid_cents,
+        COALESCE(SUM(
+          CASE
+            WHEN r.status = 'settled' THEN 0
+            WHEN COALESCE(r.amount_cents, 0) - COALESCE(r.amount_paid_cents, 0) > 0 THEN COALESCE(r.amount_cents, 0) - COALESCE(r.amount_paid_cents, 0)
+            ELSE 0
+          END
+        ), 0) AS open_cents
+      FROM shared_debt_requests r
+      LEFT JOIN transactions t
+        ON t.id = r.source_transaction_id
+       AND t.user_id = r.requester_user_id
+      LEFT JOIN imports i
+        ON i.id = t.import_id
+       AND i.user_id = t.user_id
+      WHERE r.receiver_user_id = ?
+        AND COALESCE(r.request_kind, 'card') = 'card'
+        AND r.status IN ('accepted', 'settled')
+        AND COALESCE(r.amount_cents, 0) > 0
+        AND COALESCE(r.source_due_month, i.month, t.due_month) = ?
+        AND COALESCE(r.source_due_year, i.year, t.due_year) = ?
+    `).get(Number(userId || 0), Number(month || 0), Number(year || 0)) || {};
+
+    const total = Math.max(0, Number(row.total_cents || 0));
+    const paid = Math.min(total, Math.max(0, Number(row.confirmed_paid_cents || 0)));
+    return {
+      item_count: Number(row.item_count || 0),
+      total_cents: total,
+      confirmed_paid_cents: paid,
+      open_cents: Math.max(0, Number(row.open_cents || 0) || (total - paid))
+    };
+  }
+
   function getCardMonthTotals(userId, month, year) {
     return db.prepare(`
       SELECT
@@ -375,6 +493,10 @@ function createAutomationQueriesRepository() {
     ...base,
     listCards,
     listPeople,
+    getSelfPerson,
+    getSelfCardMonthTotal,
+    getPersonPaymentBreakdownForMonth,
+    getSharedPurchaseProjectionSummary,
     getCardMonthTotals,
     getPersonMonthTotals,
     getTopPurchasesByMonth,

@@ -1054,6 +1054,34 @@ function runMigrations() {
   );
 
 
+
+
+  CREATE TABLE IF NOT EXISTS automation_pdf_import_staging (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    phone_e164 TEXT,
+    whatsapp_number TEXT,
+    channel TEXT NOT NULL DEFAULT 'whatsapp',
+    original_filename TEXT,
+    mime_type TEXT,
+    byte_size INTEGER,
+    storage_path TEXT NOT NULL,
+    source_message_id TEXT,
+    source_meta_json TEXT,
+    card_hint TEXT,
+    month INTEGER,
+    year INTEGER,
+    status TEXT NOT NULL DEFAULT 'waiting_details',
+    job_id INTEGER,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    consumed_at TEXT,
+    cancelled_at TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (job_id) REFERENCES statement_import_jobs(id)
+  );
+
   CREATE TABLE IF NOT EXISTS automation_reminders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -1565,6 +1593,9 @@ function runMigrations() {
   CREATE INDEX IF NOT EXISTS idx_automation_reminders_user_status_due ON automation_reminders(user_id, status, remind_at);
   CREATE INDEX IF NOT EXISTS idx_automation_reminders_due_dispatch ON automation_reminders(status, remind_at, last_sent_at);
   CREATE INDEX IF NOT EXISTS idx_automation_reminders_phone ON automation_reminders(phone_e164, channel, status);
+
+  CREATE INDEX IF NOT EXISTS idx_automation_pdf_staging_user_status ON automation_pdf_import_staging(user_id, status, expires_at);
+  CREATE INDEX IF NOT EXISTS idx_automation_pdf_staging_message ON automation_pdf_import_staging(user_id, source_message_id);
   `);
 
   ensureIndexWithAliases(

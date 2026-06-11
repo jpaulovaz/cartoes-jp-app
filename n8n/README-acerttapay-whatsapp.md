@@ -583,3 +583,105 @@ acerttapay-wa-month-close:<telefone>
 ```
 
 A memória é apenas conversacional. Confirmação de fechamento/reabertura fica em `automation_conversation_states`.
+
+---
+
+# AcerttaPay - Workflow N8N WhatsApp Importação PDF
+
+## Fluxo 7.1 - Importação de fatura PDF
+
+Identificador do fluxo:
+
+```txt
+7.1 - ACERTTAPAY_IMPORTACAO_PDF_WHATSAPP
+```
+
+Este workflow pertence à família **7.x - Importações por WhatsApp**. Ele recebe PDFs de fatura enviados pelo WhatsApp, baixa a mídia na Evolution API, envia o arquivo ao AcerttaPay em base64 e cria um job de leitura na fila de importação por PDF.
+
+Webhook de teste:
+
+```txt
+acerttapay-wa-pdf-imports
+```
+
+## O que o fluxo 7.1 faz
+
+```txt
+Usuário envia PDF da fatura
+N8N identifica o documento e baixa a mídia na Evolution API
+IA Agent extrai legenda como cartão/mês/ano quando houver
+N8N envia o PDF ao AcerttaPay
+AcerttaPay valida autorização, arquivo, tamanho, cartão e competência
+AcerttaPay cria job de importação
+Usuário revisa no app antes de confirmar
+```
+
+## Exemplos de conversa
+
+```txt
+[PDF] fatura Nubank junho/2026
+```
+
+Resposta esperada: cria job e informa o número da importação.
+
+```txt
+[PDF]
+```
+
+Resposta esperada: guarda temporariamente o PDF e pergunta cartão, mês e ano.
+
+```txt
+Nubank junho/2026
+```
+
+Resposta esperada: completa os dados pendentes e cria o job.
+
+```txt
+status da importação #12
+```
+
+Resposta esperada: consulta o status do job.
+
+```txt
+cancelar importação #12
+```
+
+Resposta esperada: cancela se ainda não estiver em processamento.
+
+## Endpoints usados
+
+```txt
+POST /api/automation/v1/imports/pdf/jobs
+POST /api/automation/v1/imports/pdf/jobs/list
+POST /api/automation/v1/imports/pdf/jobs/:id/status
+POST /api/automation/v1/imports/pdf/jobs/:id/cancel
+POST /api/automation/v1/imports/pdf/conversations/reply
+```
+
+## Variáveis necessárias
+
+```txt
+ACERTTAPAY_URL
+ACERTTAPAY_AUTOMATION_API_TOKEN
+EVOLUTION_API_URL
+EVOLUTION_API_KEY
+EVOLUTION_INSTANCE_NAME
+```
+
+## Configurações no AcerttaPay
+
+```txt
+AUTOMATION_PDF_MAX_FILE_BYTES=12000000
+AUTOMATION_PDF_STAGING_TTL_MINUTES=60
+STATEMENT_PDF_ENABLED=1
+STATEMENT_PDF_GEMINI_ENABLED=1
+STATEMENT_PDF_GEMINI_API_KEY=...
+```
+
+## Observações importantes
+
+- O PDF enviado pelo WhatsApp **não importa compras automaticamente**.
+- O AcerttaPay cria um job e gera revisão.
+- O usuário precisa revisar no app antes de confirmar.
+- Se faltarem cartão, mês ou ano, o PDF fica em staging temporário até o usuário responder.
+- O staging expira para evitar retenção desnecessária de arquivo.

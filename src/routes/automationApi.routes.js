@@ -5,6 +5,7 @@ const { createAutomationRemindersController } = require('../controllers/automati
 const { createAutomationSharedDebtsController } = require('../controllers/automationSharedDebts.controller');
 const { createAutomationMonthlyFinancesController } = require('../controllers/automationMonthlyFinances.controller');
 const { createAutomationMonthCloseController } = require('../controllers/automationMonthClose.controller');
+const { createAutomationPdfImportsController } = require('../controllers/automationPdfImports.controller');
 
 function createAutomationApiRouter(deps = {}) {
   const router = express.Router();
@@ -14,6 +15,7 @@ function createAutomationApiRouter(deps = {}) {
   const sharedDebtsController = createAutomationSharedDebtsController(deps);
   const monthlyFinancesController = createAutomationMonthlyFinancesController(deps);
   const monthCloseController = createAutomationMonthCloseController(deps);
+  const pdfImportsController = createAutomationPdfImportsController(deps);
 
   router.use(controller.authenticate);
   router.get('/health', controller.health);
@@ -72,6 +74,13 @@ function createAutomationApiRouter(deps = {}) {
   router.post('/month-close/prepare-reopen', monthCloseController.prepareReopen);
   router.post('/month-close/confirm-reopen', monthCloseController.confirmReopen);
   router.post('/month-close/conversations/reply', monthCloseController.conversationReply);
+
+
+  router.post('/imports/pdf/jobs', pdfImportsController.createPdfJob);
+  router.post('/imports/pdf/jobs/list', pdfImportsController.listJobs);
+  router.post('/imports/pdf/jobs/:id/status', pdfImportsController.jobStatus);
+  router.post('/imports/pdf/jobs/:id/cancel', pdfImportsController.cancelJob);
+  router.post('/imports/pdf/conversations/reply', pdfImportsController.conversationReply);
 
   return router;
 }

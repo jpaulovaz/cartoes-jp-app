@@ -4298,8 +4298,8 @@ function handleFriendlyErrorResponse(req, res, error, { defaultMessage = null, f
 }
 
 // --- MIDDLEWARES DE BODY PARSER (DEVE VIR ANTES DAS ROTAS) ---
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ limit: '10mb', extended: true }));
+app.use(express.json({ limit: '30mb' }));
+app.use(express.urlencoded({ limit: '30mb', extended: true }));
 
 // --- MIDDLEWARE DE LOGGING GLOBAL ---
 app.use((req, res, next) => {

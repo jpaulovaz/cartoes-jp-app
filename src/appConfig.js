@@ -278,6 +278,33 @@ const SETTING_DEFINITIONS = [
     required: false,
     autoReload: true
   },
+
+  {
+    key: 'AUTOMATION_PDF_MAX_FILE_BYTES',
+    section: 'automation',
+    label: 'Limite de PDF via WhatsApp (bytes)',
+    helper: 'Tamanho máximo aceito para faturas PDF enviadas pela automação. O N8N envia em base64, então mantenha uma margem saudável.',
+    input: 'number',
+    defaultValue: '12000000',
+    min: 1048576,
+    max: 25000000,
+    step: 1048576,
+    required: false,
+    autoReload: true
+  },
+  {
+    key: 'AUTOMATION_PDF_STAGING_TTL_MINUTES',
+    section: 'automation',
+    label: 'Tempo para completar dados do PDF',
+    helper: 'Minutos para guardar temporariamente um PDF recebido enquanto o usuário informa cartão, mês e ano.',
+    input: 'number',
+    defaultValue: '60',
+    min: 5,
+    max: 1440,
+    step: 5,
+    required: false,
+    autoReload: true
+  },
   {
     key: 'WELCOME_EMAIL_ENABLED',
     section: 'email',

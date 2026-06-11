@@ -1,0 +1,1284 @@
+{
+  "name": "7.1 - ACERTTAPAY_IMPORTACAO_PDF_WHATSAPP",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "acerttapay-wa-pdf-imports",
+        "responseMode": "onReceived",
+        "responseData": "firstEntryJson",
+        "options": {}
+      },
+      "id": "234eab7a-e91a-4431-998f-06f21c3195d0",
+      "name": "WA Incoming",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -1380,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "94511f38-6921-49c0-b5e4-ae6b0cf1cd8b",
+      "name": "EntradaWhatsapp",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1380,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const root = $json.body || $json || {};\nconst data = root.data || root;\nconst key = data.key || {};\nconst msg = data.message || root.message || {};\nconst documentMessage = msg.documentMessage || msg.documentWithCaptionMessage?.message?.documentMessage || msg.ephemeralMessage?.message?.documentMessage || null;\nconst extended = msg.extendedTextMessage || msg.ephemeralMessage?.message?.extendedTextMessage || null;\nconst remoteJid = String(key.remoteJid || data.remoteJid || data.from || root.from || data.sender || root.sender || '').trim();\nconst isGroup = /@g\\.us$/i.test(remoteJid);\nlet phone = String(data.number || data.phone || root.number || remoteJid.split('@')[0] || data.sender || root.sender || '').replace(/\\D/g, '');\nif (phone.startsWith('0') && phone.length > 11) phone = phone.replace(/^0+/, '');\nconst caption = String(documentMessage?.caption || msg.imageMessage?.caption || msg.videoMessage?.caption || '').trim();\nconst text = String(\n  data.text || root.text || data.body || root.body || msg.conversation || extended?.text || caption || ''\n).trim();\nconst messageId = String(key.id || data.messageId || data.id || root.messageId || root.id || '').trim() || `${phone}:${Date.now()}`;\nconst fromMe = Boolean(key.fromMe || data.fromMe || root.fromMe);\nconst filename = String(documentMessage?.fileName || documentMessage?.filename || data.fileName || data.filename || 'fatura.pdf').trim() || 'fatura.pdf';\nconst mimetype = String(documentMessage?.mimetype || data.mimetype || data.mimeType || '').trim();\nconst isDocument = Boolean(documentMessage || data.messageType === 'documentMessage' || data.messageType === 'document');\nconst isPdf = Boolean(isDocument && (/pdf/i.test(mimetype) || /\\.pdf$/i.test(filename)));\nconst isText = Boolean(text && !isPdf);\nreturn [{ json: {\n  phone,\n  remote_jid: remoteJid,\n  message_text: text,\n  message_id: messageId,\n  push_name: data.pushName || root.pushName || data.push_name || '',\n  instance: root.instance || data.instance || $env.EVOLUTION_INSTANCE_NAME || '',\n  from_me: fromMe,\n  is_group: isGroup,\n  is_document: isDocument,\n  is_pdf: isPdf,\n  is_text: isText,\n  filename,\n  mimetype,\n  caption,\n  media_message: msg,\n  is_valid_user_message: Boolean(phone && !fromMe && !isGroup && (text || isPdf)),\n  should_reply_unsupported: Boolean(phone && !fromMe && !isGroup),\n  current_date: new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' }),\n  raw: root\n}}];"
+      },
+      "id": "a0eef950-c7fe-452d-b73f-dd82c9953bd7",
+      "name": "Normalize Evolution Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1120,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "005a9264-ee81-41ed-ba06-714840584d4f",
+              "leftValue": "={ $json.is_valid_user_message === true }",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1f74d782-4188-4eba-86dd-cdf1af5bb3ce",
+      "name": "Is Valid User Message?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -900,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1f089ef-c2e8-4339-a46f-47dd923e128a",
+              "leftValue": "={ $json.should_reply_unsupported === true }",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e9064061-ec67-4daa-ab8b-d3d0d25c0a91",
+      "name": "Should Reply Unsupported?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -680,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "={{ $('Normalize Evolution Payload').first().json.instance || $env.EVOLUTION_INSTANCE_NAME || 'ACERTTAPAY' }}",
+        "remoteJid": "={{ $('Normalize Evolution Payload').first().json.phone || String($('Normalize Evolution Payload').first().json.remote_jid || '').split('@')[0].replace(/\\D/g, '') }}",
+        "messageText": "={{ 'Ainda não consigo ler esse tipo de mensagem por aqui. Para importar fatura, me manda o *PDF da fatura* ou uma mensagem como *status da importação #12*. 📄' }}",
+        "options_message": {
+          "delay": 1400,
+          "linkPreview": false
+        }
+      },
+      "id": "f4cda7be-45b3-4161-addc-085ae19143b1",
+      "name": "Send Unsupported Message",
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        -460,
+        560
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "40g56cIQ5RrPPK1M",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{($env.ACERTTAPAY_URL || 'http://127.0.0.1:3000').replace(/\\/$/, '')}}/api/automation/v1/whatsapp/resolve",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.ACERTTAPAY_AUTOMATION_API_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ { phone: $('Normalize Evolution Payload').first().json.phone, channel: 'whatsapp', instance: $('Normalize Evolution Payload').first().json.instance, message_id: $('Normalize Evolution Payload').first().json.message_id, push_name: $('Normalize Evolution Payload').first().json.push_name } }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "ee526704-5d42-400c-a0db-f1f91b6ad9e9",
+      "name": "Resolve AcerttaPay User",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -680,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "11898201-58aa-435b-bbf2-fb4b850539f5",
+              "leftValue": "={ $json.authorized === true }",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "55883114-a454-4820-8cc1-1ef17a86240e",
+      "name": "Authorized?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -460,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "={{ $('Normalize Evolution Payload').first().json.instance || $env.EVOLUTION_INSTANCE_NAME || 'ACERTTAPAY' }}",
+        "remoteJid": "={{ $('Normalize Evolution Payload').first().json.phone || String($('Normalize Evolution Payload').first().json.remote_jid || '').split('@')[0].replace(/\\D/g, '') }}",
+        "messageText": "={{ $json.whatsapp?.text || 'Esse número ainda não está liberado no AcerttaPay. Ative o WhatsApp nas Configurações do app para importar PDF por aqui. 🔐' }}",
+        "options_message": {
+          "delay": 1400,
+          "linkPreview": false
+        }
+      },
+      "id": "93cdfd3a-8e51-41d9-b504-84027651ff86",
+      "name": "Send Authorization Result",
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        -220,
+        420
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "40g56cIQ5RrPPK1M",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e87c4be6-2857-4ca8-8ac5-ee3603dab264",
+              "leftValue": "={ $json.conversation?.state === 'awaiting_pdf_import_details' }",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ac2e4daa-14b4-470d-91b2-56f55e61dcb4",
+      "name": "Has Pending PDF Details?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -220,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c12235ff-47d1-4f1f-821f-042c269b6baf",
+              "leftValue": "={ $('Normalize Evolution Payload').first().json.is_pdf === true }",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ebb9d7ff-270e-4d7a-bd89-10b01e7caad1",
+      "name": "Has PDF Document?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        40,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0
+        }
+      },
+      "id": "9389e199-8e21-456b-830b-aa125d4ead73",
+      "name": "Gemini Chat Model - PDF Details",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        60,
+        -220
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "mZ7rvYR2BFrE4r9l",
+          "name": "Google Gemini Geral"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "=acerttapay-wa-pdf-imports:{{$('Normalize Evolution Payload').first().json.phone}}",
+        "contextWindowLength": 8
+      },
+      "id": "da14d224-c9c2-437a-9d87-b728cca3c9ee",
+      "name": "WhatsApp PDF Import Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        240,
+        -220
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "1dff4e69-8d0f-48e6-92ea-f00057483189",
+      "name": "Think Tool - PDF Details",
+      "type": "@n8n/n8n-nodes-langchain.toolThink",
+      "typeVersion": 1,
+      "position": [
+        420,
+        -220
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ JSON.stringify({ current_date: $('Normalize Evolution Payload').first().json.current_date, timezone: 'America/Sao_Paulo', conversation: $('Resolve AcerttaPay User').first().json.conversation, user_message: $('Normalize Evolution Payload').first().json.message_text }) }}",
+        "options": {
+          "systemMessage": "Você interpreta a resposta do usuário para completar uma importação de fatura PDF do AcerttaPay.\n\nResponda SOMENTE JSON válido.\nNunca invente cartão, mês ou ano. Se o usuário disser para cancelar, retorne intent=cancel_pdf_import.\nSe informar dados suficientes, retorne intent=complete_pdf_import_details.\n\nSchema:\n{\n  \"intent\": \"complete_pdf_import_details\",\n  \"confidence\": 0.0,\n  \"card_id\": null,\n  \"card_hint\": null,\n  \"month\": null,\n  \"year\": null\n}\n\nPara cancelar:\n{ \"intent\": \"cancel_pdf_import\", \"confidence\": 1, \"cancel\": true }",
+          "maxIterations": 2,
+          "returnIntermediateSteps": false
+        }
+      },
+      "id": "619ef07a-abac-4238-99b9-0053831eb8d5",
+      "name": "AI Parse PDF Details",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        40,
+        -40
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function cleanJson(value) {\n  if (value && typeof value === 'object') return value;\n  const raw = String(value || '').trim();\n  const withoutFence = raw.replace(/^```(?:json)?\\s*/i, '').replace(/```$/i, '').trim();\n  const first = withoutFence.indexOf('{');\n  const last = withoutFence.lastIndexOf('}');\n  if (first >= 0 && last > first) return withoutFence.slice(first, last + 1);\n  return withoutFence;\n}\nlet parsed;\ntry {\n  const content = $json.output ?? $json.text ?? $json.response ?? '';\n  const cleaned = cleanJson(content);\n  parsed = typeof cleaned === 'object' ? cleaned : JSON.parse(cleaned);\n} catch (error) {\n  parsed = { intent: 'complete_pdf_import_details', confidence: 0, card_hint: $('Normalize Evolution Payload').first().json.message_text };\n}\nparsed.month = parsed.month == null ? null : Number(parsed.month);\nparsed.year = parsed.year == null ? null : Number(parsed.year);\nreturn [{ json: parsed }];"
+      },
+      "id": "a33d5782-88e6-4f8d-93e2-e5bce622d2df",
+      "name": "Parse PDF Details JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        340,
+        -40
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{($env.ACERTTAPAY_URL || 'http://127.0.0.1:3000').replace(/\\/$/, '')}}/api/automation/v1/imports/pdf/conversations/reply",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.ACERTTAPAY_AUTOMATION_API_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Idempotency-Key",
+              "value": "=whatsapp-pdf-details:{{$('Normalize Evolution Payload').first().json.instance}}:{{$('Normalize Evolution Payload').first().json.message_id}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ { phone: $('Normalize Evolution Payload').first().json.phone, source: { channel: 'whatsapp', instance: $('Normalize Evolution Payload').first().json.instance, message_id: $('Normalize Evolution Payload').first().json.message_id, raw_text: $('Normalize Evolution Payload').first().json.message_text }, reply: $json } }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "4c108970-aa3f-4580-b559-4fc244b2d7a6",
+      "name": "Send PDF Details Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        600,
+        -40
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "={{ $('Normalize Evolution Payload').first().json.instance || $env.EVOLUTION_INSTANCE_NAME || 'ACERTTAPAY' }}",
+        "remoteJid": "={{ $('Normalize Evolution Payload').first().json.phone || String($('Normalize Evolution Payload').first().json.remote_jid || '').split('@')[0].replace(/\\D/g, '') }}",
+        "messageText": "={{ $json.whatsapp?.text || $json.message || 'Importação PDF atualizada no AcerttaPay.' }}",
+        "options_message": {
+          "delay": 1400,
+          "linkPreview": false
+        }
+      },
+      "id": "a5bdf8ba-7688-4cac-8f35-ee99bf60331e",
+      "name": "Send PDF Conversation Result",
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        860,
+        -40
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "40g56cIQ5RrPPK1M",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0
+        }
+      },
+      "id": "679011a4-a894-453f-8795-080ee3ac08f3",
+      "name": "Gemini Chat Model - PDF Caption",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        300,
+        500
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "mZ7rvYR2BFrE4r9l",
+          "name": "Google Gemini Geral"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ JSON.stringify({ current_date: $('Normalize Evolution Payload').first().json.current_date, timezone: 'America/Sao_Paulo', filename: $('Normalize Evolution Payload').first().json.filename, caption: $('Normalize Evolution Payload').first().json.message_text }) }}",
+        "options": {
+          "systemMessage": "Você extrai metadados de uma fatura PDF enviada ao AcerttaPay por WhatsApp.\n\nResponda SOMENTE JSON válido. Não invente cartão, mês ou ano. Se não estiver claro, use null.\n\nSchema:\n{\n  \"intent\": \"import_pdf_statement\",\n  \"confidence\": 0.0,\n  \"card_hint\": null,\n  \"month\": null,\n  \"year\": null\n}\n\nExemplos:\n\"fatura nubank junho 2026\" => card_hint Nubank, month 6, year 2026.\n\"PDF do Itaú de maio\" sem ano => year null.",
+          "maxIterations": 2,
+          "returnIntermediateSteps": false
+        }
+      },
+      "id": "895a5b21-2178-433c-93cd-1383871d9c3d",
+      "name": "AI Parse PDF Caption",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        300,
+        280
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "0bd81c18-870a-4fcc-94cf-ef6d6551c105",
+      "name": "Think Tool - PDF Caption",
+      "type": "@n8n/n8n-nodes-langchain.toolThink",
+      "typeVersion": 1,
+      "position": [
+        480,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function cleanJson(value) {\n  if (value && typeof value === 'object') return value;\n  const raw = String(value || '').trim();\n  const withoutFence = raw.replace(/^```(?:json)?\\s*/i, '').replace(/```$/i, '').trim();\n  const first = withoutFence.indexOf('{');\n  const last = withoutFence.lastIndexOf('}');\n  if (first >= 0 && last > first) return withoutFence.slice(first, last + 1);\n  return withoutFence;\n}\nlet parsed;\ntry {\n  const content = $json.output ?? $json.text ?? $json.response ?? '';\n  const cleaned = cleanJson(content);\n  parsed = typeof cleaned === 'object' ? cleaned : JSON.parse(cleaned);\n} catch (error) {\n  parsed = { intent: 'import_pdf_statement', confidence: 0, card_hint: null, month: null, year: null };\n}\nparsed.month = parsed.month == null ? null : Number(parsed.month);\nparsed.year = parsed.year == null ? null : Number(parsed.year);\nreturn [{ json: parsed }];"
+      },
+      "id": "dd2320f4-bf79-494d-881b-098e220d34f6",
+      "name": "Parse PDF Caption JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        600,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{($env.EVOLUTION_API_URL || '').replace(/\\/$/, '')}}/chat/getBase64FromMediaMessage/{{$('Normalize Evolution Payload').first().json.instance || $env.EVOLUTION_INSTANCE_NAME || 'ACERTTAPAY'}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.EVOLUTION_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ { message: $('Normalize Evolution Payload').first().json.media_message, convertToMp4: false } }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "2f61ca0c-2b02-40fa-bad4-b35c646c3f5e",
+      "name": "Download PDF From Evolution",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        860,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function findBase64(value) {\n  if (!value || typeof value !== 'object') return '';\n  const candidates = [\n    value.base64,\n    value.data?.base64,\n    value.result?.base64,\n    value.media?.base64,\n    value.file?.base64,\n    value.base64Data,\n    value.message?.base64,\n    value.response?.base64\n  ];\n  for (const candidate of candidates) {\n    const text = String(candidate || '').trim();\n    if (text) return text.replace(/^data:[^;]+;base64,/i, '').replace(/\\s+/g, '');\n  }\n  return '';\n}\nconst base64 = findBase64($json);\nconst caption = $('Parse PDF Caption JSON').first().json || {};\nconst normalized = $('Normalize Evolution Payload').first().json;\nif (!base64) {\n  return [{ json: { ok: false, code: 'MEDIA_DOWNLOAD_FAILED', whatsapp: { text: 'Recebi o PDF, mas não consegui baixar a mídia pela Evolution API. Confere a instância e tenta reenviar a fatura. 📄' } } }];\n}\nreturn [{ json: {\n  phone: normalized.phone,\n  filename: normalized.filename || 'fatura.pdf',\n  mime_type: normalized.mimetype || 'application/pdf',\n  file_base64: base64,\n  card_hint: caption.card_hint || null,\n  month: caption.month || null,\n  year: caption.year || null,\n  source: {\n    channel: 'whatsapp',\n    instance: normalized.instance,\n    message_id: normalized.message_id,\n    raw_text: normalized.message_text || normalized.caption || '',\n    filename: normalized.filename,\n    mimetype: normalized.mimetype\n  }\n}}];"
+      },
+      "id": "9f327872-6b66-48fc-a57e-b1a1a6abc5ed",
+      "name": "Build PDF Import Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e170d627-efb1-458c-b9e1-efc9c47ad06b",
+              "leftValue": "={ !!$json.file_base64 }",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f03e949d-2626-4649-9be5-f6b6e6fd8ec7",
+      "name": "Media Download OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1340,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{($env.ACERTTAPAY_URL || 'http://127.0.0.1:3000').replace(/\\/$/, '')}}/api/automation/v1/imports/pdf/jobs",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.ACERTTAPAY_AUTOMATION_API_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Idempotency-Key",
+              "value": "=whatsapp-pdf:{{$('Normalize Evolution Payload').first().json.instance}}:{{$('Normalize Evolution Payload').first().json.message_id}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "4b914327-bb59-4e2a-877d-de783fe12a83",
+      "name": "Create PDF Import Job",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1580,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "={{ $('Normalize Evolution Payload').first().json.instance || $env.EVOLUTION_INSTANCE_NAME || 'ACERTTAPAY' }}",
+        "remoteJid": "={{ $('Normalize Evolution Payload').first().json.phone || String($('Normalize Evolution Payload').first().json.remote_jid || '').split('@')[0].replace(/\\D/g, '') }}",
+        "messageText": "={{ $json.whatsapp?.text || $json.message || 'Importação de PDF processada no AcerttaPay.' }}",
+        "options_message": {
+          "delay": 1400,
+          "linkPreview": false
+        }
+      },
+      "id": "a73bc218-b6ab-48c5-9e7e-f97bedbec87e",
+      "name": "Send PDF Import Result",
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        1840,
+        260
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "40g56cIQ5RrPPK1M",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0
+        }
+      },
+      "id": "4abc3a39-1e5e-4cc7-a43c-dc1d6ce7a4d0",
+      "name": "Gemini Chat Model - PDF Commands",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        300,
+        900
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "mZ7rvYR2BFrE4r9l",
+          "name": "Google Gemini Geral"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ JSON.stringify({ current_date: $('Normalize Evolution Payload').first().json.current_date, timezone: 'America/Sao_Paulo', user_message: $('Normalize Evolution Payload').first().json.message_text }) }}",
+        "options": {
+          "systemMessage": "Você é o concierge de importação de faturas PDF do AcerttaPay no WhatsApp.\n\nNesta família 7.1 você só pode ajudar com fatura PDF: receber PDF, listar importações, consultar status e cancelar job.\nResponda SOMENTE JSON válido.\n\nIntents:\n- list_pdf_imports\n- status_pdf_import\n- cancel_pdf_import\n- help\n- out_of_scope\n\nSchema:\n{\n  \"intent\": \"help\",\n  \"confidence\": 0.0,\n  \"job_id\": null,\n  \"reply_text\": null\n}\n\nSe o usuário mandar oi/ajuda, explique brevemente que ele pode enviar a fatura em PDF com legenda como: *fatura Nubank junho/2026*.\nSe pedir status/cancelar, extraia o número após #. Se não houver número, peça o número do job.",
+          "maxIterations": 2,
+          "returnIntermediateSteps": false
+        }
+      },
+      "id": "2064f509-c11a-42ee-80e6-dab7a0b53065",
+      "name": "AI PDF Import Router",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        300,
+        660
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "a493c91f-0781-4988-bdec-5a8073f1b1f7",
+      "name": "Think Tool - PDF Commands",
+      "type": "@n8n/n8n-nodes-langchain.toolThink",
+      "typeVersion": 1,
+      "position": [
+        480,
+        900
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function cleanJson(value) {\n  if (value && typeof value === 'object') return value;\n  const raw = String(value || '').trim();\n  const withoutFence = raw.replace(/^```(?:json)?\\s*/i, '').replace(/```$/i, '').trim();\n  const first = withoutFence.indexOf('{');\n  const last = withoutFence.lastIndexOf('}');\n  if (first >= 0 && last > first) return withoutFence.slice(first, last + 1);\n  return withoutFence;\n}\nlet parsed;\ntry {\n  const content = $json.output ?? $json.text ?? $json.response ?? '';\n  const cleaned = cleanJson(content);\n  parsed = typeof cleaned === 'object' ? cleaned : JSON.parse(cleaned);\n} catch (error) {\n  parsed = { intent: 'help', confidence: 0, job_id: null, reply_text: null };\n}\nconst text = $('Normalize Evolution Payload').first().json.message_text || '';\nif (!parsed.job_id) {\n  const match = String(text).match(/#?\\s*(\\d{1,8})/);\n  if (match && /status|importa|pdf|cancel/i.test(text)) parsed.job_id = Number(match[1]);\n}\nreturn [{ json: parsed }];"
+      },
+      "id": "6b9625f2-e81e-475c-a339-c4912afe59c9",
+      "name": "Parse PDF Command JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        600,
+        660
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const intent = String($json.intent || 'help');\nconst jobId = Number($json.job_id || 0);\nconst base = String($env.ACERTTAPAY_URL || 'http://127.0.0.1:3000').replace(/\\/$/, '');\nconst norm = $('Normalize Evolution Payload').first().json;\nconst commonBody = { phone: norm.phone, source: { channel: 'whatsapp', instance: norm.instance, message_id: norm.message_id, raw_text: norm.message_text } };\nif (intent === 'list_pdf_imports') {\n  return [{ json: { needs_backend: true, url: `${base}/api/automation/v1/imports/pdf/jobs/list`, body: { ...commonBody, limit: 5 }, idempotency_key: `whatsapp-pdf-list:${norm.instance}:${norm.message_id}` } }];\n}\nif (intent === 'status_pdf_import') {\n  if (!jobId) return [{ json: { needs_backend: false, reply_text: 'Me manda o número do job para eu consultar. Ex.: *status da importação #12*.' } }];\n  return [{ json: { needs_backend: true, url: `${base}/api/automation/v1/imports/pdf/jobs/${jobId}/status`, body: commonBody, idempotency_key: `whatsapp-pdf-status:${norm.instance}:${norm.message_id}` } }];\n}\nif (intent === 'cancel_pdf_import') {\n  if (!jobId) return [{ json: { needs_backend: false, reply_text: 'Me diz qual importação cancelar. Ex.: *cancelar importação #12*.' } }];\n  return [{ json: { needs_backend: true, url: `${base}/api/automation/v1/imports/pdf/jobs/${jobId}/cancel`, body: commonBody, idempotency_key: `whatsapp-pdf-cancel:${norm.instance}:${norm.message_id}` } }];\n}\nconst defaultText = '📄 *Importação de fatura PDF*\\n\\nMe manda o PDF da fatura por aqui. Se puder, coloca uma legenda assim:\\n*fatura Nubank junho/2026*\\n\\nTambém posso acompanhar:\\n• *status da importação #12*\\n• *cancelar importação #12*\\n• *listar importações*\\n\\nNada entra direto no app: eu só preparo a revisão, você confere e confirma pelo AcerttaPay.';\nreturn [{ json: { needs_backend: false, reply_text: $json.reply_text || defaultText } }];"
+      },
+      "id": "4dc54bbd-639a-4258-8f50-a7850aae770e",
+      "name": "Build PDF Command Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        860,
+        660
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "512b09f3-8e95-4086-879a-4144a08420d5",
+              "leftValue": "={ $json.needs_backend === true }",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "2fd0e23e-617b-4067-9fb9-7f5af4f52090",
+      "name": "Needs Backend PDF Command?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1120,
+        660
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$json.url}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.ACERTTAPAY_AUTOMATION_API_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Idempotency-Key",
+              "value": "={{$json.idempotency_key}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "72df4ada-3d4d-4d82-928e-e4a3c120f902",
+      "name": "Execute PDF Command",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1360,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "={{ $('Normalize Evolution Payload').first().json.instance || $env.EVOLUTION_INSTANCE_NAME || 'ACERTTAPAY' }}",
+        "remoteJid": "={{ $('Normalize Evolution Payload').first().json.phone || String($('Normalize Evolution Payload').first().json.remote_jid || '').split('@')[0].replace(/\\D/g, '') }}",
+        "messageText": "={{ $json.whatsapp?.text || $json.message || 'Consulta de PDF processada no AcerttaPay.' }}",
+        "options_message": {
+          "delay": 1400,
+          "linkPreview": false
+        }
+      },
+      "id": "f79a286e-5b6a-4edc-b3e3-9973244b2f71",
+      "name": "Send PDF Command Result",
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        1600,
+        560
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "40g56cIQ5RrPPK1M",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "={{ $('Normalize Evolution Payload').first().json.instance || $env.EVOLUTION_INSTANCE_NAME || 'ACERTTAPAY' }}",
+        "remoteJid": "={{ $('Normalize Evolution Payload').first().json.phone || String($('Normalize Evolution Payload').first().json.remote_jid || '').split('@')[0].replace(/\\D/g, '') }}",
+        "messageText": "={{ $json.reply_text || 'Me manda o PDF da fatura com cartão e mês. Ex.: *fatura Nubank junho/2026*. 📄' }}",
+        "options_message": {
+          "delay": 1400,
+          "linkPreview": false
+        }
+      },
+      "id": "c6c36992-8c7c-4b04-b3c1-db255f8990db",
+      "name": "Send AI PDF Import Reply",
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        1360,
+        780
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "40g56cIQ5RrPPK1M",
+          "name": "Evolution account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "WA Incoming": {
+      "main": [
+        [
+          {
+            "node": "Normalize Evolution Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "EntradaWhatsapp": {
+      "main": [
+        [
+          {
+            "node": "Normalize Evolution Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Evolution Payload": {
+      "main": [
+        [
+          {
+            "node": "Is Valid User Message?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Valid User Message?": {
+      "main": [
+        [
+          {
+            "node": "Resolve AcerttaPay User",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Should Reply Unsupported?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Reply Unsupported?": {
+      "main": [
+        [
+          {
+            "node": "Send Unsupported Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve AcerttaPay User": {
+      "main": [
+        [
+          {
+            "node": "Authorized?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Authorized?": {
+      "main": [
+        [
+          {
+            "node": "Has Pending PDF Details?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Authorization Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Pending PDF Details?": {
+      "main": [
+        [
+          {
+            "node": "AI Parse PDF Details",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Has PDF Document?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Parse PDF Details": {
+      "main": [
+        [
+          {
+            "node": "Parse PDF Details JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse PDF Details JSON": {
+      "main": [
+        [
+          {
+            "node": "Send PDF Details Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send PDF Details Reply": {
+      "main": [
+        [
+          {
+            "node": "Send PDF Conversation Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has PDF Document?": {
+      "main": [
+        [
+          {
+            "node": "AI Parse PDF Caption",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI PDF Import Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Parse PDF Caption": {
+      "main": [
+        [
+          {
+            "node": "Parse PDF Caption JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse PDF Caption JSON": {
+      "main": [
+        [
+          {
+            "node": "Download PDF From Evolution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download PDF From Evolution": {
+      "main": [
+        [
+          {
+            "node": "Build PDF Import Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build PDF Import Payload": {
+      "main": [
+        [
+          {
+            "node": "Media Download OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Media Download OK?": {
+      "main": [
+        [
+          {
+            "node": "Create PDF Import Job",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send PDF Import Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create PDF Import Job": {
+      "main": [
+        [
+          {
+            "node": "Send PDF Import Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI PDF Import Router": {
+      "main": [
+        [
+          {
+            "node": "Parse PDF Command JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse PDF Command JSON": {
+      "main": [
+        [
+          {
+            "node": "Build PDF Command Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build PDF Command Request": {
+      "main": [
+        [
+          {
+            "node": "Needs Backend PDF Command?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs Backend PDF Command?": {
+      "main": [
+        [
+          {
+            "node": "Execute PDF Command",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send AI PDF Import Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute PDF Command": {
+      "main": [
+        [
+          {
+            "node": "Send PDF Command Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Chat Model - PDF Details": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Parse PDF Details",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp PDF Import Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Parse PDF Details",
+            "type": "ai_memory",
+            "index": 0
+          },
+          {
+            "node": "AI PDF Import Router",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Think Tool - PDF Details": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Parse PDF Details",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Chat Model - PDF Caption": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Parse PDF Caption",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Think Tool - PDF Caption": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Parse PDF Caption",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Chat Model - PDF Commands": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI PDF Import Router",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Think Tool - PDF Commands": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI PDF Import Router",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "ebeb888c-66f7-47b2-938c-afdd552752e6",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "54c1e6e642219d63bcca2e850583056b9d4a7efdf129870e6550b48695aa00e1"
+  },
+  "id": "acerttapay_pdf_import_71",
+  "tags": [
+    {
+      "name": "ACERTTAPAY",
+      "id": "pQ0ytyDUaBKZDloP",
+      "updatedAt": "2026-06-11T00:00:00.000Z",
+      "createdAt": "2026-06-11T00:00:00.000Z"
+    }
+  ]
+}

@@ -655,3 +655,73 @@ uncategorized_purchases
 - Para reabrir, o usuário deve responder exatamente `reabrir mês`.
 - Se algum bloqueador crítico surgir entre o preparo e a confirmação, o backend deve bloquear o fechamento.
 - Reabertura é permitida, mas sempre com confirmação forte e registro de mutação.
+
+---
+
+## Fluxo 7.1 - Importação de Fatura PDF por WhatsApp
+
+```txt
+7.1 - ACERTTAPAY_IMPORTACAO_PDF_WHATSAPP.json
+```
+
+Responsabilidades:
+
+- receber documento PDF enviado pela Evolution API;
+- baixar a mídia via N8N;
+- extrair metadados de legenda com IA Agent;
+- enviar o PDF ao AcerttaPay em base64;
+- criar job de importação em `statement_import_jobs`;
+- guardar temporariamente o PDF quando faltarem cartão, mês ou ano;
+- permitir completar dados pendentes por conversa;
+- consultar status e cancelar jobs elegíveis;
+- nunca confirmar/importar compras automaticamente.
+
+### Intents do fluxo 7.1
+
+```txt
+import_pdf_statement
+complete_pdf_import_details
+cancel_pdf_import
+list_pdf_imports
+status_pdf_import
+help
+out_of_scope
+```
+
+### Endpoints da Etapa 8
+
+```txt
+POST /api/automation/v1/imports/pdf/jobs
+POST /api/automation/v1/imports/pdf/jobs/list
+POST /api/automation/v1/imports/pdf/jobs/:id/status
+POST /api/automation/v1/imports/pdf/jobs/:id/cancel
+POST /api/automation/v1/imports/pdf/conversations/reply
+```
+
+### Códigos de resposta PDF
+
+```txt
+PDF_IMPORT_JOB_CREATED
+NEEDS_PDF_IMPORT_DETAILS
+PDF_IMPORT_JOB_STATUS
+PDF_IMPORT_JOBS_LISTED
+PDF_IMPORT_JOB_CANCELLED
+PDF_IMPORT_STAGING_CANCELLED
+PDF_FILE_REQUIRED
+INVALID_PDF_FILE
+PDF_TOO_LARGE
+PDF_IMPORT_DISABLED
+PDF_IMPORT_PROVIDER_NOT_READY
+PDF_IMPORT_JOB_NOT_FOUND
+PDF_IMPORT_STAGING_EXPIRED
+PDF_IMPORT_RUNNING
+```
+
+### Regras da família 7.x
+
+- PDF é arquivo de risco médio/alto: sempre vira job e revisão.
+- Nenhum lançamento entra no app sem confirmação posterior na tela de importação.
+- A IA pode sugerir cartão/mês/ano, mas o backend valida tudo.
+- Se faltarem dados, o arquivo fica em staging temporário controlado por `AUTOMATION_PDF_STAGING_TTL_MINUTES`.
+- Arquivos maiores que `AUTOMATION_PDF_MAX_FILE_BYTES` são recusados.
+- Jobs em processamento não são cancelados pelo WhatsApp para evitar estado intermediário inconsistente.

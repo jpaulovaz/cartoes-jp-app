@@ -40,7 +40,7 @@ const requiredFiles = [
 requiredFiles.forEach((rel) => ensure(exists(rel), `Arquivo obrigatório ausente: ${rel}`));
 
 const packageJson = JSON.parse(read('package.json'));
-ensure(/^3\.20\.12$|^4\.(?:0|1|2|3|4|5|6|7|8|9)\.(?:0(?:-beta\.\d+)?|[1-9]\d*)$/.test(packageJson.version), `Versão incompatível com o gate estrutural: ${packageJson.version}`);
+ensure(/^3\.20\.12$|^4\.(?:0|1|2|3|4|5|6|7|8|9|10)\.(?:0(?:-beta\.\d+)?|[1-9]\d*)$/.test(packageJson.version), `Versão incompatível com o gate estrutural: ${packageJson.version}`);
 ensure(typeof packageJson.scripts?.test === 'string' && packageJson.scripts.test.includes('scripts/run-tests-or-verify.js'), 'package.json precisa usar scripts/run-tests-or-verify.js no script test');
 ensure(packageJson.scripts.test.includes('phase6.test.js'), 'package.json precisa manter referência a phase6.test.js para fallback quando a suíte existir');
 ensure(packageJson.scripts.test.includes('ui-v4-release.test.js'), 'package.json precisa incluir ui-v4-release.test.js no script test');

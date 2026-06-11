@@ -513,3 +513,73 @@ acerttapay-wa-monthly-finances:<telefone>
 ```
 
 A memória serve para contexto conversacional. Confirmações de escrita ficam persistidas no AcerttaPay em `automation_conversation_states`.
+
+---
+
+# AcerttaPay - Workflow N8N WhatsApp Fechamento Assistido
+
+Identificador do fluxo: `6.1 - ACERTTAPAY_FECHAMENTO_ASSISTIDO`
+
+Este é o primeiro fluxo da família **6.x - Fechamento Mensal**. Ele funciona como uma conferência guiada antes de fechar ou reabrir um mês no AcerttaPay.
+
+## O que o fluxo 6.1 faz
+
+```txt
+Posso fechar junho?
+O que falta para fechar esse mês?
+Quais pendências bloqueiam o fechamento?
+Fechar junho
+Reabrir junho
+```
+
+## Webhook de teste do fluxo 6.1
+
+```txt
+acerttapay-wa-month-close
+```
+
+O workflow também possui `EntradaWhatsapp`, permitindo que um fluxo orquestrador principal chame esta família por `Execute Workflow` no futuro.
+
+## Endpoints usados
+
+```txt
+POST /api/automation/v1/month-close/readiness
+POST /api/automation/v1/month-close/prepare-close
+POST /api/automation/v1/month-close/confirm-close
+POST /api/automation/v1/month-close/prepare-reopen
+POST /api/automation/v1/month-close/confirm-reopen
+POST /api/automation/v1/month-close/conversations/reply
+```
+
+## Regras importantes
+
+- Diagnóstico não altera dados.
+- Fechamento só acontece se não houver bloqueadores críticos.
+- Fechamento exige confirmação textual forte: `fechar mês`.
+- Reabertura exige confirmação textual forte: `reabrir mês`.
+- A IA conversa e classifica intenção; o AcerttaPay valida tudo e persiste o estado sensível.
+- Alterações usam `Idempotency-Key`.
+- Ao fechar ou reabrir, o AcerttaPay registra evento de mutação e notificação local.
+
+## Bloqueadores críticos avaliados
+
+```txt
+Cartões com fatura em aberto
+Pessoas com saldo em aberto
+Cobranças em rascunho
+Cobranças pendentes na Central de Acertos
+Finanças mensais não pagas
+Compras sem participantes
+```
+
+Compras sem categoria aparecem como aviso, mas não bloqueiam o fechamento.
+
+## Memória
+
+O workflow usa memória curta própria:
+
+```txt
+acerttapay-wa-month-close:<telefone>
+```
+
+A memória é apenas conversacional. Confirmação de fechamento/reabertura fica em `automation_conversation_states`.

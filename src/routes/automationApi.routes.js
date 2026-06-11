@@ -4,6 +4,7 @@ const { createAutomationQueriesController } = require('../controllers/automation
 const { createAutomationRemindersController } = require('../controllers/automationReminders.controller');
 const { createAutomationSharedDebtsController } = require('../controllers/automationSharedDebts.controller');
 const { createAutomationMonthlyFinancesController } = require('../controllers/automationMonthlyFinances.controller');
+const { createAutomationMonthCloseController } = require('../controllers/automationMonthClose.controller');
 
 function createAutomationApiRouter(deps = {}) {
   const router = express.Router();
@@ -12,6 +13,7 @@ function createAutomationApiRouter(deps = {}) {
   const remindersController = createAutomationRemindersController(deps);
   const sharedDebtsController = createAutomationSharedDebtsController(deps);
   const monthlyFinancesController = createAutomationMonthlyFinancesController(deps);
+  const monthCloseController = createAutomationMonthCloseController(deps);
 
   router.use(controller.authenticate);
   router.get('/health', controller.health);
@@ -62,6 +64,14 @@ function createAutomationApiRouter(deps = {}) {
   router.post('/monthly-finances/:id/update', monthlyFinancesController.update);
   router.post('/monthly-finances/:id/delete', monthlyFinancesController.delete);
   router.post('/monthly-finances/conversations/reply', monthlyFinancesController.conversationReply);
+
+
+  router.post('/month-close/readiness', monthCloseController.readiness);
+  router.post('/month-close/prepare-close', monthCloseController.prepareClose);
+  router.post('/month-close/confirm-close', monthCloseController.confirmClose);
+  router.post('/month-close/prepare-reopen', monthCloseController.prepareReopen);
+  router.post('/month-close/confirm-reopen', monthCloseController.confirmReopen);
+  router.post('/month-close/conversations/reply', monthCloseController.conversationReply);
 
   return router;
 }

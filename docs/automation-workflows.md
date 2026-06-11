@@ -570,3 +570,88 @@ MONTHLY_FINANCE_INTERNAL_ERROR
 - `Idempotency-Key` é obrigatório para escritas confirmadas ou diretas.
 - O usuário pode referenciar itens por código, como `#3`, ou por nome, como `internet`.
 - Quando houver mais de um item parecido, o backend deve pedir esclarecimento e listar opções.
+
+---
+
+## Fluxo 6.1 - Fechamento Assistido
+
+```txt
+6.1 - ACERTTAPAY_FECHAMENTO_ASSISTIDO.json
+```
+
+Responsabilidades:
+
+- diagnosticar se um mês pode ser fechado;
+- listar bloqueadores críticos e avisos;
+- preparar fechamento com confirmação forte;
+- preparar reabertura com confirmação forte;
+- persistir estado sensível de confirmação no AcerttaPay;
+- registrar mutações de fechamento/reabertura.
+
+### Intents do fluxo 6.1
+
+```txt
+greeting
+help
+month_close_readiness
+month_close_blockers
+month_close_summary
+prepare_month_close
+prepare_month_reopen
+out_of_scope
+```
+
+### Endpoints da Etapa 7
+
+```txt
+POST /api/automation/v1/month-close/readiness
+POST /api/automation/v1/month-close/prepare-close
+POST /api/automation/v1/month-close/confirm-close
+POST /api/automation/v1/month-close/prepare-reopen
+POST /api/automation/v1/month-close/confirm-reopen
+POST /api/automation/v1/month-close/conversations/reply
+```
+
+### Códigos de resposta de fechamento mensal
+
+```txt
+MONTH_READY_TO_CLOSE
+MONTH_CLOSE_HAS_BLOCKERS
+MONTH_CLOSE_BLOCKED
+MONTH_ALREADY_CLOSED
+MONTH_CLOSED
+NEEDS_MONTH_CLOSE_CONFIRMATION
+MONTH_ALREADY_OPEN
+MONTH_REOPENED
+NEEDS_MONTH_REOPEN_CONFIRMATION
+MONTH_CLOSE_ACTION_CANCELLED
+STRONG_CONFIRMATION_REQUIRED
+NO_PENDING_MONTH_CLOSE_CONVERSATION
+```
+
+### Bloqueadores críticos
+
+```txt
+cards_open
+people_open
+monthly_finances_open
+shared_debt_drafts
+shared_debts_pending
+purchases_without_participants
+```
+
+### Avisos não bloqueantes
+
+```txt
+uncategorized_purchases
+```
+
+### Regras da família 6.x
+
+- Diagnóstico é sempre read-only.
+- A IA nunca deve afirmar que fechou ou reabriu o mês sem resposta do AcerttaPay.
+- O primeiro pedido de fechamento apenas prepara a ação e retorna a frase de confirmação.
+- Para fechar, o usuário deve responder exatamente `fechar mês`.
+- Para reabrir, o usuário deve responder exatamente `reabrir mês`.
+- Se algum bloqueador crítico surgir entre o preparo e a confirmação, o backend deve bloquear o fechamento.
+- Reabertura é permitida, mas sempre com confirmação forte e registro de mutação.

@@ -1,0 +1,840 @@
+{
+  "name": "6.1 - ACERTTAPAY_FECHAMENTO_ASSISTIDO",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "acerttapay-wa-month-close",
+        "responseMode": "onReceived",
+        "responseData": "firstEntryJson",
+        "options": {}
+      },
+      "id": "0a964b1a-4a8b-4b6d-b759-e11e53f8fa88",
+      "name": "WA Incoming",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -1200,
+        260
+      ],
+      "webhookId": "df2cc500-6a9f-4ba3-ab69-2e920fcf4306"
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "42269772-7e9d-47cf-b005-00818d0b6bc1",
+      "name": "EntradaWhatsapp",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1200,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const root = $json || {};\nconst envelope = root.body && typeof root.body === 'object' ? root.body : root;\nconst data = envelope.data && typeof envelope.data === 'object' ? envelope.data : (root.data || envelope);\nconst key = data.key || envelope.key || root.key || {};\nconst msg = data.message || envelope.message || root.message || {};\n\nfunction onlyDigits(value) {\n  return String(value || '').split('@')[0].replace(/\\D/g, '');\n}\n\nfunction firstPhone(candidates) {\n  for (const candidate of candidates) {\n    const digits = onlyDigits(candidate);\n    if (digits.length >= 10) return digits;\n  }\n  return '';\n}\n\nconst remoteJid = String(\n  key.remoteJid || key.remoteJidAlt || data.remoteJid || data.from || envelope.from || root.from || ''\n).trim();\nconst phone = firstPhone([\n  key.remoteJid, key.remoteJidAlt, data.remoteJid, data.number, envelope.number,\n  root.number, data.phone, envelope.phone, root.phone, data.sender, envelope.sender, root.sender\n]);\nconst text = String(\n  data.text || envelope.text || root.text || data.bodyText || envelope.bodyText ||\n  msg.conversation || msg.extendedTextMessage?.text || msg.imageMessage?.caption ||\n  msg.videoMessage?.caption || msg.documentMessage?.caption ||\n  msg.buttonsResponseMessage?.selectedDisplayText || msg.listResponseMessage?.title ||\n  msg.templateButtonReplyMessage?.selectedDisplayText || ''\n).trim();\nconst messageId = String(\n  key.id || data.messageId || data.id || envelope.message_id || root.message_id ||\n  root.messageId || root.id || ''\n).trim() || `${phone || 'unknown'}:${Date.now()}`;\nconst fromMe = Boolean(key.fromMe || data.fromMe || envelope.fromMe || root.fromMe);\nconst messageType = String(data.messageType || envelope.messageType || root.messageType || '').trim();\nconst instance = String(envelope.instance || data.instance || root.instance || $env.EVOLUTION_INSTANCE_NAME || '').trim();\nconst isGroup = remoteJid.includes('@g.us');\nconst canReply = Boolean(phone && !fromMe && !isGroup);\nconst isSupportedText = Boolean(text);\nreturn [{ json: {\n  phone,\n  remote_jid: remoteJid,\n  message_text: text,\n  message_id: messageId,\n  message_type: messageType,\n  push_name: data.pushName || envelope.pushName || root.pushName || data.push_name || envelope.push_name || '',\n  instance,\n  from_me: fromMe,\n  is_group: isGroup,\n  can_reply: canReply,\n  is_supported_text: isSupportedText,\n  is_valid_user_message: Boolean(canReply && isSupportedText),\n  current_date: new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' }),\n  current_datetime: new Date().toLocaleString('sv-SE', { timeZone: 'America/Sao_Paulo', hour12: false }).replace(' ', 'T'),\n  raw: root\n} }];"
+      },
+      "id": "eb094c42-0387-494e-9c95-6e5bab988db7",
+      "name": "Normalize Evolution Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -960,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "6e8bdcbd-47c4-45be-8d6a-0be4f8468191",
+              "leftValue": "={{ $json.is_valid_user_message === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "3b1d75ac-96ca-4c36-badc-63b885b17ec6",
+      "name": "Is Valid User Message?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -720,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "6faa860e-8661-4072-9dc7-7fd0f25e9bb7",
+              "leftValue": "={{ $json.can_reply === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "79cca20e-e1c6-4761-ad5f-8d150be102cd",
+      "name": "Can Reply Unsupported?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -480,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "={{ $('Normalize Evolution Payload').first().json.instance || $env.EVOLUTION_INSTANCE_NAME || 'ACERTTAPAY' }}",
+        "remoteJid": "={{ $('Normalize Evolution Payload').first().json.phone || String($('Normalize Evolution Payload').first().json.remote_jid || '').split('@')[0].replace(/\\D/g, '') }}",
+        "messageText": "={{ 'Ainda não consigo ler esse tipo de mensagem por aqui. Me manda em texto, combinado?\n\nEx.: *posso fechar junho?*, *o que falta para fechar esse mês?* ou *reabrir junho*' }}",
+        "options_message": {
+          "delay": 1400,
+          "linkPreview": false
+        }
+      },
+      "id": "d2bfe079-ffd1-4ca5-91cb-99c3c702e563",
+      "name": "Send Unsupported Message",
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        520
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "40g56cIQ5RrPPK1M",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "dd0de237-e907-4a5e-9095-b3ba325281d2",
+      "name": "Ignore Message",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.ACERTTAPAY_URL || 'http://127.0.0.1:3000').replace(/\\/$/, '') + '/api/automation/v1/whatsapp/resolve' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.ACERTTAPAY_AUTOMATION_API_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { phone: $('Normalize Evolution Payload').first().json.phone, channel: 'whatsapp', instance: $('Normalize Evolution Payload').first().json.instance, message_id: $('Normalize Evolution Payload').first().json.message_id, push_name: $('Normalize Evolution Payload').first().json.push_name } }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "bcd30e73-33af-4a37-9f41-1fd2e26c891f",
+      "name": "Resolve AcerttaPay User",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -480,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "865e63e6-2eca-4876-926e-f02f7f2385f6",
+              "leftValue": "={{ $json.authorized === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a506f068-e55d-4244-98f7-172fb2e8a0bb",
+      "name": "Authorized?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -240,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "={{ $('Normalize Evolution Payload').first().json.instance || $env.EVOLUTION_INSTANCE_NAME || 'ACERTTAPAY' }}",
+        "remoteJid": "={{ $('Normalize Evolution Payload').first().json.phone || String($('Normalize Evolution Payload').first().json.remote_jid || '').split('@')[0].replace(/\\D/g, '') }}",
+        "messageText": "={{ $json.whatsapp?.text || 'Esse número ainda não está liberado no AcerttaPay. Ative o WhatsApp nas Configurações do app para usar o fechamento assistido com segurança. 🔐' }}",
+        "options_message": {
+          "delay": 1400,
+          "linkPreview": false
+        }
+      },
+      "id": "695e7b08-4bf6-476e-829b-0c4dacec332a",
+      "name": "Send Authorization Result",
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        0,
+        420
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "40g56cIQ5RrPPK1M",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ JSON.stringify({ current_date: $('Normalize Evolution Payload').first().json.current_date, current_datetime: $('Normalize Evolution Payload').first().json.current_datetime, timezone: 'America/Sao_Paulo', user_message: $('Normalize Evolution Payload').first().json.message_text }) }}",
+        "options": {
+          "systemMessage": "Você é o concierge financeiro do AcerttaPay no WhatsApp, focado na família 6.1 de Fechamento Mensal Assistido.\n\nResponda SOMENTE com JSON válido, sem markdown.\n\nVocê ajuda o usuário a conferir se um mês pode ser fechado, explicar bloqueadores, iniciar fechamento e iniciar reabertura. Nunca feche nem reabra por conta própria: o AcerttaPay sempre exige confirmação forte e valida tudo.\n\nIntents aceitas:\n- greeting: saudação simples.\n- help: ajuda/lista do que você faz nesta família.\n- month_close_readiness: conferir se o mês pode ser fechado.\n- month_close_blockers: listar o que falta para fechar.\n- month_close_summary: resumo da conferência de fechamento.\n- prepare_month_close: usuário pediu para fechar um mês.\n- prepare_month_reopen: usuário pediu para reabrir um mês fechado.\n- out_of_scope: algo fora desta família.\n\nFormato obrigatório:\n{\n  \"intent\": \"month_close_readiness\",\n  \"confidence\": 0.0,\n  \"needs_clarification\": false,\n  \"clarifying_question\": null,\n  \"reply_text\": null,\n  \"period\": {\n    \"period\": null,\n    \"month\": null,\n    \"year\": null\n  }\n}\n\nRegras:\n- Para greeting/help, use reply_text com resposta curta e exemplos.\n- \"posso fechar junho?\", \"dá para fechar esse mês?\", \"o que falta para fechar?\" => month_close_readiness.\n- \"quais pendências bloqueiam o fechamento?\" => month_close_blockers.\n- \"fechar junho\", \"quero fechar esse mês\" ou \"fechar mês\" => prepare_month_close.\n- \"reabrir junho\" ou \"reabrir esse mês\" => prepare_month_reopen.\n- Se o mês estiver claro no texto, preencha month/year. Se disser \"esse mês\", deixe period=null e month/year=null; o backend usa o mês atual.\n- Se disser \"mês passado\", use period=\"last_month\". Se disser \"próximo mês\", use period=\"next_month\".\n- Fechamento e reabertura são ações críticas. Não diga que fechou; diga que vai conferir e pedir confirmação.\n- Se for compra, lembrete, Central de Acertos ou finanças mensais fora do cartão, responda out_of_scope indicando a família correta.\n",
+          "maxIterations": 2,
+          "returnIntermediateSteps": false
+        }
+      },
+      "id": "1242d412-7671-4419-a34c-cc1022ee1b25",
+      "name": "AI Month Close Router",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        240,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0
+        }
+      },
+      "id": "2eaa6058-63e8-4ab9-9117-fbfaf6458304",
+      "name": "Gemini Chat Model - Month Close",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        240,
+        540
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "mZ7rvYR2BFrE4r9l",
+          "name": "Google Gemini Geral"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "=acerttapay-wa-month-close:{{$('Normalize Evolution Payload').first().json.phone}}",
+        "contextWindowLength": 10
+      },
+      "id": "566cd5af-d3f1-4871-9b0c-c338188d57c2",
+      "name": "WhatsApp Month Close Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        420,
+        540
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "479b5c68-9309-4c67-9b97-5a324dfe7646",
+      "name": "Think Tool - Month Close",
+      "type": "@n8n/n8n-nodes-langchain.toolThink",
+      "typeVersion": 1,
+      "position": [
+        600,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function cleanJsonContent(value) {\n  if (value && typeof value === 'object') return value;\n  const raw = String(value || '').trim();\n  if (!raw) return '';\n  const withoutFence = raw.replace(/^```(?:json)?\\s*/i, '').replace(/```$/i, '').trim();\n  const first = withoutFence.indexOf('{');\n  const last = withoutFence.lastIndexOf('}');\n  if (first >= 0 && last > first) return withoutFence.slice(first, last + 1);\n  return withoutFence;\n}\nconst content = $json.output ?? $json.text ?? $json.response ?? $json.choices?.[0]?.message?.content ?? '';\nlet parsed;\ntry {\n  const cleaned = cleanJsonContent(content);\n  parsed = typeof cleaned === 'object' ? cleaned : JSON.parse(cleaned);\n} catch (error) {\n  parsed = {\n    intent: 'help',\n    confidence: 0,\n    needs_clarification: false,\n    reply_text: 'Posso conferir se o mês pode ser fechado, mostrar pendências e iniciar fechamento ou reabertura com confirmação forte. Ex.: posso fechar junho? 🔎'\n  };\n}\nif (!parsed || typeof parsed !== 'object') parsed = { intent: 'help', reply_text: 'Me manda qual mês você quer conferir para fechamento.' };\nconst apiIntents = new Set(['month_close_readiness','month_close_blockers','month_close_summary','prepare_month_close','prepare_month_reopen']);\nparsed.should_call_api = apiIntents.has(String(parsed.intent || '')) && parsed.needs_clarification !== true;\nif (parsed.needs_clarification === true && !parsed.clarifying_question) parsed.clarifying_question = 'Qual mês você quer conferir ou fechar?';\nif (['greeting','help'].includes(String(parsed.intent || '')) && !parsed.reply_text) {\n  parsed.reply_text = 'Oi! Aqui é seu concierge de fechamento mensal do AcerttaPay. Posso conferir pendências, dizer se o mês pode fechar e iniciar fechamento ou reabertura com confirmação forte. Ex.: *posso fechar junho?* 🔎';\n}\nif (String(parsed.intent || '') === 'out_of_scope' && !parsed.reply_text) parsed.reply_text = 'Esse pedido parece de outra área do AcerttaPay. Aqui eu cuido só de fechamento mensal: conferência, bloqueadores, fechamento e reabertura com segurança. 🔐';\nreturn [{ json: parsed }];"
+      },
+      "id": "d6ab53e1-7d28-4695-b314-4484a1197d87",
+      "name": "Parse Month Close JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        580,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "8a1c52a7-b164-4063-ab02-a457e63fccf3",
+              "leftValue": "={{ $json.should_call_api === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "020bedfe-fced-40da-be64-3d31ade06280",
+      "name": "Should Call Month Close API?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        840,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "={{ $('Normalize Evolution Payload').first().json.instance || $env.EVOLUTION_INSTANCE_NAME || 'ACERTTAPAY' }}",
+        "remoteJid": "={{ $('Normalize Evolution Payload').first().json.phone || String($('Normalize Evolution Payload').first().json.remote_jid || '').split('@')[0].replace(/\\D/g, '') }}",
+        "messageText": "={{ $json.reply_text || $json.clarifying_question || 'Me manda o mês que você quer conferir para fechamento. Ex.: posso fechar junho? 🔎' }}",
+        "options_message": {
+          "delay": 1400,
+          "linkPreview": false
+        }
+      },
+      "id": "d4f88e6f-c17a-447a-943b-e12567340eb3",
+      "name": "Send AI Month Close Reply",
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        460
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "40g56cIQ5RrPPK1M",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const parsed = $json || {};\nconst intent = String(parsed.intent || '').trim();\nconst phone = $('Normalize Evolution Payload').first().json.phone;\nconst source = {\n  channel: 'whatsapp',\n  instance: $('Normalize Evolution Payload').first().json.instance,\n  message_id: $('Normalize Evolution Payload').first().json.message_id,\n  raw_text: $('Normalize Evolution Payload').first().json.message_text\n};\nconst period = parsed.period || parsed.query || {};\nlet endpoint = '/api/automation/v1/month-close/readiness';\nlet idempotencySuffix = intent || 'readiness';\nif (intent === 'prepare_month_close') {\n  endpoint = '/api/automation/v1/month-close/prepare-close';\n} else if (intent === 'prepare_month_reopen') {\n  endpoint = '/api/automation/v1/month-close/prepare-reopen';\n} else {\n  endpoint = '/api/automation/v1/month-close/readiness';\n}\nconst body = { phone, source, period };\nreturn [{ json: {\n  intent,\n  endpoint,\n  body,\n  idempotency_key: `whatsapp-month-close:${$('Normalize Evolution Payload').first().json.instance}:${$('Normalize Evolution Payload').first().json.message_id}:${idempotencySuffix}`\n} }];"
+      },
+      "id": "8d97cf8b-6e6b-4a70-9298-ee0dd4ec4737",
+      "name": "Prepare Month Close Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.ACERTTAPAY_URL || 'http://127.0.0.1:3000').replace(/\\/$/, '') + $json.endpoint }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.ACERTTAPAY_AUTOMATION_API_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Idempotency-Key",
+              "value": "={{ $json.idempotency_key }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "e43fea85-e267-48b1-a5f3-4c2b89a37542",
+      "name": "Call AcerttaPay Month Close",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1360,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $json || {};\nlet text = result.whatsapp?.text || result.message || result.reply_text || '';\nif (!text) text = 'Fechamento mensal processado no AcerttaPay, mas a resposta veio tímida. Tenta de novo em instantes.';\nreturn [{ json: { ...result, outbound_text: text } }];"
+      },
+      "id": "a7faeb72-d0b4-4c8f-9afe-3bd77535c21a",
+      "name": "Style Month Close Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1620,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "={{ $('Normalize Evolution Payload').first().json.instance || $env.EVOLUTION_INSTANCE_NAME || 'ACERTTAPAY' }}",
+        "remoteJid": "={{ $('Normalize Evolution Payload').first().json.phone || String($('Normalize Evolution Payload').first().json.remote_jid || '').split('@')[0].replace(/\\D/g, '') }}",
+        "messageText": "={{ $json.outbound_text || $json.whatsapp?.text || $json.message || 'Conferência de fechamento processada no AcerttaPay.' }}",
+        "options_message": {
+          "delay": 1400,
+          "linkPreview": false
+        }
+      },
+      "id": "98d61f27-7921-42ed-9f01-781b13690d45",
+      "name": "Send Month Close Result",
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        1880,
+        220
+      ],
+      "credentials": {
+        "evolutionApi": {
+          "id": "40g56cIQ5RrPPK1M",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "06c3ef02-dad0-49aa-9c72-152c66684cf8",
+              "leftValue": "={{ $json.conversation?.state === 'awaiting_month_close_confirmation' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d5700815-ef6b-449f-9b00-488bb37e948b",
+      "name": "Has Pending Month Close Conversation?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const phone = $('Normalize Evolution Payload').first().json.phone;\nconst source = {\n  channel: 'whatsapp',\n  instance: $('Normalize Evolution Payload').first().json.instance,\n  message_id: $('Normalize Evolution Payload').first().json.message_id,\n  raw_text: $('Normalize Evolution Payload').first().json.message_text\n};\nreturn [{ json: {\n  endpoint: '/api/automation/v1/month-close/conversations/reply',\n  idempotency_key: `whatsapp-month-close-reply:${$('Normalize Evolution Payload').first().json.instance}:${$('Normalize Evolution Payload').first().json.message_id}`,\n  body: { phone, source, reply: { raw_text: $('Normalize Evolution Payload').first().json.message_text } }\n} }];"
+      },
+      "id": "bcb13e10-f154-46f6-8508-b2b3f3d79754",
+      "name": "Prepare Month Close Conversation Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.ACERTTAPAY_URL || 'http://127.0.0.1:3000').replace(/\\/$/, '') + $json.endpoint }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.ACERTTAPAY_AUTOMATION_API_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Idempotency-Key",
+              "value": "={{ $json.idempotency_key }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "82abfbd9-daa7-4761-a5bb-2f1ab74f9449",
+      "name": "Call Month Close Conversation Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        500,
+        40
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "WA Incoming": {
+      "main": [
+        [
+          {
+            "node": "Normalize Evolution Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "EntradaWhatsapp": {
+      "main": [
+        [
+          {
+            "node": "Normalize Evolution Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Evolution Payload": {
+      "main": [
+        [
+          {
+            "node": "Is Valid User Message?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Valid User Message?": {
+      "main": [
+        [
+          {
+            "node": "Resolve AcerttaPay User",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Can Reply Unsupported?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Can Reply Unsupported?": {
+      "main": [
+        [
+          {
+            "node": "Send Unsupported Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ignore Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve AcerttaPay User": {
+      "main": [
+        [
+          {
+            "node": "Authorized?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Authorized?": {
+      "main": [
+        [
+          {
+            "node": "Has Pending Month Close Conversation?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Authorization Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Month Close Router": {
+      "main": [
+        [
+          {
+            "node": "Parse Month Close JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Chat Model - Month Close": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Month Close Router",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp Month Close Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Month Close Router",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Think Tool - Month Close": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Month Close Router",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Month Close JSON": {
+      "main": [
+        [
+          {
+            "node": "Should Call Month Close API?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Call Month Close API?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Month Close Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send AI Month Close Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Month Close Request": {
+      "main": [
+        [
+          {
+            "node": "Call AcerttaPay Month Close",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call AcerttaPay Month Close": {
+      "main": [
+        [
+          {
+            "node": "Style Month Close Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Style Month Close Response": {
+      "main": [
+        [
+          {
+            "node": "Send Month Close Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Pending Month Close Conversation?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Month Close Conversation Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Month Close Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Month Close Conversation Reply": {
+      "main": [
+        [
+          {
+            "node": "Call Month Close Conversation Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Month Close Conversation Reply": {
+      "main": [
+        [
+          {
+            "node": "Style Month Close Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "b866f10f-9b50-40ef-8a02-d6e9caa1002d",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": [
+    {
+      "name": "ACERTTAPAY",
+      "id": "pQ0ytyDUaBKZDloP",
+      "updatedAt": "2026-06-08T17:04:41.481Z",
+      "createdAt": "2026-06-08T17:04:41.481Z"
+    }
+  ],
+  "id": "acerttapayMonthClose61"
+}

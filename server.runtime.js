@@ -11646,6 +11646,38 @@ function syncSharedDebtRequestsForTransaction(userId, txnId) {
   return syncSharedDebtRequestsForTransactions(userId, [txnId]);
 }
 
+
+function clearAutomationPurchaseReferences(userId, txnIds = []) {
+  const cleanIds = Array.from(new Set((txnIds || []).map(Number).filter(Boolean)));
+  if (!cleanIds.length) return { conversationCount: 0, receiptCount: 0 };
+  const placeholders = cleanIds.map(() => '?').join(', ');
+  let conversationCount = 0;
+  let receiptCount = 0;
+  try {
+    conversationCount = db.prepare(`
+      UPDATE automation_conversation_states
+      SET related_purchase_id = NULL,
+          updated_at = ?
+      WHERE user_id = ?
+        AND related_purchase_id IN (${placeholders})
+    `).run(nowIso(), userId, ...cleanIds).changes || 0;
+  } catch (error) {
+    // Bancos antigos podem ainda nao ter a tabela de automacao.
+  }
+  try {
+    receiptCount = db.prepare(`
+      UPDATE automation_receipt_image_staging
+      SET purchase_id = NULL,
+          updated_at = ?
+      WHERE user_id = ?
+        AND purchase_id IN (${placeholders})
+    `).run(nowIso(), userId, ...cleanIds).changes || 0;
+  } catch (error) {
+    // Bancos antigos podem ainda nao ter a tabela de comprovantes.
+  }
+  return { conversationCount, receiptCount };
+}
+
 function deleteTransactionsAndAllocations(userId, rows) {
   const uniqueRows = Array.from(new Map(
     (rows || [])
@@ -11669,6 +11701,7 @@ function deleteTransactionsAndAllocations(userId, rows) {
 
   db.transaction((items) => {
     const importIds = new Set();
+    clearAutomationPurchaseReferences(userId, items.map(item => item.id));
 
     items.forEach(item => {
       clearDraftSharedDebtSendQueueItemsForTransactions(userId, [item.id]);

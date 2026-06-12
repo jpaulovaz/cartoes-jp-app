@@ -210,6 +210,13 @@ function resolveCardByHint(cards = [], hint = '') {
   return matches[0].card;
 }
 
+
+function canBypassPurchaseCreateConfirmation(payload = {}, meta = {}) {
+  // Confirmacao direta so vale quando veio do proprio backend apos uma conversa pendente.
+  // Chamadas externas do N8N/API nunca devem pular a primeira confirmacao de compra por texto.
+  return payload.confirmed === true && meta.confirmedByConversationReply === true;
+}
+
 function createAutomationApiService(deps = {}) {
   const repository = deps.repository || createAutomationApiRepository();
   const operationsRepository = deps.operationsRepository || createAutomationOperationsRepository();
@@ -1812,7 +1819,7 @@ function createAutomationApiService(deps = {}) {
       checkRateLimit(resolved.normalized.e164);
 
       const purchase = payload.purchase || {};
-      if (payload.confirmed !== true && payload.skip_create_confirmation !== true) {
+      if (!canBypassPurchaseCreateConfirmation(payload, meta)) {
         const response = buildPurchaseCreateConfirmationResponse({
           userId: resolved.user.id,
           phoneE164: resolved.normalized.e164,
@@ -2164,7 +2171,7 @@ function createAutomationApiService(deps = {}) {
           source: payload.source || data.source || {},
           confirmed: true,
           card_hint_confirmed: Boolean(confirmedCardHint)
-        }, meta);
+        }, { ...meta, confirmedByConversationReply: true });
       }
 
       if (state === 'awaiting_card_confirmation') {

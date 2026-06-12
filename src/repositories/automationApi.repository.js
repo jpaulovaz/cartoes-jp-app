@@ -440,6 +440,38 @@ function createAutomationApiRepository() {
     return options;
   }
 
+
+  function unlinkAutomationPurchaseReferences(userId, transactionIds) {
+    const ids = Array.from(new Set((transactionIds || []).map(Number).filter(Boolean)));
+    if (!ids.length) return { conversationCount: 0, receiptCount: 0 };
+    const placeholders = ids.map(() => '?').join(',');
+    let conversationCount = 0;
+    let receiptCount = 0;
+    try {
+      conversationCount = db.prepare(`
+        UPDATE automation_conversation_states
+        SET related_purchase_id = NULL,
+            updated_at = ?
+        WHERE user_id = ?
+          AND related_purchase_id IN (${placeholders})
+      `).run(nowIso(), Number(userId || 0), ...ids).changes || 0;
+    } catch (error) {
+      // A tabela pode nao existir em bancos antigos durante migracao.
+    }
+    try {
+      receiptCount = db.prepare(`
+        UPDATE automation_receipt_image_staging
+        SET purchase_id = NULL,
+            updated_at = ?
+        WHERE user_id = ?
+          AND purchase_id IN (${placeholders})
+      `).run(nowIso(), Number(userId || 0), ...ids).changes || 0;
+    } catch (error) {
+      // A tabela pode nao existir em bancos antigos durante migracao.
+    }
+    return { conversationCount, receiptCount };
+  }
+
   function clearDraftSharedDebtItemsForTransactions(userId, transactionIds) {
     const ids = Array.from(new Set((transactionIds || []).map(Number).filter(Boolean)));
     if (!ids.length) return { removedCount: 0, queueIds: [] };
@@ -947,6 +979,7 @@ function createAutomationApiRepository() {
     `);
 
     const importIds = new Set();
+    unlinkAutomationPurchaseReferences(userId, uniqueRows.map((row) => row.id));
     uniqueRows.forEach((row) => {
       clearDraftSharedDebtItemsForTransactions(userId, [row.id]);
       db.prepare(`
@@ -1079,6 +1112,7 @@ function createAutomationApiRepository() {
     getPeopleForUser,
     getSplitEligiblePeople,
     clearDraftSharedDebtItemsForTransactions,
+    unlinkAutomationPurchaseReferences,
     getSharedDebtEligibleAllocationRows,
     getDraftQueue,
     createDraftQueue,

@@ -237,10 +237,10 @@
                 "purchases"
               ]
             },
-            "description": "Pode criar conversa de confirmação ou compra, conforme regra atual.",
+            "description": "Cria uma conversa de confirmação para compra por texto. A compra só deve ser lançada depois de responder confirmar em /conversations/reply.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"description\": \"Compra teste Postman\",\n  \"amount_cents\": 1234,\n  \"date\": \"{{today}}\",\n  \"installments\": 1,\n  \"card_hint\": \"{{cardHint}}\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"purchase\": {\n    \"description\": \"Compra teste Postman\",\n    \"amount_cents\": 1234,\n    \"date\": \"{{today}}\",\n    \"installments\": 1,\n    \"card_hint\": \"{{cardHint}}\"\n  },\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -641,10 +641,10 @@
                 "reply"
               ]
             },
-            "description": "",
+            "description": "Use para confirmar ou cancelar conversas pendentes, como confirmação de nova compra, exclusão, edição, cartão ou participantes.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"text\": \"confirmar\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"teste via postman\"\n  }\n}",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"text\": \"confirmar\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-{{$guid}}\",\n    \"raw_text\": \"confirmar\"\n  }\n}",
               "options": {
                 "raw": {
                   "language": "json"

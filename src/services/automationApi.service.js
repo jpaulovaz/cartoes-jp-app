@@ -244,6 +244,28 @@ function selectedPurchaseLabelFromRows(rows = []) {
   };
 }
 
+function selectedPurchaseLabelFromListedPurchase(purchase = {}) {
+  return {
+    description: stripInstallmentMarker(purchase.description || purchase.merchant || 'Compra'),
+    amount_cents: Number(purchase.amount_cents || purchase.amountCents || 0),
+    card_name: purchase.card_name || purchase.cardName || 'cartão',
+    installments: Number(purchase.installments || 1) || 1
+  };
+}
+
+function findListedPurchaseById(purchases = [], purchaseId) {
+  const id = Number(purchaseId || 0);
+  if (!id) return null;
+  return (Array.isArray(purchases) ? purchases : []).find((purchase) => Number(purchase.id || purchase.purchase_id || 0) === id) || null;
+}
+
+function compactAutomationText(value, limit = 320) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  if (!text) return '';
+  const safeLimit = Math.max(40, Number(limit || 320) || 320);
+  return text.length > safeLimit ? `${text.slice(0, safeLimit)}...` : text;
+}
+
 function formatAutomationDateBR(value) {
   if (!value) return '';
   const parsed = dayjs(value);
@@ -644,11 +666,71 @@ function createAutomationApiService(deps = {}) {
           statusCode,
           resultCode,
           errorMessage: responsePayload?.message || responsePayload?.error || resultCode,
-          requestMeta
+          requestMeta: {
+            ...requestMeta,
+            response_meta: responseMeta,
+            source_excerpt: compactAutomationText(payload.source?.raw_text || payload.source?.rawText || payload.text || payload.reply?.text || '')
+          }
         });
       }
     } catch (error) {
       // Observabilidade nunca deve quebrar o fluxo financeiro.
+    }
+  }
+
+  function logConciergeFailure({ error, response, payload = {}, meta = {}, resolved = null, conversation = null, state = '', operation = 'conversation.reply' } = {}) {
+    try {
+      const source = payload.source || {};
+      const reply = payload.reply || {};
+      const phoneE164 = resolved?.normalized?.e164 || normalizeAutomationPhone(payload.phone || payload.user_phone || payload.number || '').e164 || null;
+      const userId = resolved?.user?.id || null;
+      const workflowKey = state.includes('receipt')
+        ? '1.4'
+        : (state.includes('participant') || state.includes('split') || state.includes('amount') ? '1.3'
+          : (state.includes('correction') || state.includes('edit') || state.includes('delete') || state.includes('mutation') ? '1.2' : '1.1'));
+      const requestMeta = {
+        endpoint: meta.endpoint || '/api/automation/v1/conversations/reply',
+        idempotency_key: meta.idempotencyKey || meta.idempotency_key || '',
+        source_message_id: source.message_id || payload.message_id || payload.source_message_id || null,
+        conversation_id: conversation?.id || null,
+        conversation_state: state || conversation?.state || null,
+        related_purchase_id: conversation?.related_purchase_id || null,
+        reply_intent: reply.intent || null,
+        reply_purchase_id: reply.purchase_id || reply.purchaseId || null,
+        source_excerpt: compactAutomationText(source.raw_text || source.rawText || reply.text || payload.text || ''),
+        error_name: error?.name || null,
+        error_code: error?.code || response?.code || 'INTERNAL_ERROR'
+      };
+      repository.logRequest({
+        userId,
+        phoneE164,
+        channel: source.channel || payload.channel || 'whatsapp',
+        operation,
+        statusCode: response?.statusCode || error?.statusCode || 500,
+        resultCode: response?.code || error?.code || 'INTERNAL_ERROR',
+        sourceMessageId: requestMeta.source_message_id,
+        ipAddress: meta.ipAddress || null,
+        requestMeta,
+        responseMeta: {
+          ok: response?.ok,
+          code: response?.code,
+          message: response?.message || null
+        }
+      });
+      operationsRepository.logErrorEvent({
+        userId,
+        phoneE164,
+        workflowKey,
+        familyKey: '1.x',
+        operation,
+        statusCode: response?.statusCode || error?.statusCode || 500,
+        resultCode: response?.code || error?.code || 'INTERNAL_ERROR',
+        errorMessage: error?.message || response?.message || 'Erro interno no concierge.',
+        errorStack: error?.stack || null,
+        requestMeta
+      });
+    } catch (logError) {
+      // Logs do concierge nunca podem quebrar ou mascarar a resposta ao WhatsApp.
     }
   }
 
@@ -1822,7 +1904,18 @@ function createAutomationApiService(deps = {}) {
       });
       return response;
     } catch (error) {
-      return handleServiceError(error);
+      const response = handleServiceError(error);
+      repository.logRequest({
+        userId: null,
+        phoneE164: null,
+        channel: payload.channel || 'whatsapp',
+        operation: 'whatsapp.resolve',
+        statusCode: response.statusCode,
+        resultCode: response.code,
+        sourceMessageId: payload.message_id || null,
+        ipAddress: meta.ipAddress || null
+      });
+      return response;
     }
   }
 
@@ -2344,9 +2437,13 @@ function createAutomationApiService(deps = {}) {
   }
 
   function handleConversationReply(payload = {}, meta = {}) {
+    let resolved = null;
+    let conversation = null;
+    let data = {};
+    let state = '';
     try {
       assertApiEnabled();
-      const resolved = resolveAuthorizedPhone(payload.phone || payload.user_phone || payload.number);
+      resolved = resolveAuthorizedPhone(payload.phone || payload.user_phone || payload.number);
       if (!resolved.authorized) {
         throw new AutomationApiError('Esse número ainda não está liberado no AcerttaPay.', {
           code: 'NOT_AUTHORIZED',
@@ -2363,10 +2460,10 @@ function createAutomationApiService(deps = {}) {
         }, 404);
       }
 
-      const data = repository.getConversationPayload(conversation) || {};
+      data = repository.getConversationPayload(conversation) || {};
       const reply = payload.reply || {};
       const rawText = payload.source?.raw_text || payload.source?.rawText || reply.text || payload.text || '';
-      const state = String(conversation.state || '').trim();
+      state = String(conversation.state || '').trim();
 
       if (reply.abandon === true || reply.intent === 'new_topic') {
         repository.resolveConversationState(conversation.id);
@@ -2445,8 +2542,10 @@ function createAutomationApiService(deps = {}) {
           repository.resolveConversationState(conversation.id);
           return preparePurchaseEdit({ phone: resolved.normalized.e164, source: payload.source || data.source || {}, purchaseId, purchase_id: purchaseId, patch }, meta);
         }
-        const rows = repository.getPurchaseScopeRows(resolved.user.id, purchaseId);
-        const selected = selectedPurchaseLabelFromRows(rows);
+        const listedPurchase = findListedPurchaseById(purchases, purchaseId);
+        const selected = listedPurchase
+          ? selectedPurchaseLabelFromListedPurchase(listedPurchase)
+          : selectedPurchaseLabelFromRows(repository.getPurchaseScopeRows(resolved.user.id, purchaseId));
         const next = repository.updateConversationState(conversation.id, {
           state: 'awaiting_purchase_correction_details',
           payload: { ...data, selected_purchase_id: purchaseId, selected_purchase: selected },
@@ -2749,7 +2848,18 @@ function createAutomationApiService(deps = {}) {
         whatsapp: { text: 'Esse papo ficou antigo demais para eu seguir com segurança. Me manda a compra de novo?' }
       }, 409);
     } catch (error) {
-      return handleServiceError(error);
+      const response = handleServiceError(error);
+      logConciergeFailure({
+        error,
+        response,
+        payload,
+        meta,
+        resolved,
+        conversation,
+        state,
+        operation: state ? `conversation.reply.${state}` : 'conversation.reply'
+      });
+      return response;
     }
   }
 

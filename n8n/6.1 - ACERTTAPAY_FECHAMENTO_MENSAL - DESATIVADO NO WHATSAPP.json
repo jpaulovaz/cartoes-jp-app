@@ -1,42 +1,42 @@
 {
-  "name": "4.1 - ACERTTAPAY_CENTRAL_DE_ACERTOS",
+  "name": "6.1 - ACERTTAPAY_FECHAMENTO_MENSAL - DESATIVADO NO WHATSAPP",
   "nodes": [
     {
       "parameters": {},
-      "id": "a0796054-affb-472b-9f9c-9158feded592",
+      "id": "831f77b0-d2dc-4e2e-89ae-ed7eb93ed1c5",
       "name": "WA Incoming",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        -1952,
-        112
+        -1776,
+        1056
       ],
-      "webhookId": "26b14474-738e-4f02-aad9-d8c7e4c48745"
+      "webhookId": "df2cc500-6a9f-4ba3-ab69-2e920fcf4306"
     },
     {
       "parameters": {
         "inputSource": "passthrough"
       },
-      "id": "a7c5f329-9f94-48f2-9396-a6988b7e351d",
+      "id": "5fa25945-6730-4625-9e26-8d17af20f451",
       "name": "EntradaWhatsapp",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1.1,
       "position": [
-        -1952,
-        288
+        -1776,
+        1232
       ]
     },
     {
       "parameters": {
         "jsCode": "const routedRoot = $json || {};\nif (routedRoot.whatsapp && (routedRoot.router || routedRoot.user || routedRoot.runtime || routedRoot.media)) {\n  const whatsapp = routedRoot.whatsapp || {};\n  const media = routedRoot.media || {};\n  const rawPhone = String(whatsapp.phone || whatsapp.phone_e164 || routedRoot.phone || '').trim();\n  const digits = rawPhone.split('@')[0].replace(/\\D/g, '');\n  const text = String(whatsapp.message_text || routedRoot.message_text || '').trim();\n  const messageId = String(whatsapp.message_id || routedRoot.message_id || routedRoot.source?.message_id || '').trim() || (digits ? digits + ':' + Date.now() : 'unknown:' + Date.now());\n  return [{ json: {\n    ...whatsapp,\n    phone: digits,\n    remote_jid: whatsapp.remote_jid || (digits ? digits + '@s.whatsapp.net' : ''),\n    message_text: text,\n    message_id: messageId,\n    message_type: whatsapp.message_type || (media.is_pdf ? 'documentMessage' : 'conversation'),\n    push_name: whatsapp.push_name || '',\n    instance: whatsapp.instance || routedRoot.source?.instance || $env.EVOLUTION_INSTANCE_NAME || '',\n    from_me: false,\n    is_group: false,\n    can_reply: Boolean(digits),\n    is_supported_text: Boolean(text || media.is_pdf),\n    is_valid_user_message: Boolean(digits && (text || media.is_pdf)),\n    current_date: routedRoot.runtime?.current_date || new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' }),\n    raw: routedRoot,\n    user: routedRoot.user || {},\n    conversation: routedRoot.conversation || {},\n    router: routedRoot.router || {},\n    media,\n    runtime: routedRoot.runtime || {},\n    capabilities: routedRoot.capabilities || []\n  }}];\n}\nconst root = $json || {};\nconst envelope = root.body && typeof root.body === 'object' ? root.body : root;\nconst data = envelope.data && typeof envelope.data === 'object' ? envelope.data : (root.data || envelope);\nconst key = data.key || envelope.key || root.key || {};\nconst msg = data.message || envelope.message || root.message || {};\n\nfunction onlyDigits(value) {\n  return String(value || '').split('@')[0].replace(/\\D/g, '');\n}\n\nfunction firstPhone(candidates) {\n  for (const candidate of candidates) {\n    const digits = onlyDigits(candidate);\n    if (digits.length >= 10) return digits;\n  }\n  return '';\n}\n\nconst remoteJid = String(\n  key.remoteJid || key.remoteJidAlt || data.remoteJid || data.from || envelope.from || root.from || ''\n).trim();\nconst phone = firstPhone([\n  key.remoteJid, key.remoteJidAlt, data.remoteJid, data.number, envelope.number,\n  root.number, data.phone, envelope.phone, root.phone, data.sender, envelope.sender, root.sender\n]);\nconst text = String(\n  data.text || envelope.text || root.text || data.bodyText || envelope.bodyText ||\n  msg.conversation || msg.extendedTextMessage?.text || msg.imageMessage?.caption ||\n  msg.videoMessage?.caption || msg.documentMessage?.caption ||\n  msg.buttonsResponseMessage?.selectedDisplayText || msg.listResponseMessage?.title ||\n  msg.templateButtonReplyMessage?.selectedDisplayText || ''\n).trim();\nconst messageId = String(\n  key.id || data.messageId || data.id || envelope.message_id || root.message_id ||\n  root.messageId || root.id || ''\n).trim() || `${phone || 'unknown'}:${Date.now()}`;\nconst fromMe = Boolean(key.fromMe || data.fromMe || envelope.fromMe || root.fromMe);\nconst messageType = String(data.messageType || envelope.messageType || root.messageType || '').trim();\nconst instance = String(envelope.instance || data.instance || root.instance || $env.EVOLUTION_INSTANCE_NAME || '').trim();\nconst isGroup = remoteJid.includes('@g.us');\nconst canReply = Boolean(phone && !fromMe && !isGroup);\nconst isSupportedText = Boolean(text);\nreturn [{ json: {\n  phone,\n  remote_jid: remoteJid,\n  message_text: text,\n  message_id: messageId,\n  message_type: messageType,\n  push_name: data.pushName || envelope.pushName || root.pushName || data.push_name || envelope.push_name || '',\n  instance,\n  from_me: fromMe,\n  is_group: isGroup,\n  can_reply: canReply,\n  is_supported_text: isSupportedText,\n  is_valid_user_message: Boolean(canReply && isSupportedText),\n  current_date: new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' }),\n  current_datetime: new Date().toLocaleString('sv-SE', { timeZone: 'America/Sao_Paulo', hour12: false }).replace(' ', 'T'),\n  raw: root\n} }];"
       },
-      "id": "d6bdc54a-e616-4e8d-bad4-d39791e128c5",
+      "id": "362ad27f-bde5-4cdf-ab32-f0e85053ae4c",
       "name": "Normalize Evolution Payload",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1712,
-        192
+        -1536,
+        1136
       ]
     },
     {
@@ -64,13 +64,13 @@
         },
         "options": {}
       },
-      "id": "1dc1adeb-6f0a-45cd-829f-21e9e6a33e87",
+      "id": "fdd9a07e-6df5-4935-adc6-83ca6d8775b8",
       "name": "Is Valid User Message?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -1472,
-        192
+        -1296,
+        1136
       ]
     },
     {
@@ -98,50 +98,50 @@
         },
         "options": {}
       },
-      "id": "2d74c835-d2e9-4449-85f2-096332ba8e0f",
+      "id": "0b86e83d-8dd2-426c-a500-e4554d351896",
       "name": "Can Reply Unsupported?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -1232,
-        368
+        -1056,
+        1312
       ]
     },
     {
       "parameters": {
-        "jsCode": "const root = $json || {};\nconst whatsapp = root.whatsapp && typeof root.whatsapp === 'object' ? root.whatsapp : {};\nconst text = String(root.outbound_text || whatsapp.text || root.message || root.reply_text || root.clarifying_question || \"Ainda não consigo ler esse tipo de mensagem por aqui. Me manda em texto? Se for fatura, pode enviar o PDF.\").trim();\nreturn [{ json: { ...root, ok: root.ok !== false, workflow_key: root.workflow_key || \"4.1\", outbound_text: text, send_by_orchestrator: true, whatsapp: { ...whatsapp, text } } }];"
+        "jsCode": "const root = $json || {};\nconst whatsapp = root.whatsapp && typeof root.whatsapp === 'object' ? root.whatsapp : {};\nconst text = String(root.outbound_text || whatsapp.text || root.message || root.reply_text || root.clarifying_question || \"Ainda não consigo ler esse tipo de mensagem por aqui. Me manda em texto? Se for fatura, pode enviar o PDF.\").trim();\nreturn [{ json: { ...root, ok: root.ok !== false, workflow_key: root.workflow_key || \"6.1\", outbound_text: text, send_by_orchestrator: true, whatsapp: { ...whatsapp, text } } }];"
       },
-      "id": "a46fa75c-c3da-43ea-af5f-a7ece0ba6c48",
+      "id": "b8ed8d4d-4924-4375-874d-48779382717a",
       "name": "Send Unsupported Message",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -992,
-        368
+        -816,
+        1312
       ]
     },
     {
       "parameters": {},
-      "id": "1b5d414f-b357-4806-b39b-39b276ed4ea6",
+      "id": "20137111-7094-4350-abc7-a05cb66ab156",
       "name": "Ignore Message",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        -992,
-        560
+        -816,
+        1504
       ]
     },
     {
       "parameters": {
         "jsCode": "const normalized = $('Normalize Evolution Payload').first().json || {};\nconst root = normalized.raw || $json || {};\nconst user = normalized.user || root.user || {};\nconst conversation = normalized.conversation || root.conversation || {};\nconst authorized = user.authorized !== false && Number(user.id || 0) > 0;\nreturn [{ json: { ...root, authorized, code: authorized ? 'AUTHORIZED_BY_ORCHESTRATOR' : 'NOT_AUTHORIZED', user, conversation, phone: normalized.phone, whatsapp: { ...(root.whatsapp || {}), phone: normalized.phone, message_text: normalized.message_text, message_id: normalized.message_id, instance: normalized.instance } } }];"
       },
-      "id": "8706fbe9-2197-48c0-a848-aba1976a00ab",
+      "id": "e4379280-cbc9-4b77-9e48-354f666497ca",
       "name": "Resolve AcerttaPay User",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1232,
-        80
+        -1056,
+        1024
       ]
     },
     {
@@ -169,26 +169,26 @@
         },
         "options": {}
       },
-      "id": "a6e78a85-15a3-4e6e-87b4-b0b7a54a029a",
+      "id": "98d60b9d-118c-4dcc-810f-ff4d86da2235",
       "name": "Authorized?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -992,
-        80
+        -816,
+        1024
       ]
     },
     {
       "parameters": {
-        "jsCode": "const root = $json || {};\nconst whatsapp = root.whatsapp && typeof root.whatsapp === 'object' ? root.whatsapp : {};\nconst text = String(root.outbound_text || whatsapp.text || root.message || root.reply_text || root.clarifying_question || \"Esse número ainda não está liberado no AcerttaPay. Ative o WhatsApp nas Configurações do app.\").trim();\nreturn [{ json: { ...root, ok: root.ok !== false, workflow_key: root.workflow_key || \"4.1\", outbound_text: text, send_by_orchestrator: true, whatsapp: { ...whatsapp, text } } }];"
+        "jsCode": "const root = $json || {};\nconst whatsapp = root.whatsapp && typeof root.whatsapp === 'object' ? root.whatsapp : {};\nconst text = String(root.outbound_text || whatsapp.text || root.message || root.reply_text || root.clarifying_question || \"Esse número ainda não está liberado no AcerttaPay. Ative o WhatsApp nas Configurações do app.\").trim();\nreturn [{ json: { ...root, ok: root.ok !== false, workflow_key: root.workflow_key || \"6.1\", outbound_text: text, send_by_orchestrator: true, whatsapp: { ...whatsapp, text } } }];"
       },
-      "id": "c1607836-8e49-462e-bfc1-a576d349f870",
+      "id": "4b471577-768b-403b-b436-e2f6607edabe",
       "name": "Send Authorization Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -752,
-        272
+        -576,
+        1216
       ]
     },
     {
@@ -196,18 +196,18 @@
         "promptType": "define",
         "text": "={{ JSON.stringify({ current_date: $('Normalize Evolution Payload').first().json.current_date, current_datetime: $('Normalize Evolution Payload').first().json.current_datetime, timezone: 'America/Sao_Paulo', user_message: $('Normalize Evolution Payload').first().json.message_text }) }}",
         "options": {
-          "systemMessage": "Você é o concierge financeiro do AcerttaPay no WhatsApp, focado na família 4.1 da Central de Acertos.\n\nResponda SOMENTE com JSON válido, sem markdown.\n\nVocê pode conversar com charme leve, mas nunca inventa ID, pessoa, valor ou status. O AcerttaPay é a fonte de verdade e vai validar tudo.\n\nIntents aceitas:\n- greeting: saudação simples.\n- help: ajuda/lista do que você faz nesta família.\n- shared_debt_summary: resumo geral da Central de Acertos.\n- list_incoming_debts: listar o que o usuário deve.\n- list_outgoing_debts: listar quem deve ao usuário.\n- list_draft_queues: listar rascunhos da caixa de saída.\n- send_draft_queue: preparar envio de rascunho.\n- accept_debt: aceitar cobrança recebida.\n- reject_debt: recusar cobrança recebida.\n- contest_debt: contestar uma recusa recebida pelo usuário que enviou.\n- mark_as_paid: marcar acerto como pago pelo usuário devedor.\n- confirm_received: confirmar recebimento pelo usuário credor.\n- generate_pix: preparar Pix de acerto mensal.\n- out_of_scope: algo fora desta família.\n\nFormato obrigatório:\n{\n  \"intent\": \"shared_debt_summary\",\n  \"confidence\": 0.0,\n  \"needs_clarification\": false,\n  \"clarifying_question\": null,\n  \"reply_text\": null,\n  \"query\": {\n    \"period\": null,\n    \"month\": null,\n    \"year\": null,\n    \"person_hint\": null,\n    \"direction\": null,\n    \"limit\": 10\n  },\n  \"target\": {\n    \"request_id\": null,\n    \"queue_id\": null,\n    \"settlement_id\": null,\n    \"person_hint\": null\n  },\n  \"action\": {\n    \"name\": null,\n    \"note\": null,\n    \"amount_cents\": null\n  }\n}\n\nRegras:\n- Para greeting/help, use reply_text com uma resposta curta e exemplos.\n- \"quem me deve\" => list_outgoing_debts.\n- \"o que eu devo\" / \"quanto devo\" => list_incoming_debts.\n- \"listar rascunhos\" => list_draft_queues.\n- \"enviar rascunho #12\" => send_draft_queue target.queue_id=12.\n- \"enviar rascunhos da Ana\" => send_draft_queue target.person_hint=\"Ana\".\n- \"aceitar cobrança #8\" => accept_debt target.request_id=8.\n- \"recusar #8 porque já paguei\" => reject_debt target.request_id=8 action.note=\"já paguei\".\n- Para recusar ou contestar, peça nota se não houver motivo.\n- \"marcar #8 como pago\" => mark_as_paid target.request_id=8.\n- \"confirmar recebimento #8\" => confirm_received target.request_id=8.\n- \"gerar Pix do acerto com Bruno\" => generate_pix target.person_hint=\"Bruno\".\n- Se faltar ID ou pessoa, ainda pode enviar person_hint; o AcerttaPay vai resolver ou pedir esclarecimento.\n- Ações sensíveis serão confirmadas pelo AcerttaPay. Não confirme sozinho.\n- Se houver ambiguidade, needs_clarification=true e faça pergunta curta.\n",
+          "systemMessage": "Você é o concierge financeiro do AcerttaPay no WhatsApp, focado na família 6.1 de Fechamento Mensal Assistido.\n\nResponda SOMENTE com JSON válido, sem markdown.\n\nVocê ajuda o usuário a conferir se um mês pode ser fechado, explicar bloqueadores, iniciar fechamento e iniciar reabertura. Nunca feche nem reabra por conta própria: o AcerttaPay sempre exige confirmação forte e valida tudo.\n\nIntents aceitas:\n- greeting: saudação simples.\n- help: ajuda/lista do que você faz nesta família.\n- month_close_readiness: conferir se o mês pode ser fechado.\n- month_close_blockers: listar o que falta para fechar.\n- month_close_summary: resumo da conferência de fechamento.\n- prepare_month_close: usuário pediu para fechar um mês.\n- prepare_month_reopen: usuário pediu para reabrir um mês fechado.\n- out_of_scope: algo fora desta família.\n\nFormato obrigatório:\n{\n  \"intent\": \"month_close_readiness\",\n  \"confidence\": 0.0,\n  \"needs_clarification\": false,\n  \"clarifying_question\": null,\n  \"reply_text\": null,\n  \"period\": {\n    \"period\": null,\n    \"month\": null,\n    \"year\": null\n  }\n}\n\nRegras:\n- Para greeting/help, use reply_text com resposta curta e exemplos.\n- \"posso fechar junho?\", \"dá para fechar esse mês?\", \"o que falta para fechar?\" => month_close_readiness.\n- \"quais pendências bloqueiam o fechamento?\" => month_close_blockers.\n- \"fechar junho\", \"quero fechar esse mês\" ou \"fechar mês\" => prepare_month_close.\n- \"reabrir junho\" ou \"reabrir esse mês\" => prepare_month_reopen.\n- Se o mês estiver claro no texto, preencha month/year. Se disser \"esse mês\", deixe period=null e month/year=null; o backend usa o mês atual.\n- Se disser \"mês passado\", use period=\"last_month\". Se disser \"próximo mês\", use period=\"next_month\".\n- Fechamento e reabertura são ações críticas. Não diga que fechou; diga que vai conferir e pedir confirmação.\n- Se for compra, lembrete, Central de Acertos ou finanças mensais fora do cartão, responda out_of_scope indicando a família correta.\n",
           "maxIterations": 2,
           "returnIntermediateSteps": false
         }
       },
-      "id": "ad48090f-bb2f-441f-8dc5-2de199e7e6f3",
-      "name": "AI Shared Debts Router",
+      "id": "2b10f0d8-04e8-4962-b177-da023bcff79e",
+      "name": "AI Month Close Router",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3.1,
       "position": [
-        -512,
-        176
+        -336,
+        1120
       ]
     },
     {
@@ -217,13 +217,13 @@
           "temperature": 0
         }
       },
-      "id": "1d4d76e0-3daf-46d2-a46d-d550901a0eb6",
-      "name": "Gemini Chat Model - Shared Debts",
+      "id": "c7d5374c-0580-4426-be73-0637e42893d3",
+      "name": "Gemini Chat Model - Month Close",
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1.1,
       "position": [
-        -512,
-        400
+        -336,
+        1344
       ],
       "credentials": {
         "googlePalmApi": {
@@ -235,17 +235,17 @@
     {
       "parameters": {
         "sessionIdType": "customKey",
-        "sessionKey": "={{ 'acerttapay:wa:4.1:' + ($('Normalize Evolution Payload').first().json.phone || $json.whatsapp?.phone || $json.phone || 'unknown') }}",
+        "sessionKey": "={{ 'acerttapay:wa:6.1:' + ($('Normalize Evolution Payload').first().json.phone || $json.whatsapp?.phone || $json.phone || 'unknown') }}",
         "sessionTTL": "={{ Number($env.ACERTTAPAY_N8N_MEMORY_TTL_SECONDS || 86400) }}",
         "contextWindowLength": 10
       },
-      "id": "cc9df947-1c56-4f49-a6a4-bb124bf8e75f",
-      "name": "WhatsApp Shared Debt Memory",
+      "id": "e98bad46-ae0e-4227-88a4-81a7862bd36d",
+      "name": "WhatsApp Month Close Memory",
       "type": "@n8n/n8n-nodes-langchain.memoryRedisChat",
       "typeVersion": 1.4,
       "position": [
-        -336,
-        400
+        -160,
+        1344
       ],
       "credentials": {
         "redis": {
@@ -256,26 +256,26 @@
     },
     {
       "parameters": {},
-      "id": "f770f369-a4b3-4f55-8dc7-cb55d40638f4",
-      "name": "Think Tool - Shared Debts",
+      "id": "c4a599d4-1654-4fe5-b7b6-c59695c6b170",
+      "name": "Think Tool - Month Close",
       "type": "@n8n/n8n-nodes-langchain.toolThink",
       "typeVersion": 1,
       "position": [
-        -160,
-        400
+        32,
+        1344
       ]
     },
     {
       "parameters": {
-        "jsCode": "function cleanJsonContent(value) {\n  if (value && typeof value === 'object') return value;\n  const raw = String(value || '').trim();\n  if (!raw) return '';\n  const withoutFence = raw.replace(/^```(?:json)?\\s*/i, '').replace(/```$/i, '').trim();\n  const first = withoutFence.indexOf('{');\n  const last = withoutFence.lastIndexOf('}');\n  if (first >= 0 && last > first) return withoutFence.slice(first, last + 1);\n  return withoutFence;\n}\nconst content = $json.output ?? $json.text ?? $json.response ?? $json.choices?.[0]?.message?.content ?? '';\nlet parsed;\ntry {\n  const cleaned = cleanJsonContent(content);\n  parsed = typeof cleaned === 'object' ? cleaned : JSON.parse(cleaned);\n} catch (error) {\n  parsed = {\n    intent: 'help',\n    confidence: 0,\n    needs_clarification: false,\n    reply_text: 'Posso te ajudar com a Central de Acertos: quem te deve, o que você deve, rascunhos, aceite/recusa, pagamento e Pix mensal. Me manda do seu jeito. 😉'\n  };\n}\nif (!parsed || typeof parsed !== 'object') parsed = { intent: 'help', reply_text: 'Me manda o que você quer ver na Central de Acertos.' };\nconst apiIntents = new Set(['shared_debt_summary','list_incoming_debts','list_outgoing_debts','list_draft_queues','send_draft_queue','accept_debt','reject_debt','contest_debt','mark_as_paid','confirm_received','generate_pix']);\nparsed.should_call_api = apiIntents.has(String(parsed.intent || '')) && parsed.needs_clarification !== true;\nif (parsed.needs_clarification === true && !parsed.clarifying_question) parsed.clarifying_question = 'Me dá mais um detalhe para eu não mexer errado na Central de Acertos?';\nif (['greeting','help'].includes(String(parsed.intent || '')) && !parsed.reply_text) {\n  parsed.reply_text = 'Oi! Aqui é seu concierge da Central de Acertos do AcerttaPay. Posso mostrar quem te deve, o que você deve, listar rascunhos, preparar envio, aceitar/recusar acertos, marcar pagamento e gerar Pix mensal. 🤝';\n}\nif (String(parsed.intent || '') === 'out_of_scope' && !parsed.reply_text) parsed.reply_text = 'Essa função ainda não entrou na Central de Acertos por WhatsApp. Por enquanto, cuido de pendências, rascunhos, pagamentos e Pix mensal.';\nreturn [{ json: parsed }];"
+        "jsCode": "function cleanJsonContent(value) {\n  if (value && typeof value === 'object') return value;\n  const raw = String(value || '').trim();\n  if (!raw) return '';\n  const withoutFence = raw.replace(/^```(?:json)?\\s*/i, '').replace(/```$/i, '').trim();\n  const first = withoutFence.indexOf('{');\n  const last = withoutFence.lastIndexOf('}');\n  if (first >= 0 && last > first) return withoutFence.slice(first, last + 1);\n  return withoutFence;\n}\nconst content = $json.output ?? $json.text ?? $json.response ?? $json.choices?.[0]?.message?.content ?? '';\nlet parsed;\ntry {\n  const cleaned = cleanJsonContent(content);\n  parsed = typeof cleaned === 'object' ? cleaned : JSON.parse(cleaned);\n} catch (error) {\n  parsed = {\n    intent: 'help',\n    confidence: 0,\n    needs_clarification: false,\n    reply_text: 'Posso conferir se o mês pode ser fechado, mostrar pendências e iniciar fechamento ou reabertura com confirmação forte. Ex.: posso fechar junho? 🔎'\n  };\n}\nif (!parsed || typeof parsed !== 'object') parsed = { intent: 'help', reply_text: 'Me manda qual mês você quer conferir para fechamento.' };\nconst apiIntents = new Set(['month_close_readiness','month_close_blockers','month_close_summary','prepare_month_close','prepare_month_reopen']);\nparsed.should_call_api = apiIntents.has(String(parsed.intent || '')) && parsed.needs_clarification !== true;\nif (parsed.needs_clarification === true && !parsed.clarifying_question) parsed.clarifying_question = 'Qual mês você quer conferir ou fechar?';\nif (['greeting','help'].includes(String(parsed.intent || '')) && !parsed.reply_text) {\n  parsed.reply_text = 'Oi! Aqui é seu concierge de fechamento mensal do AcerttaPay. Posso conferir pendências, dizer se o mês pode fechar e iniciar fechamento ou reabertura com confirmação forte. Ex.: *posso fechar junho?* 🔎';\n}\nif (String(parsed.intent || '') === 'out_of_scope' && !parsed.reply_text) parsed.reply_text = 'Esse pedido parece de outra área do AcerttaPay. Aqui eu cuido só de fechamento mensal: conferência, bloqueadores, fechamento e reabertura com segurança. 🔐';\nreturn [{ json: parsed }];"
       },
-      "id": "934e90e6-538a-4610-add4-3eb4767e4a0b",
-      "name": "Parse Shared Debt JSON",
+      "id": "a2a6ad2f-39f6-43cd-9c07-b88b77580f5c",
+      "name": "Parse Month Close JSON",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -176,
-        176
+        16,
+        1120
       ]
     },
     {
@@ -303,39 +303,39 @@
         },
         "options": {}
       },
-      "id": "57ce4a69-5560-48e0-ace4-2f1fd3b732df",
-      "name": "Should Call Shared Debt API?",
+      "id": "61d6a27b-bb54-44e2-a225-6c403917f5a0",
+      "name": "Should Call Month Close API?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        96,
-        176
+        272,
+        1120
       ]
     },
     {
       "parameters": {
-        "jsCode": "const root = $json || {};\nconst whatsapp = root.whatsapp && typeof root.whatsapp === 'object' ? root.whatsapp : {};\nconst text = String(root.outbound_text || whatsapp.text || root.message || root.reply_text || root.clarifying_question || \"Pedido processado no AcerttaPay.\").trim();\nreturn [{ json: { ...root, ok: root.ok !== false, workflow_key: root.workflow_key || \"4.1\", outbound_text: text, send_by_orchestrator: true, whatsapp: { ...whatsapp, text } } }];"
+        "jsCode": "const root = $json || {};\nconst whatsapp = root.whatsapp && typeof root.whatsapp === 'object' ? root.whatsapp : {};\nconst text = String(root.outbound_text || whatsapp.text || root.message || root.reply_text || root.clarifying_question || \"Pedido processado no AcerttaPay.\").trim();\nreturn [{ json: { ...root, ok: root.ok !== false, workflow_key: root.workflow_key || \"6.1\", outbound_text: text, send_by_orchestrator: true, whatsapp: { ...whatsapp, text } } }];"
       },
-      "id": "dc89fa71-58be-4c38-b79c-e4034a625159",
-      "name": "Send AI Shared Debt Reply",
+      "id": "f3039e9e-8345-45d9-a209-f8df55737234",
+      "name": "Send AI Month Close Reply",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        352,
-        320
+        528,
+        1264
       ]
     },
     {
       "parameters": {
-        "jsCode": "const parsed = $json || {};\nconst intent = String(parsed.intent || '').trim();\nconst phone = $('Normalize Evolution Payload').first().json.phone;\nconst source = {\n  channel: 'whatsapp',\n  instance: $('Normalize Evolution Payload').first().json.instance,\n  message_id: $('Normalize Evolution Payload').first().json.message_id,\n  raw_text: $('Normalize Evolution Payload').first().json.message_text\n};\nconst query = parsed.query || {};\nconst target = parsed.target || {};\nconst action = parsed.action || {};\nlet endpoint = '/api/automation/v1/shared-debts/summary';\nlet body = { phone, source, query };\nlet idempotencySuffix = intent;\nfunction cleanId(value) {\n  return String(value || '0').replace(/[^0-9]/g, '') || '0';\n}\nif (intent === 'shared_debt_summary') {\n  endpoint = '/api/automation/v1/shared-debts/summary';\n} else if (intent === 'list_incoming_debts') {\n  endpoint = '/api/automation/v1/shared-debts/requests';\n  body.query = { ...query, direction: 'incoming' };\n} else if (intent === 'list_outgoing_debts') {\n  endpoint = '/api/automation/v1/shared-debts/requests';\n  body.query = { ...query, direction: 'outgoing' };\n} else if (intent === 'list_draft_queues') {\n  endpoint = '/api/automation/v1/shared-debts/drafts';\n} else if (intent === 'send_draft_queue') {\n  const id = cleanId(target.queue_id || target.id);\n  endpoint = `/api/automation/v1/shared-debts/drafts/${id}/prepare-send`;\n  body.query = { ...query, person_hint: target.person_hint || query.person_hint || null };\n  idempotencySuffix += ':' + id;\n} else if (intent === 'accept_debt' || intent === 'reject_debt' || intent === 'contest_debt') {\n  const id = cleanId(target.request_id || target.id);\n  endpoint = `/api/automation/v1/shared-debts/requests/${id}/respond`;\n  body.action = intent === 'accept_debt' ? 'accept' : intent === 'reject_debt' ? 'reject' : 'contest';\n  body.note = action.note || null;\n  body.query = { ...query, person_hint: target.person_hint || query.person_hint || null };\n  idempotencySuffix += ':' + id;\n} else if (intent === 'mark_as_paid') {\n  const id = cleanId(target.request_id || target.id);\n  endpoint = `/api/automation/v1/shared-debts/requests/${id}/mark-paid`;\n  body.note = action.note || null;\n  body.query = { ...query, person_hint: target.person_hint || query.person_hint || null };\n  idempotencySuffix += ':' + id;\n} else if (intent === 'confirm_received') {\n  const id = cleanId(target.request_id || target.id);\n  endpoint = `/api/automation/v1/shared-debts/requests/${id}/confirm-received`;\n  body.note = action.note || null;\n  body.query = { ...query, person_hint: target.person_hint || query.person_hint || null };\n  idempotencySuffix += ':' + id;\n} else if (intent === 'generate_pix') {\n  const id = cleanId(target.settlement_id || target.id);\n  endpoint = `/api/automation/v1/shared-debts/settlements/${id}/pix/prepare`;\n  body.amount_cents = action.amount_cents || null;\n  body.query = { ...query, person_hint: target.person_hint || query.person_hint || null };\n  idempotencySuffix += ':' + id;\n}\nreturn [{ json: { intent, endpoint, body, idempotency_key: `whatsapp-shared-debt:${$('Normalize Evolution Payload').first().json.instance}:${$('Normalize Evolution Payload').first().json.message_id}:${idempotencySuffix}` } }];"
+        "jsCode": "const parsed = $json || {};\nconst intent = String(parsed.intent || '').trim();\nconst phone = $('Normalize Evolution Payload').first().json.phone;\nconst source = {\n  channel: 'whatsapp',\n  instance: $('Normalize Evolution Payload').first().json.instance,\n  message_id: $('Normalize Evolution Payload').first().json.message_id,\n  raw_text: $('Normalize Evolution Payload').first().json.message_text\n};\nconst period = parsed.period || parsed.query || {};\nlet endpoint = '/api/automation/v1/month-close/readiness';\nlet idempotencySuffix = intent || 'readiness';\nif (intent === 'prepare_month_close') {\n  endpoint = '/api/automation/v1/month-close/prepare-close';\n} else if (intent === 'prepare_month_reopen') {\n  endpoint = '/api/automation/v1/month-close/prepare-reopen';\n} else {\n  endpoint = '/api/automation/v1/month-close/readiness';\n}\nconst body = { phone, source, period };\nreturn [{ json: {\n  intent,\n  endpoint,\n  body,\n  idempotency_key: `whatsapp-month-close:${$('Normalize Evolution Payload').first().json.instance}:${$('Normalize Evolution Payload').first().json.message_id}:${idempotencySuffix}`\n} }];"
       },
-      "id": "e250d6d8-d311-4a9f-a5c2-e9b5147ce3b8",
-      "name": "Prepare Shared Debt Request",
+      "id": "c4bcb56f-3610-4a25-8bb0-3ee0e3ddaf30",
+      "name": "Prepare Month Close Request",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        352,
-        80
+        528,
+        1024
       ]
     },
     {
@@ -371,39 +371,39 @@
           }
         }
       },
-      "id": "b28945bf-2b31-45d9-b747-2bd1b3c8c9d3",
-      "name": "Call AcerttaPay Shared Debt",
+      "id": "3af86ec1-53c8-41a7-8f35-b7143a6875b8",
+      "name": "Call AcerttaPay Month Close",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
-        592,
-        80
+        784,
+        1024
       ]
     },
     {
       "parameters": {
-        "jsCode": "const result = $json || {};\nlet text = result.whatsapp?.text || result.message || result.reply_text || '';\nif (!text) text = 'Central de Acertos processada no AcerttaPay, mas a resposta veio tímida. Tenta de novo em instantes.';\nreturn [{ json: { ...result, outbound_text: text } }];"
+        "jsCode": "const result = $json || {};\nlet text = result.whatsapp?.text || result.message || result.reply_text || '';\nif (!text) text = 'Fechamento mensal processado no AcerttaPay, mas a resposta veio tímida. Tenta de novo em instantes.';\nreturn [{ json: { ...result, outbound_text: text } }];"
       },
-      "id": "bd2b1be7-faca-4004-bfc5-83ed27469522",
-      "name": "Style Shared Debt Response",
+      "id": "dcdf1c23-fe40-4595-96e7-f356cda67ac1",
+      "name": "Style Month Close Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        880,
-        -96
+        1056,
+        848
       ]
     },
     {
       "parameters": {
-        "jsCode": "const root = $json || {};\nconst whatsapp = root.whatsapp && typeof root.whatsapp === 'object' ? root.whatsapp : {};\nconst text = String(root.outbound_text || whatsapp.text || root.message || root.reply_text || root.clarifying_question || \"Pedido processado no AcerttaPay.\").trim();\nreturn [{ json: { ...root, ok: root.ok !== false, workflow_key: root.workflow_key || \"4.1\", outbound_text: text, send_by_orchestrator: true, whatsapp: { ...whatsapp, text } } }];"
+        "jsCode": "const root = $json || {};\nconst whatsapp = root.whatsapp && typeof root.whatsapp === 'object' ? root.whatsapp : {};\nconst text = String(root.outbound_text || whatsapp.text || root.message || root.reply_text || root.clarifying_question || \"Pedido processado no AcerttaPay.\").trim();\nreturn [{ json: { ...root, ok: root.ok !== false, workflow_key: root.workflow_key || \"6.1\", outbound_text: text, send_by_orchestrator: true, whatsapp: { ...whatsapp, text } } }];"
       },
-      "id": "15d0f2e4-8f7f-4776-a5f6-f6d4e85a96ef",
-      "name": "Send Shared Debt Result",
+      "id": "301772dd-c8a4-4214-9259-25b351988da1",
+      "name": "Send Month Close Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1136,
-        -96
+        1328,
+        848
       ]
     },
     {
@@ -418,7 +418,7 @@
           "conditions": [
             {
               "id": "06c3ef02-dad0-49aa-9c72-152c66684cf8",
-              "leftValue": "={{ $json.conversation?.state === 'awaiting_shared_debt_action_confirmation' }}",
+              "leftValue": "={{ $json.conversation?.state === 'awaiting_month_close_confirmation' }}",
               "rightValue": true,
               "operator": {
                 "type": "boolean",
@@ -431,26 +431,26 @@
         },
         "options": {}
       },
-      "id": "a37f7e96-6e78-4910-927b-719ba576dd14",
-      "name": "Has Pending Shared Debt Conversation?",
+      "id": "44e5ddc8-fd86-4549-a92d-720a520d0bf1",
+      "name": "Has Pending Month Close Conversation?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -752,
-        80
+        -576,
+        1024
       ]
     },
     {
       "parameters": {
-        "jsCode": "const phone = $('Normalize Evolution Payload').first().json.phone;\nconst source = {\n  channel: 'whatsapp',\n  instance: $('Normalize Evolution Payload').first().json.instance,\n  message_id: $('Normalize Evolution Payload').first().json.message_id,\n  raw_text: $('Normalize Evolution Payload').first().json.message_text\n};\nreturn [{ json: {\n  endpoint: '/api/automation/v1/shared-debts/conversations/reply',\n  idempotency_key: `whatsapp-shared-debt-reply:${$('Normalize Evolution Payload').first().json.instance}:${$('Normalize Evolution Payload').first().json.message_id}`,\n  body: { phone, source, reply: { raw_text: $('Normalize Evolution Payload').first().json.message_text } }\n} }];"
+        "jsCode": "const phone = $('Normalize Evolution Payload').first().json.phone;\nconst source = {\n  channel: 'whatsapp',\n  instance: $('Normalize Evolution Payload').first().json.instance,\n  message_id: $('Normalize Evolution Payload').first().json.message_id,\n  raw_text: $('Normalize Evolution Payload').first().json.message_text\n};\nreturn [{ json: {\n  endpoint: '/api/automation/v1/month-close/conversations/reply',\n  idempotency_key: `whatsapp-month-close-reply:${$('Normalize Evolution Payload').first().json.instance}:${$('Normalize Evolution Payload').first().json.message_id}`,\n  body: { phone, source, reply: { raw_text: $('Normalize Evolution Payload').first().json.message_text } }\n} }];"
       },
-      "id": "59dfc24f-303d-4bd3-b664-a26e682bd39c",
-      "name": "Prepare Shared Debt Conversation Reply",
+      "id": "7b53c27d-ff1b-4a9c-b290-3d34d75b3b2a",
+      "name": "Prepare Month Close Conversation Reply",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -512,
-        -112
+        -336,
+        832
       ]
     },
     {
@@ -486,13 +486,13 @@
           }
         }
       },
-      "id": "c7888969-34ad-427a-aa1f-1a0dfbcff687",
-      "name": "Call Shared Debt Conversation Reply",
+      "id": "860f7661-a319-48e2-9ec7-44d384b1d06d",
+      "name": "Call Month Close Conversation Reply",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
-        -256,
-        -112
+        -80,
+        832
       ]
     }
   ],
@@ -582,7 +582,7 @@
       "main": [
         [
           {
-            "node": "Has Pending Shared Debt Conversation?",
+            "node": "Has Pending Month Close Conversation?",
             "type": "main",
             "index": 0
           }
@@ -596,146 +596,146 @@
         ]
       ]
     },
-    "AI Shared Debts Router": {
+    "AI Month Close Router": {
       "main": [
         [
           {
-            "node": "Parse Shared Debt JSON",
+            "node": "Parse Month Close JSON",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Gemini Chat Model - Shared Debts": {
+    "Gemini Chat Model - Month Close": {
       "ai_languageModel": [
         [
           {
-            "node": "AI Shared Debts Router",
+            "node": "AI Month Close Router",
             "type": "ai_languageModel",
             "index": 0
           }
         ]
       ]
     },
-    "WhatsApp Shared Debt Memory": {
+    "WhatsApp Month Close Memory": {
       "ai_memory": [
         [
           {
-            "node": "AI Shared Debts Router",
+            "node": "AI Month Close Router",
             "type": "ai_memory",
             "index": 0
           }
         ]
       ]
     },
-    "Think Tool - Shared Debts": {
+    "Think Tool - Month Close": {
       "ai_tool": [
         [
           {
-            "node": "AI Shared Debts Router",
+            "node": "AI Month Close Router",
             "type": "ai_tool",
             "index": 0
           }
         ]
       ]
     },
-    "Parse Shared Debt JSON": {
+    "Parse Month Close JSON": {
       "main": [
         [
           {
-            "node": "Should Call Shared Debt API?",
+            "node": "Should Call Month Close API?",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Should Call Shared Debt API?": {
+    "Should Call Month Close API?": {
       "main": [
         [
           {
-            "node": "Prepare Shared Debt Request",
+            "node": "Prepare Month Close Request",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Send AI Shared Debt Reply",
+            "node": "Send AI Month Close Reply",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Prepare Shared Debt Request": {
+    "Prepare Month Close Request": {
       "main": [
         [
           {
-            "node": "Call AcerttaPay Shared Debt",
+            "node": "Call AcerttaPay Month Close",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Call AcerttaPay Shared Debt": {
+    "Call AcerttaPay Month Close": {
       "main": [
         [
           {
-            "node": "Style Shared Debt Response",
+            "node": "Style Month Close Response",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Style Shared Debt Response": {
+    "Style Month Close Response": {
       "main": [
         [
           {
-            "node": "Send Shared Debt Result",
+            "node": "Send Month Close Result",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Has Pending Shared Debt Conversation?": {
+    "Has Pending Month Close Conversation?": {
       "main": [
         [
           {
-            "node": "Prepare Shared Debt Conversation Reply",
+            "node": "Prepare Month Close Conversation Reply",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "AI Shared Debts Router",
+            "node": "AI Month Close Router",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Prepare Shared Debt Conversation Reply": {
+    "Prepare Month Close Conversation Reply": {
       "main": [
         [
           {
-            "node": "Call Shared Debt Conversation Reply",
+            "node": "Call Month Close Conversation Reply",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Call Shared Debt Conversation Reply": {
+    "Call Month Close Conversation Reply": {
       "main": [
         [
           {
-            "node": "Style Shared Debt Response",
+            "node": "Style Month Close Response",
             "type": "main",
             "index": 0
           }
@@ -752,12 +752,12 @@
     "callerPolicy": "workflowsFromSameOwner",
     "availableInMCP": false
   },
-  "versionId": "7b451e3a-3c00-41fc-a7e2-75829fa2dab7",
+  "versionId": "c500d62b-fafb-40f8-8b41-b15b334d8e54",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "54c1e6e642219d63bcca2e850583056b9d4a7efdf129870e6550b48695aa00e1"
   },
-  "id": "SwEvY2WXaQxujZpQ",
+  "id": "9OFl9IzfPUDCigFx",
   "tags": [
     {
       "updatedAt": "2026-06-08T17:04:41.481Z",

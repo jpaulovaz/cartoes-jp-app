@@ -218,6 +218,10 @@ function parsePurchaseSelectionFromText(text = '', purchases = []) {
   return 0;
 }
 
+function stripInstallmentMarker(description) {
+  return String(description || '').replace(/\s*\(\d{1,3}\/\d{1,3}\)\s*$/g, '').trim();
+}
+
 function parseSimpleEditPatchFromText(text = '') {
   const normalized = normalizeIntentText(text);
   const patch = {};

@@ -192,7 +192,7 @@
             "description": "",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"workflow_key\": \"0.0\",\n  \"family_key\": \"0.x\",\n  \"intent\": \"postman_test\",\n  \"operation\": \"router.dispatch\",\n  \"result_code\": \"POSTMAN_TEST\",\n  \"status_code\": 200,\n  \"source_message_id\": \"postman-{{$guid}}\",\n  \"request_meta\": {\n    \"tool\": \"postman\"\n  },\n  \"response_meta\": {\n    \"ok\": true\n  }\n}",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"workflow_key\": \"0.0\",\n  \"family_key\": \"0.x\",\n  \"intent\": \"postman_test\",\n  \"operation\": \"router.dispatch\",\n  \"result_code\": \"POSTMAN_TEST\",\n  \"status_code\": 200,\n  \"source_message_id\": \"postman-{{$guid}}\",\n  \"request_meta\": {\n    \"tool\": \"postman\",\n    \"routed_by\": \"manual_test\",\n    \"confidence\": 1,\n    \"conversation_action\": \"none\",\n    \"interrupt_conversation\": false,\n    \"interrupt_conversation_id\": null,\n    \"previous_conversation_state\": null,\n    \"interrupted_reason\": null\n  },\n  \"response_meta\": {\n    \"ok\": true\n  }\n}",
               "options": {
                 "raw": {
                   "language": "json"

@@ -97,7 +97,9 @@ function formatAutomationPeriod(month, year) {
 
 function isAffirmativeText(value) {
   const text = normalizeIntentText(value);
-  return /^(sim|s|quero|bora|pode|ok|claro|vamos|dividir|quero dividir|manda|isso|isso mesmo|correto|confere|confirmo|e esse|é esse|esse mesmo)$/i.test(text)
+  return /^(sim|s|quero|bora|pode|ok|claro|vamos|dividir|quero dividir|manda|isso|isso mesmo|correto|confere|confirmo|confirmar|confirma|confirmado|e esse|é esse|esse mesmo)$/i.test(text)
+    || text.includes('confirmar')
+    || text.includes('confirma')
     || text.includes('quero dividir')
     || text.includes('pode dividir')
     || text.includes('isso mesmo')
@@ -107,7 +109,14 @@ function isAffirmativeText(value) {
 
 function isNegativeText(value) {
   const text = normalizeIntentText(value);
-  return /^(nao|n|não|deixa|deixa assim|so eu|só eu|apenas eu|eu mesmo|outro|outro cartao|outro cartão)$/i.test(text)
+  return /^(nao|n|não|cancelar|cancela|cancelado|desistir|desisto|desisti|descartar|descarta|parar|para|sair|voltar|deixa|deixa assim|deixa pra la|deixa para la|esquece|nao quero|não quero|so eu|só eu|apenas eu|eu mesmo|outro|outro cartao|outro cartão)$/i.test(text)
+    || text.includes('cancelar')
+    || text.includes('cancela')
+    || text.includes('desist')
+    || text.includes('descart')
+    || text.includes('deixa pra la')
+    || text.includes('deixa para la')
+    || text.includes('esquece')
     || text.includes('nao quero')
     || text.includes('não quero')
     || text.includes('nao e esse')
@@ -1697,13 +1706,11 @@ function createAutomationApiService(deps = {}) {
         }, 200);
       }
       checkRateLimit(resolved.normalized.e164);
-      let conversation = repository.getOpenConversationForUser(resolved.user.id, resolved.normalized.e164);
-      let interruptedConversation = null;
-      if (conversation && shouldInterruptRouterConversation(conversation, source.raw_text)) {
-        interruptedConversation = publicConversation(conversation, repository);
-        repository.resolveConversationState(conversation.id);
-        conversation = null;
-      }
+      const conversation = repository.getOpenConversationForUser(resolved.user.id, resolved.normalized.e164);
+      // A decisão de continuar, cancelar ou trocar de assunto fica com o roteador de IA do n8n.
+      // O backend apenas entrega o estado pendente como contexto e aplica a resolução quando o
+      // roteador registra uma interrupção explícita com o id da conversa.
+      const interruptedConversation = null;
       const capabilities = buildRouterCapabilitiesForUser(resolved.user.id);
       return makeResult({
         ...base,
@@ -1749,6 +1756,14 @@ function createAutomationApiService(deps = {}) {
           userId = Number(found?.user_id || 0) || null;
         }
       }
+      const requestMeta = payload.request_meta || payload.requestMeta || {};
+      const interruptConversationId = Number(requestMeta.interrupt_conversation_id || requestMeta.interrupted_conversation_id || 0);
+      let interruptedConversationResolved = false;
+      if (requestMeta.interrupt_conversation === true && interruptConversationId > 0) {
+        repository.resolveConversationState(interruptConversationId);
+        interruptedConversationResolved = true;
+      }
+
       operationsRepository.logIntentEvent({
         userId,
         phoneE164,
@@ -1760,10 +1775,13 @@ function createAutomationApiService(deps = {}) {
         resultCode: payload.result_code || payload.code || 'ROUTER_INTENT_RECORDED',
         channel: payload.channel || payload.source?.channel || 'whatsapp',
         sourceMessageId: payload.source_message_id || payload.source?.message_id || payload.whatsapp?.message_id || null,
-        requestMeta: payload.request_meta || payload.requestMeta || {},
-        responseMeta: payload.response_meta || payload.responseMeta || {}
+        requestMeta,
+        responseMeta: {
+          ...(payload.response_meta || payload.responseMeta || {}),
+          interrupted_conversation_resolved: interruptedConversationResolved
+        }
       });
-      return makeResult({ ok: true, code: 'ROUTER_INTENT_RECORDED' });
+      return makeResult({ ok: true, code: 'ROUTER_INTENT_RECORDED', interrupted_conversation_resolved: interruptedConversationResolved });
     } catch (error) {
       return handleServiceError(error);
     }

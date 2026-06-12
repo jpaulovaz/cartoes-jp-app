@@ -994,12 +994,12 @@ Responsabilidades do `0.0`:
 - ignorar mensagens próprias, grupos e mídias não suportadas;
 - resolver usuário autorizado uma única vez;
 - consultar conversa pendente, preferências do usuário, registry e modo manutenção;
-- priorizar conversa pendente antes de classificar intenção com IA;
+- enviar conversa pendente para a IA roteadora decidir entre continuar, cancelar ou trocar de assunto;
 - montar menu dinâmico conforme capacidades liberadas;
-- chamar o subfluxo correto;
+- chamar o subfluxo correto com base na intenção classificada pela IA;
 - rotear PDF de fatura para `7.1` e imagem de comprovante para `1.4`;
 - enviar a resposta final ao WhatsApp;
-- registrar logs de roteamento.
+- registrar logs de roteamento e, quando a IA identificar novo assunto, encerrar explicitamente a conversa pendente anterior pelo id.
 
 Variáveis N8N obrigatórias:
 
@@ -1014,3 +1014,16 @@ ACERTTAPAY_N8N_MEMORY_TTL_SECONDS=86400
 Ponto operacional: no AcerttaPay a chave se chama `AUTOMATION_API_TOKEN`; no N8N se chama `ACERTTAPAY_AUTOMATION_API_TOKEN`. Elas devem ter o mesmo valor.
 
 Redis Chat Memory substitui as memórias locais `memoryBufferWindow`. Redis guarda somente contexto conversacional da IA; estados financeiros sensíveis continuam no AcerttaPay em `automation_conversation_states`.
+
+### Roteamento por IA e troca de assunto
+
+A partir da versão 4.14.4, o fluxo inicial não usa mais regras amplas por expressão regular para decidir intenção textual. O nó `Prepare Deterministic Route` mantém apenas guardrails objetivos de mídia: PDF vai para `7.1`, imagem vai para `1.4` e mídia não suportada recebe orientação curta. Mensagens de texto seguem para o `AI Initial Router`.
+
+O roteador de IA recebe o estado pendente vindo do AcerttaPay e deve decidir entre:
+
+- `conversation_action=continue`: a mensagem continua a conversa pendente, como `confirmar`, `cancelar`, número de opção ou resposta curta;
+- `conversation_action=new_topic`: o usuário mudou de assunto, por exemplo pediu `minhas últimas compras` no meio de uma confirmação;
+- `conversation_action=none`: não havia conversa pendente relevante.
+
+Quando houver `new_topic`, o orquestrador remove a conversa pendente do payload enviado ao subfluxo novo e registra `interrupt_conversation_id` no log de roteamento. O backend resolve exatamente essa conversa antiga pelo id, sem depender de regex e sem apagar uma nova conversa criada pelo subfluxo atual.
+

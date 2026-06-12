@@ -1065,3 +1065,12 @@ O roteador de IA recebe o estado pendente vindo do AcerttaPay e deve decidir ent
 
 Quando houver `new_topic`, o orquestrador remove a conversa pendente do payload enviado ao subfluxo novo e registra `interrupt_conversation_id` no log de roteamento. O backend resolve exatamente essa conversa antiga pelo id, sem depender de regex e sem apagar uma nova conversa criada pelo subfluxo atual.
 
+
+
+## 4.14.13 - Ajustes de concierge por função
+
+- Reforça roteamento de respostas pendentes de correção/divisão para evitar voltar ao pedido de fatura/mês após a compra já estar selecionada.
+- Adiciona logs console/operacionais para falhas internas nas confirmações de edição, exclusão e reabertura de participantes.
+- Faz "fatura do cartão" sem nome perguntar qual cartão antes de abrir o detalhe.
+- Reforça "gastos do mês" como resumo completo de consultas, com cartões e finanças fora do cartão.
+- Corrige criação de finanças mensais fora do cartão quando falta valor, retornando pergunta objetiva em vez de cair no menu.

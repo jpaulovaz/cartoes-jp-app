@@ -546,18 +546,17 @@ function createAutomationQueriesService(deps = {}) {
         selectedCard = resolved.item;
       }
 
-      if (!selectedCard && cards.length === 1) selectedCard = { id: cards[0].id, name: cards[0].name };
       if (!selectedCard && !hint) {
         const total = sumBy(cards, 'total_cents');
         const cardLines = cards.length
           ? truncateRows(cards, 8).map((card, index) => `${index + 1}. ${card.name}: *${formatBRLFromCents(card.total_cents)}*`)
           : ['• Nenhum cartão com compra nessa fatura.'];
         return makeResult({
-          ok: true,
-          code: 'CARD_SUMMARY_LIST',
+          ok: false,
+          code: 'NEEDS_CARD_SELECTION_FOR_SUMMARY',
           data: { period, cards },
           whatsapp: {
-            text: [`💳 *Faturas de ${periodLabel(period.month, period.year)}*`, '', `Total nos cartões: *${formatBRLFromCents(total)}*`, '', ...cardLines, '', 'Me diz o cartão para eu abrir o detalhe. Ex.: *fatura do Nubank*.'].join('\n')
+            text: [`💳 *Qual cartão você quer ver em ${periodLabel(period.month, period.year)}?*`, '', `Total nos cartões: *${formatBRLFromCents(total)}*`, '', ...cardLines, '', 'Me responde com o nome ou número. Ex.: *Inter* ou *1*.'].join('\n')
           }
         });
       }

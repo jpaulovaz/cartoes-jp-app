@@ -309,7 +309,7 @@ function createAutomationMonthlyFinancesService(deps = {}) {
 
   function normalizeFinancePayload(input = {}) {
     const raw = input.finance || input.monthly_finance || input;
-    const period = resolvePeriod({ ...payload, ...raw });
+    const period = resolvePeriod({ ...input, ...raw });
     const type = normalizeFinanceType(raw.type || raw.kind || raw.direction) || 'expense';
     const description = sanitizeDescription(raw.description || raw.title || raw.name);
     const amountMode = normalizeAmountMode(raw.amount_mode || raw.amountMode || raw.mode);
@@ -331,7 +331,7 @@ function createAutomationMonthlyFinancesService(deps = {}) {
       : amountCents;
 
     if (totalCents <= 0) {
-      throw new AutomationApiError('Me manda um valor maior que zero para essa finança mensal.', { code: 'INVALID_AMOUNT', statusCode: 400 });
+      throw new AutomationApiError('Me manda o valor dessa finança mensal antes de salvar. Ex.: *aluguel de R$ 1.500 para julho*.', { code: 'MISSING_MONTHLY_FINANCE_AMOUNT', statusCode: 400 });
     }
 
     return {

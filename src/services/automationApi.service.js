@@ -1735,6 +1735,9 @@ function createAutomationApiService(deps = {}) {
     } catch (error) {
       const response = handleServiceError(error);
       repository.logRequest({ userId: resolved?.user?.id || null, phoneE164: resolved?.normalized?.e164 || null, channel: payload.source?.channel || payload.channel || 'whatsapp', operation: 'purchase.edit.prepare', statusCode: response.statusCode, resultCode: response.code, sourceMessageId: payload.source?.message_id || payload.message_id || null, ipAddress: meta.ipAddress || null });
+      if (response.statusCode >= 500 || response.code === 'INTERNAL_ERROR') {
+        logConciergeFailure({ error, response, payload, meta: { ...meta, endpoint: '/api/automation/v1/purchases/:id/prepare-edit' }, resolved, operation: 'purchase.edit.prepare' });
+      }
       return response;
     }
   }
@@ -1767,6 +1770,9 @@ function createAutomationApiService(deps = {}) {
     } catch (error) {
       const response = handleServiceError(error);
       repository.logRequest({ userId: resolved?.user?.id || null, phoneE164: resolved?.normalized?.e164 || null, channel: payload.source?.channel || payload.channel || 'whatsapp', operation: 'purchase.edit.confirm', statusCode: response.statusCode, resultCode: response.code, sourceMessageId: payload.source?.message_id || payload.message_id || null, ipAddress: meta.ipAddress || null });
+      if (response.statusCode >= 500 || response.code === 'INTERNAL_ERROR') {
+        logConciergeFailure({ error, response, payload, meta: { ...meta, endpoint: '/api/automation/v1/purchases/:id/confirm-edit' }, resolved, operation: 'purchase.edit.confirm' });
+      }
       return response;
     }
   }
@@ -1802,6 +1808,9 @@ function createAutomationApiService(deps = {}) {
     } catch (error) {
       const response = handleServiceError(error);
       repository.logRequest({ userId: resolved?.user?.id || null, phoneE164: resolved?.normalized?.e164 || null, channel: payload.source?.channel || payload.channel || 'whatsapp', operation: 'purchase.delete.prepare', statusCode: response.statusCode, resultCode: response.code, sourceMessageId: payload.source?.message_id || payload.message_id || null, ipAddress: meta.ipAddress || null });
+      if (response.statusCode >= 500 || response.code === 'INTERNAL_ERROR') {
+        logConciergeFailure({ error, response, payload, meta: { ...meta, endpoint: '/api/automation/v1/purchases/:id/prepare-delete' }, resolved, operation: 'purchase.delete.prepare' });
+      }
       return response;
     }
   }
@@ -1873,6 +1882,9 @@ function createAutomationApiService(deps = {}) {
     } catch (error) {
       const response = handleServiceError(error);
       repository.logRequest({ userId: resolved?.user?.id || null, phoneE164: resolved?.normalized?.e164 || null, channel: payload.source?.channel || payload.channel || 'whatsapp', operation: 'purchase.delete.confirm', statusCode: response.statusCode, resultCode: response.code, sourceMessageId: payload.source?.message_id || payload.message_id || null, ipAddress: meta.ipAddress || null });
+      if (response.statusCode >= 500 || response.code === 'INTERNAL_ERROR') {
+        logConciergeFailure({ error, response, payload, meta: { ...meta, endpoint: '/api/automation/v1/purchases/:id/confirm-delete' }, resolved, operation: 'purchase.delete.confirm' });
+      }
       return response;
     }
   }
@@ -1925,6 +1937,9 @@ function createAutomationApiService(deps = {}) {
     } catch (error) {
       const response = handleServiceError(error);
       repository.logRequest({ userId: resolved?.user?.id || null, phoneE164: resolved?.normalized?.e164 || null, channel: payload.source?.channel || payload.channel || 'whatsapp', operation: 'purchase.participants.reopen', statusCode: response.statusCode, resultCode: response.code, sourceMessageId: payload.source?.message_id || payload.message_id || null, ipAddress: meta.ipAddress || null });
+      if (response.statusCode >= 500 || response.code === 'INTERNAL_ERROR') {
+        logConciergeFailure({ error, response, payload, meta: { ...meta, endpoint: '/api/automation/v1/purchases/:id/participants/reopen' }, resolved, operation: 'purchase.participants.reopen' });
+      }
       return response;
     }
   }

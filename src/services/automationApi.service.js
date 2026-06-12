@@ -259,9 +259,36 @@ function findListedPurchaseById(purchases = [], purchaseId) {
   return (Array.isArray(purchases) ? purchases : []).find((purchase) => Number(purchase.id || purchase.purchase_id || 0) === id) || null;
 }
 
+function rawPatchHasMutationSignal(rawPatch = {}) {
+  const patch = rawPatch && typeof rawPatch === 'object' ? rawPatch : {};
+  return [
+    'amount_cents',
+    'amountCents',
+    'amount',
+    'value',
+    'date',
+    'txn_date',
+    'purchase_date',
+    'description',
+    'merchant',
+    'title',
+    'installments',
+    'parcelas',
+    'card_id',
+    'cardId',
+    'card_hint',
+    'cardHint',
+    'card_name',
+    'cardName'
+  ].some((key) => Object.prototype.hasOwnProperty.call(patch, key)
+    && patch[key] !== undefined
+    && patch[key] !== null
+    && String(patch[key]).trim() !== '');
+}
+
 function hasPurchaseMutationSignal(text = '', reply = {}) {
   const normalized = normalizeIntentText(text || reply.text || reply.raw_text || '');
-  if (patchHasMutation(normalizeEditPatch(reply.patch || {}))) return true;
+  if (rawPatchHasMutationSignal(reply.patch || {})) return true;
   const mutationWords = new RegExp('(^|\\s)(apagar|apaga|excluir|exclui|deletar|deleta|remover|remove|dividir|divide|ratear|rateia|valor|preco|preço|custou|data|cartao|cartão|descricao|descrição|nome|parcela|parcelas|x)(\\s|$)');
   return mutationWords.test(normalized);
 }

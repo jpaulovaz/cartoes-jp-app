@@ -4,11 +4,28 @@ function createAutomationApiController(deps = {}) {
   const service = deps.service || createAutomationApiService(deps);
 
   async function sendResult(res, result) {
-    const resolved = await Promise.resolve(result);
-    const statusCode = Number(resolved?.statusCode || 200) || 200;
-    const payload = { ...(resolved || {}) };
-    delete payload.statusCode;
-    return res.status(statusCode).json(payload);
+    try {
+      const resolved = await Promise.resolve(result);
+      const statusCode = Number(resolved?.statusCode || 200) || 200;
+      const payload = { ...(resolved || {}) };
+      delete payload.statusCode;
+      return res.status(statusCode).json(payload);
+    } catch (error) {
+      const response = service.handleServiceError
+        ? service.handleServiceError(error)
+        : { ok: false, statusCode: 500, code: 'INTERNAL_ERROR', message: 'Algo tropeçou por aqui. Tenta de novo que eu seguro as pontas deste lado.' };
+      try {
+        if (service.recordUnhandledControllerError) {
+          service.recordUnhandledControllerError(res.req || {}, error, response, metaFromRequest(res.req || {}));
+        }
+      } catch (logError) {
+        // Observabilidade nunca deve impedir uma resposta JSON ao N8N.
+      }
+      const statusCode = Number(response?.statusCode || 500) || 500;
+      const payload = { ...(response || {}) };
+      delete payload.statusCode;
+      return res.status(statusCode).json(payload);
+    }
   }
 
   function metaFromRequest(req) {

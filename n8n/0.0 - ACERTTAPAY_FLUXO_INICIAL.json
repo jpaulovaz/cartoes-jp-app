@@ -7,13 +7,13 @@
         "path": "acerttapay-wa-inbound",
         "options": {}
       },
-      "id": "a6425154-0f9e-462d-8be2-bae0fd0e1b30",
+      "id": "2be72ec6-13a3-4676-9615-922503ff7b86",
       "name": "WA Incoming",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        -3808,
-        4688
+        -3216,
+        7312
       ],
       "webhookId": "e9923675-4743-46f4-a258-d22234445f0c"
     },
@@ -21,13 +21,13 @@
       "parameters": {
         "jsCode": "const root = $json || {};\nconst envelope = root.body && typeof root.body === 'object' ? root.body : root;\nconst data = envelope.data && typeof envelope.data === 'object' ? envelope.data : (root.data || envelope);\nconst key = data.key || envelope.key || root.key || {};\nconst msg = data.message || envelope.message || root.message || {};\nfunction onlyDigits(value) { return String(value || '').split('@')[0].replace(/D/g, ''); }\nfunction firstPhone(candidates) { for (const candidate of candidates) { const digits = onlyDigits(candidate); if (digits.length >= 10) return digits; } return ''; }\nfunction unwrapMessage(message) {\n  let current = message || {};\n  for (let i = 0; i < 5; i += 1) {\n    if (current.ephemeralMessage?.message) current = current.ephemeralMessage.message;\n    else if (current.viewOnceMessage?.message) current = current.viewOnceMessage.message;\n    else if (current.viewOnceMessageV2?.message) current = current.viewOnceMessageV2.message;\n    else if (current.documentWithCaptionMessage?.message) current = current.documentWithCaptionMessage.message;\n    else break;\n  }\n  return current || {};\n}\nconst remoteJid = String(key.remoteJid || key.remoteJidAlt || data.remoteJid || data.from || envelope.from || root.from || '').trim();\nconst phone = firstPhone([key.remoteJid, key.remoteJidAlt, data.remoteJid, data.number, envelope.number, root.number, data.phone, envelope.phone, root.phone, data.sender, envelope.sender, root.sender]);\nconst innerMsg = unwrapMessage(msg);\nconst documentMessage = innerMsg.documentMessage || data.documentMessage || envelope.documentMessage || null;\nconst imageMessage = innerMsg.imageMessage || data.imageMessage || envelope.imageMessage || null;\nconst videoMessage = innerMsg.videoMessage || data.videoMessage || envelope.videoMessage || null;\nconst audioMessage = innerMsg.audioMessage || data.audioMessage || envelope.audioMessage || null;\nconst stickerMessage = innerMsg.stickerMessage || data.stickerMessage || envelope.stickerMessage || null;\nconst mimeType = String(imageMessage?.mimetype || documentMessage?.mimetype || data.mimetype || data.mimeType || envelope.mimetype || '').trim();\nconst filename = String(documentMessage?.fileName || imageMessage?.fileName || data.fileName || data.filename || envelope.fileName || '').trim();\nconst caption = String(imageMessage?.caption || documentMessage?.caption || innerMsg.videoMessage?.caption || '').trim();\nconst text = String(data.text || envelope.text || root.text || data.bodyText || envelope.bodyText || innerMsg.conversation || innerMsg.extendedTextMessage?.text || caption || innerMsg.buttonsResponseMessage?.selectedDisplayText || innerMsg.listResponseMessage?.title || innerMsg.templateButtonReplyMessage?.selectedDisplayText || '').trim();\nconst messageId = String(key.id || data.messageId || data.id || envelope.message_id || root.message_id || root.messageId || root.id || '').trim() || (phone ? phone + ':' + Date.now() : 'unknown:' + Date.now());\nconst fromMe = Boolean(key.fromMe || data.fromMe || envelope.fromMe || root.fromMe);\nconst messageType = String(data.messageType || envelope.messageType || root.messageType || '').trim();\nconst instance = String(envelope.instance || data.instance || root.instance || $env.EVOLUTION_INSTANCE_NAME || '').trim();\nconst isGroup = remoteJid.includes('@g.us');\nconst isPdf = /pdf/i.test(mimeType) || /\\.pdf$/i.test(filename) || (/document/i.test(messageType) && /pdf/i.test(filename + ' ' + mimeType));\nconst looksImageMime = /^image\\/(jpeg|jpg|png|webp)$/i.test(mimeType);\nconst isImage = Boolean(imageMessage || (documentMessage && looksImageMime) || /\\.(jpe?g|png|webp)$/i.test(filename));\nconst hasMedia = Boolean(documentMessage || imageMessage || videoMessage || audioMessage || stickerMessage || data.mediaMessage || mimeType || filename);\nconst canReply = Boolean(phone && !fromMe && !isGroup);\nreturn [{ json: { phone, remote_jid: remoteJid, message_text: text, message_id: messageId, message_type: messageType, push_name: data.pushName || envelope.pushName || root.pushName || data.push_name || envelope.push_name || '', instance, from_me: fromMe, is_group: isGroup, can_reply: canReply, is_valid_user_message: Boolean(canReply && (text || hasMedia)), current_date: new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' }), current_datetime: new Date().toISOString(), media: { has_media: hasMedia, is_pdf: isPdf, is_image: isImage, mime_type: mimeType || null, filename: filename || (isImage ? 'comprovante.jpg' : null), caption: caption || null, raw_document: documentMessage || null, raw_image: imageMessage || null }, raw: root } }];"
       },
-      "id": "196c63e9-aa92-4c3e-822d-f6ccea017325",
+      "id": "bf8be38f-da01-4d72-a8f6-b85744c4b5ab",
       "name": "Normalize Evolution Payload",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -3568,
-        4688
+        -2976,
+        7312
       ]
     },
     {
@@ -55,13 +55,13 @@
         },
         "options": {}
       },
-      "id": "e5f500cc-1c69-4e38-9274-4a9527a39fba",
+      "id": "e40e7b7a-2f6f-4d08-b7a2-e5ebc5862f6f",
       "name": "Is Valid User Message?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -3328,
-        4688
+        -2736,
+        7312
       ]
     },
     {
@@ -75,13 +75,13 @@
           "linkPreview": false
         }
       },
-      "id": "0a8e7895-fa5d-47d9-bc08-56efa31766bb",
+      "id": "1855468b-43f4-4340-b943-b9e782166761",
       "name": "Send Unsupported Message",
       "type": "n8n-nodes-evolution-api.evolutionApi",
       "typeVersion": 1,
       "position": [
-        -2496,
-        4880
+        -1904,
+        7504
       ],
       "credentials": {
         "evolutionApi": {
@@ -119,13 +119,13 @@
           }
         }
       },
-      "id": "0a038a90-1fcc-4bcb-bce2-29cc2cdcd250",
+      "id": "60ccffbf-7690-4112-8d4e-e0d1a378f399",
       "name": "Load Router Context",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
-        -2800,
-        4608
+        -2208,
+        7232
       ]
     },
     {
@@ -153,13 +153,13 @@
         },
         "options": {}
       },
-      "id": "2ac91552-1759-42f0-8b40-7be822525c11",
+      "id": "b9ce5ef1-5b4b-4f73-adc3-cb938f1b8e84",
       "name": "Authorized?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -2576,
-        4608
+        -1984,
+        7232
       ]
     },
     {
@@ -173,13 +173,13 @@
           "linkPreview": false
         }
       },
-      "id": "8416ab09-faa1-4bdf-a1c1-bc07813beaea",
+      "id": "601fc3b9-4128-4c75-9f3b-0a63eca3d1f5",
       "name": "Send Authorization Result",
       "type": "n8n-nodes-evolution-api.evolutionApi",
       "typeVersion": 1,
       "position": [
-        -2112,
-        4944
+        -1520,
+        7568
       ],
       "credentials": {
         "evolutionApi": {
@@ -193,19 +193,20 @@
         "promptType": "define",
         "text": "={{ (() => { const n = $('Normalize Evolution Payload').item.json || {}; const c = $('Load Router Context').item.json || {}; const conv = c.conversation || null; const caps = (c.capabilities || []).map(x => ({ workflow_key: String(x.workflow_key || ''), title: x.title || x.name || '', enabled: x.enabled !== false, maintenance_mode: x.maintenance_mode === true })).filter(x => x.workflow_key); return JSON.stringify({ message: n.message_text || '', current_date: n.current_date || '', timezone: 'America/Sao_Paulo', media: { has_media: !!n.media?.has_media, is_pdf: !!n.media?.is_pdf, is_image: !!n.media?.is_image }, conversation: conv ? { id: Number(conv.id || 0), state: conv.state || '', related_purchase_id: conv.related_purchase_id || null } : null, capabilities: caps }); })() }}\n",
         "options": {
-          "systemMessage": "Você é um classificador leve de rota do WhatsApp do AcerttaPay. Responda SOMENTE JSON válido, sem markdown. Sua única tarefa é escolher destino e se uma conversa pendente deve continuar ou ser interrompida. Não escreva resposta final de ação financeira.\n\nSchema:\n{\"intent\":\"help|greeting|conversation_reply|create_purchase|edit_purchase|delete_purchase|set_participants_later|query|recent_purchases|create_reminder|monthly_finance|shared_debt|month_close|pdf_import|category|intelligent_summary|unknown\",\"workflow_key\":\"1.1|1.2|1.3|1.4|2.1|3.1|4.1|5.1|6.1|7.1|8.1|8.2|null\",\"confidence\":0,\"direct_reply\":false,\"reply_text\":null,\"conversation_action\":\"none|continue|new_topic\",\"interrupt_conversation\":false,\"interrupted_reason\":null}\n\nRotas:\n1.1 criar compra no cartão. Ex.: \"Compra em Sam's Club no cartão Inter, 100 reais hoje\", \"comprei 42,26 no mercado\". Não precisa ter a palavra nova.\n1.2 editar/apagar/remover/excluir/corrigir compra.\n1.3 dividir/ratear/participantes de compra.\n2.1 consultas: resumo, fatura, saldo, quanto gastei, últimas compras, compras recentes, compras por cartão/pessoa.\n3.1 lembretes.\n4.1 Central de Acertos, cobrar, pagar, Pix de acerto.\n5.1 receitas/despesas mensais fora do cartão: salário, aluguel, internet, luz, água, boleto, conta mensal.\n6.1 fechamento/reabertura de mês.\n7.1 PDF de fatura.\n8.1 categorias/regras.\n8.2 resumos/insights inteligentes.\n\nConversa pendente:\nSe conversation.state existir e a mensagem for curta ou parecer resposta à pergunta pendente, use intent conversation_reply e a rota do estado.\nEstados 1.1: awaiting_purchase_create_confirmation, awaiting_card_confirmation, awaiting_card_selection, awaiting_card_choice, awaiting_split_confirmation.\nEstados 1.3: awaiting_split_participants, awaiting_split_mode, awaiting_exact_amounts.\nEstados 1.4: awaiting_receipt_purchase_confirmation, awaiting_receipt_purchase_details.\nEstados 1.2: awaiting_purchase_edit_confirmation, awaiting_purchase_delete_confirmation.\nEstados 4.1/5.1/6.1/7.1/8.1 seguem seus números.\n\nSe houver conversa pendente, mas o usuário mudar claramente de assunto, defina conversation_action new_topic e interrupt_conversation true, roteando o novo pedido. Exemplos: \"minhas últimas compras\", \"resumo do mês\", \"nova compra no mercado\", \"criar lembrete\", \"fatura do Inter\", \"menu\".\nSe for ajuda/menu/oi sem outro pedido: direct_reply true, workflow_key null, reply_text curto com menu.\nSe for ação financeira, direct_reply false; o backend confirma.\n\nExemplos:\n{\"message\":\"Compra em Sam's Club no cartão Inter, 100 reais hoje\"} => {\"intent\":\"create_purchase\",\"workflow_key\":\"1.1\",\"confidence\":0.95,\"direct_reply\":false,\"reply_text\":null,\"conversation_action\":\"none\",\"interrupt_conversation\":false,\"interrupted_reason\":null}\nCom conversation.state awaiting_purchase_delete_confirmation e message \"Apagar\" => {\"intent\":\"conversation_reply\",\"workflow_key\":\"1.2\",\"confidence\":0.95,\"direct_reply\":false,\"reply_text\":null,\"conversation_action\":\"continue\",\"interrupt_conversation\":false,\"interrupted_reason\":null}\nCom conversa pendente e message \"minhas últimas compras\" => {\"intent\":\"recent_purchases\",\"workflow_key\":\"2.1\",\"confidence\":0.93,\"direct_reply\":false,\"reply_text\":null,\"conversation_action\":\"new_topic\",\"interrupt_conversation\":true,\"interrupted_reason\":\"user_changed_subject\"}\n",
+          "systemMessage": "Você é o classificador leve de rota do WhatsApp do AcerttaPay. Responda SOMENTE JSON válido, sem markdown. Sua única tarefa é escolher o destino da mensagem e dizer se uma conversa pendente deve continuar ou ser interrompida. Não escreva mensagem bonita, não formate menu e não execute ação financeira.\n\nSchema obrigatório:\n{\"intent\":\"help|greeting|conversation_reply|create_purchase|edit_purchase|delete_purchase|set_participants_later|query|recent_purchases|create_reminder|monthly_finance|pdf_import|unsupported_removed_feature|unknown\",\"workflow_key\":\"1.1|1.2|1.3|1.4|2.1|3.1|5.1|7.1|null\",\"confidence\":0,\"direct_reply\":false,\"reply_text\":null,\"conversation_action\":\"none|continue|new_topic\",\"interrupt_conversation\":false,\"interrupted_reason\":null}\n\nRotas:\n1.1 criar compra no cartão. Ex.: \"Compra em Sam's Club no cartão Inter, 100 reais hoje\", \"comprei 42,26 no mercado\". Não precisa ter a palavra nova.\n1.2 editar, corrigir, apagar, remover ou excluir compra.\n1.3 dividir, ratear ou definir participantes de compra.\n2.1 consultas: resumo, fatura, saldo, quanto gastei, últimas compras, compras recentes, compras por cartão/pessoa.\n3.1 lembretes.\n5.1 receitas/despesas mensais fora do cartão: salário, aluguel, internet, luz, água, boleto, conta mensal.\n7.1 PDF de fatura.\n\nConversa pendente:\nSe conversation.state existir e a mensagem for curta ou parecer resposta à pergunta pendente, use intent conversation_reply e a rota do estado.\nEstados 1.1: awaiting_purchase_create_confirmation, awaiting_card_confirmation, awaiting_card_selection, awaiting_card_choice, awaiting_split_confirmation.\nEstados 1.3: awaiting_split_participants, awaiting_split_mode, awaiting_exact_amounts.\nEstados 1.4: awaiting_receipt_purchase_confirmation, awaiting_receipt_purchase_details.\nEstados 1.2: awaiting_purchase_edit_confirmation, awaiting_purchase_delete_confirmation, awaiting_purchase_mutation_period, awaiting_purchase_selection_for_correction, awaiting_purchase_correction_details.\nEstados 1.3: awaiting_split_participants, awaiting_split_mode, awaiting_exact_amounts, awaiting_purchase_participants_period, awaiting_purchase_selection_for_participants.\nEstados 2.1: awaiting_purchase_query_period.\nEstados 5.1/7.1 seguem seus números.\n\nSe houver conversa pendente, mas o usuário mudar claramente de assunto, defina conversation_action new_topic e interrupt_conversation true, roteando o novo pedido. Exemplos: \"minhas últimas compras\", \"resumo do mês\", \"nova compra no mercado\", \"criar lembrete\", \"fatura do Inter\", \"menu\".\nSe for ajuda/menu/oi sem outro pedido: direct_reply true, workflow_key null, reply_text curto com o objetivo, como \"menu\". A resposta final será escrita por outra IA.\nSe for ação financeira, direct_reply false; o backend confirma.\n\nExemplos:\n{\"message\":\"Compra em Sam's Club no cartão Inter, 100 reais hoje\"} => {\"intent\":\"create_purchase\",\"workflow_key\":\"1.1\",\"confidence\":0.95,\"direct_reply\":false,\"reply_text\":null,\"conversation_action\":\"none\",\"interrupt_conversation\":false,\"interrupted_reason\":null}\nCom conversation.state awaiting_purchase_delete_confirmation e message \"Apagar\" => {\"intent\":\"conversation_reply\",\"workflow_key\":\"1.2\",\"confidence\":0.95,\"direct_reply\":false,\"reply_text\":null,\"conversation_action\":\"continue\",\"interrupt_conversation\":false,\"interrupted_reason\":null}\nCom conversa pendente e message \"minhas últimas compras\" => {\"intent\":\"recent_purchases\",\"workflow_key\":\"2.1\",\"confidence\":0.93,\"direct_reply\":false,\"reply_text\":null,\"conversation_action\":\"new_topic\",\"interrupt_conversation\":true,\"interrupted_reason\":\"user_changed_subject\"}\nFunções removidas do WhatsApp: Central de Acertos/Pix de acerto/cobranças, fechamento/reabertura de mês, categorias/regras e resumos inteligentes. Se o usuário pedir uma dessas, retorne direct_reply=true, workflow_key=null, intent=\"unsupported_removed_feature\" e reply_text curto dizendo que essa parte fica no app.\nPara listar compras, corrigir compra ou dividir gasto sem mês claro, roteie para o fluxo correto; o backend vai perguntar a fatura/mês.\n",
           "maxIterations": 1,
           "returnIntermediateSteps": false
         }
       },
-      "id": "e1663641-7d3e-45ee-8cac-00961bba9152",
+      "id": "f8f7d009-bb10-43ac-b65d-f64a07afaad3",
       "name": "AI Initial Router",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3.1,
       "position": [
-        -1984,
-        3904
-      ]
+        -1392,
+        6528
+      ],
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -214,13 +215,13 @@
           "temperature": 0
         }
       },
-      "id": "a9995bd0-fd46-478c-bbda-778bdbcbb279",
+      "id": "2b521ed0-4543-4178-88ea-e0e62ec78228",
       "name": "Gemini Chat Model - Initial Router",
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1.1,
       "position": [
-        -1984,
-        4144
+        -1392,
+        6768
       ],
       "credentials": {
         "googlePalmApi": {
@@ -236,13 +237,13 @@
         "sessionTTL": "={{ Number($env.ACERTTAPAY_N8N_MEMORY_TTL_SECONDS || 86400) }}",
         "contextWindowLength": 10
       },
-      "id": "9b20fdaf-7d05-4c69-ab9d-b25fe61baa30",
-      "name": "Redis Chat Memory - Initial Router",
+      "id": "f8f749c4-5b54-4b3a-9851-548b5e2e3017",
+      "name": "Redis Chat Memory - Reply Formatter",
       "type": "@n8n/n8n-nodes-langchain.memoryRedisChat",
       "typeVersion": 1.4,
       "position": [
-        -1888,
-        4336
+        -640,
+        6816
       ],
       "credentials": {
         "redis": {
@@ -253,26 +254,26 @@
     },
     {
       "parameters": {},
-      "id": "8b8c8265-500d-4e17-bca4-255ce8da37f9",
-      "name": "Think Tool - Initial Router",
+      "id": "57b07750-d738-4bc8-bada-33f8ea6af3ee",
+      "name": "Think Tool - Reply Formatter",
       "type": "@n8n/n8n-nodes-langchain.toolThink",
       "typeVersion": 1,
       "position": [
-        -1856,
-        4528
+        -544,
+        6976
       ]
     },
     {
       "parameters": {
-        "jsCode": "function cleanJsonContent(value) {\n  if (value && typeof value === 'object') return value;\n  const raw = String(value || '').trim();\n  if (!raw) return '';\n  const fence = String.fromCharCode(96, 96, 96);\n  const noFence = raw\n    .replace(new RegExp('^' + fence + 'json', 'i'), '')\n    .replace(new RegExp('^' + fence, 'i'), '')\n    .replace(new RegExp(fence + '$', 'i'), '')\n    .trim();\n  const first = noFence.indexOf('{');\n  const last = noFence.lastIndexOf('}');\n  return first >= 0 && last > first ? noFence.slice(first, last + 1) : noFence;\n}\nconst context = $('Load Router Context').item.json || {};\nconst normalized = $('Normalize Evolution Payload').item.json || {};\nconst workflowNames = {\n  '1.1': '1.1 - ACERTTAPAY_COMPRA_ASSISTIDA_CONCIERGE',\n  '1.2': '1.2 - ACERTTAPAY_COMPRA_ASSISTIDA_CORRECOES',\n  '1.3': '1.3 - ACERTTAPAY_COMPRA_ASSISTIDA_PARTICIPANTES',\n  '1.4': '1.4 - ACERTTAPAY_COMPRA_ASSISTIDA_COMPROVANTE',\n  '2.1': '2.1 - ACERTTAPAY_CONSULTAS_FINANCEIRAS',\n  '3.1': '3.1 - ACERTTAPAY_LEMBRETES',\n  '4.1': '4.1 - ACERTTAPAY_CENTRAL_DE_ACERTOS',\n  '5.1': '5.1 - ACERTTAPAY_FINANCAS_MENSAIS',\n  '6.1': '6.1 - ACERTTAPAY_FECHAMENTO_ASSISTIDO',\n  '7.1': '7.1 - ACERTTAPAY_IMPORTACAO_PDF_WHATSAPP',\n  '8.1': '8.1 - ACERTTAPAY_CATEGORIAS_E_APRENDIZADO',\n  '8.2': '8.2 - ACERTTAPAY_RESUMOS_INTELIGENTES'\n};\nconst workflowIds = {\n  '1.1': 'kY4pKPsY43CGrDXI',\n  '1.2': 'bRPTKY7haGfArUZu',\n  '1.3': 'pklZha3lbW45LvWo',\n  '1.4': 'Vj7pC4wimRx7ZQj2',\n  '2.1': 'TrL01J5rjcztcoUy',\n  '3.1': 'yE3YCD9V8F05XCUC',\n  '4.1': 'SwEvY2WXaQxujZpQ',\n  '5.1': 'hjvfuEAG7KxhtQi6',\n  '6.1': '9OFl9IzfPUDCigFx',\n  '7.1': 'P8gk42Ccgrsw7imb',\n  '8.1': 'jC8o9QQWT82h8V98',\n  '8.2': 'y658nYdBc5f0ikgg'\n};\nconst stateMap = {\n  awaiting_purchase_create_confirmation: '1.1',\n  awaiting_card_confirmation: '1.1',\n  awaiting_card_selection: '1.1',\n  awaiting_card_choice: '1.1',\n  awaiting_split_confirmation: '1.1',\n  awaiting_split_participants: '1.3',\n  awaiting_split_mode: '1.3',\n  awaiting_exact_amounts: '1.3',\n  awaiting_receipt_purchase_confirmation: '1.4',\n  awaiting_receipt_purchase_details: '1.4',\n  awaiting_purchase_edit_confirmation: '1.2',\n  awaiting_purchase_delete_confirmation: '1.2',\n  awaiting_shared_debt_action_confirmation: '4.1',\n  awaiting_monthly_finance_action_confirmation: '5.1',\n  awaiting_month_close_action_confirmation: '6.1',\n  awaiting_pdf_import_details: '7.1',\n  awaiting_category_rule_confirmation: '8.1'\n};\nfunction menuText() {\n  return context.menu?.text || 'Me manda do seu jeito. Posso registrar compra, consultar gastos, criar lembretes, cuidar da Central de Acertos, importar PDF e gerar resumos.';\n}\nlet parsed;\ntry {\n  const cleaned = cleanJsonContent($json.output ?? $json.text ?? $json.response ?? '');\n  parsed = typeof cleaned === 'object' ? cleaned : JSON.parse(cleaned);\n} catch (error) {\n  const fallbackWorkflow = stateMap[String(context.conversation?.state || '')] || null;\n  parsed = fallbackWorkflow\n    ? {\n        intent: 'conversation_reply',\n        workflow_key: fallbackWorkflow,\n        confidence: 0.1,\n        direct_reply: false,\n        reply_text: null,\n        conversation_action: 'continue',\n        interrupt_conversation: false,\n        routed_by: 'router_ai_fallback_state'\n      }\n    : {\n        intent: 'unknown',\n        workflow_key: null,\n        confidence: 0,\n        direct_reply: true,\n        reply_text: menuText(),\n        conversation_action: 'none',\n        interrupt_conversation: false,\n        routed_by: 'router_ai_parse_error'\n      };\n}\nif (!parsed || typeof parsed !== 'object') {\n  parsed = { intent: 'unknown', workflow_key: null, confidence: 0, direct_reply: true, reply_text: menuText(), conversation_action: 'none', interrupt_conversation: false };\n}\nconst directIntents = new Set(['help', 'greeting', 'unknown']);\nconst capabilities = context.capabilities || [];\nconst workflowKey = parsed.workflow_key ? String(parsed.workflow_key) : '';\nconst capability = capabilities.find((item) => String(item.workflow_key) === workflowKey);\nconst interruptConversation = parsed.interrupt_conversation === true && Boolean(context.conversation?.id);\nconst conversationAction = interruptConversation ? 'new_topic' : (parsed.conversation_action || (context.conversation?.state ? 'continue' : 'none'));\nlet directReply = parsed.direct_reply === true || directIntents.has(String(parsed.intent || '')) || !workflowKey;\nlet replyText = parsed.reply_text || menuText();\nif (!directReply && capability && capability.enabled === false) {\n  directReply = true;\n  replyText = capability.maintenance_mode\n    ? 'Esse fluxo está em manutenção agora. Tenta daqui a pouco que eu volto com a prancheta.'\n    : 'Essa função do WhatsApp está desligada para seu usuário no AcerttaPay.';\n}\nconst workflowName = workflowNames[workflowKey] || null;\nconst workflowId = workflowIds[workflowKey] || null;\nconst conversationForSubflow = interruptConversation ? null : context.conversation;\nreturn [{\n  json: {\n    router: {\n      workflow_key: workflowKey || (directReply ? '0.0' : null),\n      workflow_name: workflowName,\n      workflow_id: workflowId,\n      intent: parsed.intent || 'unknown',\n      confidence: Number(parsed.confidence || 0),\n      routed_by: parsed.routed_by || 'ai_intent_classifier',\n      conversation_action: conversationAction,\n      interrupt_conversation: interruptConversation,\n      interrupted_reason: parsed.interrupted_reason || null\n    },\n    target_workflow_name: workflowName,\n    target_workflow_id: workflowId,\n    direct_reply: directReply,\n    reply_text: replyText,\n    user: context.user,\n    conversation: conversationForSubflow,\n    interrupted_conversation: interruptConversation ? context.conversation : null,\n    capabilities,\n    whatsapp: normalized,\n    media: normalized.media || {},\n    source: { channel: 'whatsapp', instance: normalized.instance, message_id: normalized.message_id, raw_text: normalized.message_text },\n    runtime: { timezone: 'America/Sao_Paulo', current_date: normalized.current_date, current_datetime: normalized.current_datetime }\n  }\n}];\n"
+        "jsCode": "function cleanJsonContent(value) {\n  if (value && typeof value === 'object') return value;\n  const raw = String(value || '').trim();\n  if (!raw) return '';\n  const fence = String.fromCharCode(96, 96, 96);\n  const noFence = raw\n    .replace(new RegExp('^' + fence + 'json', 'i'), '')\n    .replace(new RegExp('^' + fence, 'i'), '')\n    .replace(new RegExp(fence + '$', 'i'), '')\n    .trim();\n  const first = noFence.indexOf('{');\n  const last = noFence.lastIndexOf('}');\n  return first >= 0 && last > first ? noFence.slice(first, last + 1) : noFence;\n}\nconst context = $('Load Router Context').item.json || {};\nconst normalized = $('Normalize Evolution Payload').item.json || {};\nconst workflowNames = {\n  '1.1': '1.1 - ACERTTAPAY_COMPRA_ASSISTIDA_CONCIERGE',\n  '1.2': '1.2 - ACERTTAPAY_COMPRA_ASSISTIDA_CORRECOES',\n  '1.3': '1.3 - ACERTTAPAY_COMPRA_ASSISTIDA_PARTICIPANTES',\n  '1.4': '1.4 - ACERTTAPAY_COMPRA_ASSISTIDA_COMPROVANTE',\n  '2.1': '2.1 - ACERTTAPAY_CONSULTAS_FINANCEIRAS',\n  '3.1': '3.1 - ACERTTAPAY_LEMBRETES',\n  '4.1': '4.1 - ACERTTAPAY_CENTRAL_DE_ACERTOS',\n  '5.1': '5.1 - ACERTTAPAY_FINANCAS_MENSAIS',\n  '6.1': '6.1 - ACERTTAPAY_FECHAMENTO_ASSISTIDO',\n  '7.1': '7.1 - ACERTTAPAY_IMPORTACAO_PDF_WHATSAPP',\n  '8.1': '8.1 - ACERTTAPAY_CATEGORIAS_E_APRENDIZADO',\n  '8.2': '8.2 - ACERTTAPAY_RESUMOS_INTELIGENTES'\n};\nconst workflowIds = {\n  '1.1': 'kY4pKPsY43CGrDXI',\n  '1.2': 'bRPTKY7haGfArUZu',\n  '1.3': 'pklZha3lbW45LvWo',\n  '1.4': 'Vj7pC4wimRx7ZQj2',\n  '2.1': 'TrL01J5rjcztcoUy',\n  '3.1': 'yE3YCD9V8F05XCUC',\n  '4.1': 'SwEvY2WXaQxujZpQ',\n  '5.1': 'hjvfuEAG7KxhtQi6',\n  '6.1': '9OFl9IzfPUDCigFx',\n  '7.1': 'P8gk42Ccgrsw7imb',\n  '8.1': 'jC8o9QQWT82h8V98',\n  '8.2': 'y658nYdBc5f0ikgg'\n};\nconst allowedWorkflows = new Set(['1.1', '1.2', '1.3', '1.4', '2.1', '3.1', '5.1', '7.1']);\nconst stateMap = {\n  awaiting_purchase_create_confirmation: '1.1',\n  awaiting_card_confirmation: '1.1',\n  awaiting_card_selection: '1.1',\n  awaiting_card_choice: '1.1',\n  awaiting_split_confirmation: '1.1',\n  awaiting_split_participants: '1.3',\n  awaiting_split_mode: '1.3',\n  awaiting_exact_amounts: '1.3',\n  awaiting_receipt_purchase_confirmation: '1.4',\n  awaiting_receipt_purchase_details: '1.4',\n  awaiting_purchase_edit_confirmation: '1.2',\n  awaiting_purchase_delete_confirmation: '1.2',\n  awaiting_purchase_mutation_period: '1.2',\n  awaiting_purchase_selection_for_correction: '1.2',\n  awaiting_purchase_correction_details: '1.2',\n  awaiting_purchase_participants_period: '1.3',\n  awaiting_purchase_selection_for_participants: '1.3',\n  awaiting_purchase_query_period: '2.1',\n  awaiting_monthly_finance_action_confirmation: '5.1',\n  awaiting_pdf_import_details: '7.1'\n};\nfunction menuText() {\n  return context.menu?.text || 'Me manda do seu jeito. Posso registrar compra, consultar gastos por mês, criar lembretes, lançar finanças mensais e importar PDF.';\n}\nlet parsed;\ntry {\n  const cleaned = cleanJsonContent($json.output ?? $json.text ?? $json.response ?? '');\n  parsed = typeof cleaned === 'object' ? cleaned : JSON.parse(cleaned);\n} catch (error) {\n  const fallbackWorkflow = stateMap[String(context.conversation?.state || '')] || null;\n  parsed = fallbackWorkflow\n    ? {\n        intent: 'conversation_reply',\n        workflow_key: fallbackWorkflow,\n        confidence: 0.1,\n        direct_reply: false,\n        reply_text: null,\n        conversation_action: 'continue',\n        interrupt_conversation: false,\n        routed_by: 'router_ai_fallback_state'\n      }\n    : {\n        intent: 'unknown',\n        workflow_key: null,\n        confidence: 0,\n        direct_reply: true,\n        reply_text: menuText(),\n        conversation_action: 'none',\n        interrupt_conversation: false,\n        routed_by: 'router_ai_parse_error'\n      };\n}\nif (!parsed || typeof parsed !== 'object') {\n  parsed = { intent: 'unknown', workflow_key: null, confidence: 0, direct_reply: true, reply_text: menuText(), conversation_action: 'none', interrupt_conversation: false };\n}\nconst directIntents = new Set(['help', 'greeting', 'unknown']);\nconst capabilities = context.capabilities || [];\nconst workflowKey = parsed.workflow_key ? String(parsed.workflow_key) : '';\nconst capability = capabilities.find((item) => String(item.workflow_key) === workflowKey);\nconst interruptConversation = parsed.interrupt_conversation === true && Boolean(context.conversation?.id);\nconst conversationAction = interruptConversation ? 'new_topic' : (parsed.conversation_action || (context.conversation?.state ? 'continue' : 'none'));\nlet directReply = parsed.direct_reply === true || directIntents.has(String(parsed.intent || '')) || !workflowKey;\nlet replyText = parsed.reply_text || menuText();\nif (!directReply && workflowKey && !allowedWorkflows.has(workflowKey)) {\n  directReply = true;\n  replyText = 'Essa função ficou fora do WhatsApp para evitar confusão. Pelo WhatsApp eu posso ajudar com compras, consultas por mês, lembretes, finanças mensais e PDF. Para Central de Acertos, fechamento ou inteligência avançada, use o app.';\n}\nif (!directReply && capability && capability.enabled === false) {\n  directReply = true;\n  replyText = capability.maintenance_mode\n    ? 'Esse fluxo está em manutenção agora. Tenta daqui a pouco que eu volto com a prancheta.'\n    : 'Essa função do WhatsApp está desligada para seu usuário no AcerttaPay.';\n}\nconst workflowName = workflowNames[workflowKey] || null;\nconst workflowId = workflowIds[workflowKey] || null;\nconst conversationForSubflow = interruptConversation ? null : context.conversation;\nreturn [{\n  json: {\n    router: {\n      workflow_key: workflowKey || (directReply ? '0.0' : null),\n      workflow_name: workflowName,\n      workflow_id: workflowId,\n      intent: parsed.intent || 'unknown',\n      confidence: Number(parsed.confidence || 0),\n      routed_by: parsed.routed_by || 'ai_intent_classifier',\n      conversation_action: conversationAction,\n      interrupt_conversation: interruptConversation,\n      interrupted_reason: parsed.interrupted_reason || null\n    },\n    target_workflow_name: workflowName,\n    target_workflow_id: workflowId,\n    direct_reply: directReply,\n    reply_text: replyText,\n    user: context.user,\n    conversation: conversationForSubflow,\n    interrupted_conversation: interruptConversation ? context.conversation : null,\n    capabilities,\n    whatsapp: normalized,\n    media: normalized.media || {},\n    source: { channel: 'whatsapp', instance: normalized.instance, message_id: normalized.message_id, raw_text: normalized.message_text },\n    runtime: { timezone: 'America/Sao_Paulo', current_date: normalized.current_date, current_datetime: normalized.current_datetime }\n  }\n}];\n"
       },
-      "id": "a39cd22f-4311-4f3d-b2d8-a49bdf638da9",
+      "id": "caaaafec-6785-46c0-972e-72f59a7a3a32",
       "name": "Build Route",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1616,
-        3904
+        -1232,
+        7152
       ]
     },
     {
@@ -300,13 +301,13 @@
         },
         "options": {}
       },
-      "id": "2fe89141-c06d-4175-8633-723aac33ca74",
+      "id": "53b3fbd7-a80a-42d5-835a-4e90b0f8bcd9",
       "name": "Direct Reply?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -1504,
-        4624
+        -912,
+        7248
       ]
     },
     {
@@ -329,39 +330,39 @@
           "waitForSubWorkflow": true
         }
       },
-      "id": "f43e5d0b-a78d-4de0-96fb-d59e00494cd1",
+      "id": "9f003edf-ea09-431a-b0b9-2e5415acd6fa",
       "name": "Execute Routed Subworkflow",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
       "position": [
-        -1232,
-        4704
+        -640,
+        7328
       ]
     },
     {
       "parameters": {
         "jsCode": "const root = $json || {};\nconst original = $('Direct Reply?').item.json || {};\nconst text = String(root.outbound_text || root.whatsapp?.text || root.message || root.reply_text || original.reply_text || 'Pedido processado no AcerttaPay.').trim();\nreturn [{\n  json: {\n    ...root,\n    router: root.router || original.router,\n    user: root.user || original.user,\n    conversation: root.conversation || original.conversation,\n    capabilities: root.capabilities || original.capabilities,\n    whatsapp: { ...(original.whatsapp || {}), ...(root.whatsapp || {}), text },\n    outbound_text: text,\n    source: root.source || original.source,\n    media: root.media || original.media,\n    runtime: root.runtime || original.runtime\n  }\n}];"
       },
-      "id": "af24e188-3b58-4f12-922e-1146d51690fa",
+      "id": "14108d5c-8d14-4a60-b612-9a2d53bad584",
       "name": "Normalize Subflow Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -976,
-        4704
+        -384,
+        7328
       ]
     },
     {
       "parameters": {
-        "jsCode": "const root = $json || {};\nconst text = String(root.reply_text || root.whatsapp?.text || 'Me manda do seu jeito.').trim();\nreturn [{ json: { ...root, whatsapp: { ...(root.whatsapp || {}), text }, outbound_text: text } }];"
+        "jsCode": "function cleanJsonContent(value) {\n  if (value && typeof value === 'object') return value;\n  const raw = String(value || '').trim();\n  if (!raw) return '';\n  const fence = String.fromCharCode(96, 96, 96);\n  const noFence = raw\n    .replace(new RegExp('^' + fence + 'json', 'i'), '')\n    .replace(new RegExp('^' + fence, 'i'), '')\n    .replace(new RegExp(fence + '$', 'i'), '')\n    .trim();\n  const first = noFence.indexOf('{');\n  const last = noFence.lastIndexOf('}');\n  return first >= 0 && last > first ? noFence.slice(first, last + 1) : noFence;\n}\nfunction nodeJson(name) {\n  try { return $(name).item.json || null; } catch (error) { return null; }\n}\nfunction formatterText(root) {\n  const raw = root.output ?? root.text ?? root.response ?? root.reply_text ?? '';\n  if (!raw || typeof raw !== 'string') return '';\n  try {\n    const cleaned = cleanJsonContent(raw);\n    const parsed = typeof cleaned === 'object' ? cleaned : JSON.parse(cleaned);\n    return String(parsed.text || parsed.message || parsed.reply_text || '').trim();\n  } catch (error) {\n    return String(raw).trim();\n  }\n}\nconst formatter = $json || {};\nconst base = nodeJson('Direct Reply?') || nodeJson('Build Route') || nodeJson('Prepare Deterministic Route') || {};\nconst fallbackMenu = 'Oi! 👋 Eu sou o concierge do AcerttaPay.\\n\\nPosso te ajudar pelo WhatsApp com:\\n\\n🧾 *Compras*\\n• registrar compra por texto\\n• enviar foto de comprovante\\n• corrigir ou apagar compra por fatura/mês\\n• dividir uma compra escolhida com amigos ou contatos\\n\\n📊 *Consultas*\\n• gastos do mês\\n• fatura do cartão\\n• listar compras por fatura/mês\\n\\n⏰ *Lembretes*\\n• criar, listar, concluir ou adiar lembretes\\n\\n📒 *Finanças mensais*\\n• lançar aluguel, salário, contas e receitas fora do cartão\\n\\n📄 *PDF*\\n• enviar fatura para revisão no app\\n\\nMe manda do seu jeito. Ex.: “Quanto gastei esse mês?” ou “Nova compra hoje de R$ 50 no iFood”.';\nconst text = formatterText(formatter) || String(base.reply_text || base.whatsapp?.text || fallbackMenu).trim();\nreturn [{\n  json: {\n    ...base,\n    reply_formatter: {\n      used: Boolean(formatter.output || formatter.text || formatter.response),\n      fallback_used: !Boolean(formatterText(formatter)),\n      error: formatter.error || null\n    },\n    whatsapp: { ...(base.whatsapp || {}), text },\n    outbound_text: text\n  }\n}];"
       },
-      "id": "eb94d39d-7310-46a9-8a30-f8957580e463",
+      "id": "5189c49a-1a1d-4730-b370-af4e58a60068",
       "name": "Build Direct Reply",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1232,
-        4512
+        -640,
+        7136
       ]
     },
     {
@@ -393,13 +394,13 @@
           }
         }
       },
-      "id": "6f607bf3-4619-4b5b-951f-8c2de2cf262d",
+      "id": "53221cd7-6b9f-472e-8d6c-d576a8497ffe",
       "name": "Log Router Intent",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
-        -704,
-        4528
+        368,
+        7072
       ]
     },
     {
@@ -413,13 +414,13 @@
           "linkPreview": false
         }
       },
-      "id": "2490b75d-f2f0-44d5-a675-39a5bbcbbc63",
+      "id": "3cb271b5-5bfd-48bd-9224-1383e83c5334",
       "name": "Send Final WhatsApp Reply",
       "type": "n8n-nodes-evolution-api.evolutionApi",
       "typeVersion": 1,
       "position": [
-        -704,
-        4704
+        -64,
+        7248
       ],
       "credentials": {
         "evolutionApi": {
@@ -432,13 +433,13 @@
       "parameters": {
         "jsCode": "const context = $('Load Router Context').item.json || {};\nconst normalized = $('Normalize Evolution Payload').item.json || {};\nconst workflowNames = {\n  '1.1': '1.1 - ACERTTAPAY_COMPRA_ASSISTIDA_CONCIERGE',\n  '1.2': '1.2 - ACERTTAPAY_COMPRA_ASSISTIDA_CORRECOES',\n  '1.3': '1.3 - ACERTTAPAY_COMPRA_ASSISTIDA_PARTICIPANTES',\n  '1.4': '1.4 - ACERTTAPAY_COMPRA_ASSISTIDA_COMPROVANTE',\n  '2.1': '2.1 - ACERTTAPAY_CONSULTAS_FINANCEIRAS',\n  '3.1': '3.1 - ACERTTAPAY_LEMBRETES',\n  '4.1': '4.1 - ACERTTAPAY_CENTRAL_DE_ACERTOS',\n  '5.1': '5.1 - ACERTTAPAY_FINANCAS_MENSAIS',\n  '6.1': '6.1 - ACERTTAPAY_FECHAMENTO_ASSISTIDO',\n  '7.1': '7.1 - ACERTTAPAY_IMPORTACAO_PDF_WHATSAPP',\n  '8.1': '8.1 - ACERTTAPAY_CATEGORIAS_E_APRENDIZADO',\n  '8.2': '8.2 - ACERTTAPAY_RESUMOS_INTELIGENTES'\n};\nconst workflowIds = {\n  '1.1': 'kY4pKPsY43CGrDXI',\n  '1.2': 'bRPTKY7haGfArUZu',\n  '1.3': 'pklZha3lbW45LvWo',\n  '1.4': 'Vj7pC4wimRx7ZQj2',\n  '2.1': 'TrL01J5rjcztcoUy',\n  '3.1': 'yE3YCD9V8F05XCUC',\n  '3.2': 'fRFKqIsv6HTWVgMh',\n  '4.1': 'SwEvY2WXaQxujZpQ',\n  '5.1': 'hjvfuEAG7KxhtQi6',\n  '6.1': '9OFl9IzfPUDCigFx',\n  '7.1': 'P8gk42Ccgrsw7imb',\n  '8.1': 'jC8o9QQWT82h8V98',\n  '8.2': 'y658nYdBc5f0ikgg'\n};\nfunction buildBase() {\n  return {\n    user: context.user,\n    conversation: context.conversation,\n    capabilities: context.capabilities || [],\n    whatsapp: normalized,\n    media: normalized.media || {},\n    source: {\n      channel: 'whatsapp',\n      instance: normalized.instance,\n      message_id: normalized.message_id,\n      raw_text: normalized.message_text\n    },\n    runtime: {\n      timezone: 'America/Sao_Paulo',\n      current_date: normalized.current_date,\n      current_datetime: normalized.current_datetime\n    }\n  };\n}\nfunction route(workflowKey, intent, routedBy) {\n  return {\n    ...buildBase(),\n    skip_ai: true,\n    direct_reply: false,\n    router: {\n      workflow_key: workflowKey,\n      workflow_name: workflowNames[workflowKey] || null,\n      workflow_id: workflowIds[workflowKey] || null,\n      intent,\n      confidence: 1,\n      routed_by: routedBy,\n      conversation_action: 'none',\n      interrupt_conversation: false\n    },\n    target_workflow_name: workflowNames[workflowKey] || null,\n    target_workflow_id: workflowIds[workflowKey] || null\n  };\n}\nfunction direct(intent, text, routedBy) {\n  return {\n    ...buildBase(),\n    skip_ai: true,\n    direct_reply: true,\n    reply_text: text,\n    router: {\n      workflow_key: '0.0',\n      workflow_name: '0.0 - ACERTTAPAY_FLUXO_INICIAL',\n      workflow_id: 'stcHf4DYEiMVhOax',\n      intent,\n      confidence: 1,\n      routed_by: routedBy,\n      conversation_action: 'none',\n      interrupt_conversation: false\n    },\n    target_workflow_name: null,\n    target_workflow_id: null\n  };\n}\n\n// A partir daqui, decisões semânticas ficam com o AI Initial Router.\n// Este nó só mantém guardrails objetivos de mídia e evita regex de intenção.\nif (normalized.media?.is_pdf) {\n  return [{ json: route('7.1', 'pdf_import', 'media_pdf_guard') }];\n}\nif (normalized.media?.is_image) {\n  return [{ json: route('1.4', 'receipt_image_purchase', 'media_image_guard') }];\n}\nif (normalized.media?.has_media && !normalized.message_text) {\n  return [{ json: direct('unsupported_media', 'Ainda não consigo atender esse tipo de mensagem por aqui. Me manda em texto? Se for fatura, pode enviar o PDF; se for comprovante de compra, pode enviar uma foto JPG, PNG ou WEBP.', 'media_guard') }];\n}\nreturn [{ json: { ...buildBase(), skip_ai: false } }];\n"
       },
-      "id": "6e49dfe3-d038-40cd-ac8c-b2cea148c67f",
+      "id": "d6dabc9e-797a-4ed6-8fd6-0571b3bebfe7",
       "name": "Prepare Deterministic Route",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -2352,
-        4608
+        -1760,
+        7232
       ]
     },
     {
@@ -466,13 +467,13 @@
         },
         "options": {}
       },
-      "id": "efcee054-ed7b-4c0d-8ed2-d1b89b51aae1",
+      "id": "bde8a4ac-6fdd-4af7-9295-24bcadf28420",
       "name": "Needs AI Router?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -2128,
-        4608
+        -1536,
+        7232
       ]
     },
     {
@@ -500,25 +501,128 @@
         },
         "options": {}
       },
-      "id": "79dcab2d-3bae-4eb3-b117-f70f5cc6a605",
+      "id": "b3bff29a-7598-485b-929e-07227eabc435",
       "name": "Can Reply Unsupported?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -2752,
-        4896
+        -2160,
+        7520
       ]
     },
     {
       "parameters": {},
-      "id": "8740d243-d307-4f99-845d-426cbb78b747",
+      "id": "934e7463-bfbc-4496-a1c4-f213504dc66e",
       "name": "Ignore Unsupported Message",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        -2496,
-        5024
+        -1904,
+        7648
       ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ (() => { const n = $('Normalize Evolution Payload').item.json || {}; const c = $('Load Router Context').item.json || {}; const r = $json || {}; return JSON.stringify({ message: n.message_text || '', current_date: n.current_date || '', current_datetime: n.current_datetime || '', timezone: 'America/Sao_Paulo', user: c.user ? { name: c.user.name || c.user.display_name || '', phone: c.user.phone || n.phone || '' } : null, menu: c.menu || null, capabilities: c.capabilities || [], conversation: c.conversation || null, router: r.router || null, raw_reply_text: r.reply_text || '', media: n.media || {}, source: { channel: 'whatsapp', instance: n.instance, message_id: n.message_id } }); })() }}\n",
+        "options": {
+          "systemMessage": "Você é a IA premium de resposta curta do orquestrador WhatsApp do AcerttaPay. Esta etapa NÃO decide rota e NÃO executa ações. A rota já foi decidida pelo classificador leve; sua função é transformar uma resposta direta do orquestrador em uma mensagem bonita, clara e humana para WhatsApp.\n\nResponda SOMENTE JSON válido:\n{\"text\":\"mensagem final\"}\n\nRegras:\n- Não mencione workflow, endpoint, JSON, rota, classificador, token, IA ou detalhes técnicos.\n- Não prometa que uma ação financeira foi executada. Para compras, exclusões, edições, divisões, lembretes e acertos, apenas oriente o usuário a pedir a ação quando a rota não puder seguir.\n- Se o usuário pedir menu, ajuda, oi, ou se a intenção for unknown, escreva um menu amigável e útil com o que o AcerttaPay faz no WhatsApp.\n- O menu precisa preservar TODAS as capacidades ativas recebidas em menu/capabilities/contexto. Você pode melhorar o estilo, mas não pode remover funções ativas.\n- Quando menu.text existir no contexto, ele é a fonte canônica das capacidades. Reescreva com o estilo do AcerttaPay, sem podar itens.\n- Use linguagem leve do AcerttaPay, com um toque simpático, sem exagerar.\n- Pode usar formatação de WhatsApp: *negrito*, bullets e emojis discretos.\n- Seja objetivo. Menus completos podem ter até 1300 caracteres; respostas simples devem ser mais curtas.\n- Se raw_reply_text já trouxer uma orientação importante, preserve o sentido e melhore a forma.\n- Se houver capabilities/menu no contexto, use essas funções como fonte para o menu. Não invente funções fora do universo financeiro do app.\n\nModelo recomendado para menu completo:\nOi, {{nome}}! 👋 Eu sou o concierge do AcerttaPay.\n\nPosso te ajudar pelo WhatsApp com:\n\n🧾 *Compras*\n• registrar compra por texto\n• enviar foto de comprovante\n• corrigir ou apagar compra por fatura/mês\n• dividir uma compra escolhida com amigos ou contatos\n\n📊 *Consultas*\n• gastos do mês\n• fatura do cartão\n• listar compras por fatura/mês\n\n⏰ *Lembretes*\n• criar, listar, concluir ou adiar lembretes\n\n📒 *Finanças mensais*\n• lançar aluguel, salário, contas e receitas fora do cartão\n\n📄 *PDF*\n• enviar fatura para revisão no app\n\nMe manda do seu jeito. Ex.: “Quanto gastei esse mês?” ou “Nova compra hoje de R$ 50 no iFood”.\n\nNão ofereça pelo WhatsApp: Central de Acertos, fechamento/reabertura de mês, categorias/regras ou resumos inteligentes. Se o usuário pedir uma dessas funções, explique de forma curta que essa parte ficou no app para evitar confusão.\n",
+          "maxIterations": 2,
+          "returnIntermediateSteps": false
+        }
+      },
+      "id": "6549a97f-aa94-4b49-9d0d-f08c9c3002ed",
+      "name": "AI Reply Formatter",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        -800,
+        6336
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "c2f8ac63-97a4-4d06-8dde-997b2732fc54",
+      "name": "Gemini Chat Model - Reply Formatter",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        -736,
+        6672
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "mZ7rvYR2BFrE4r9l",
+          "name": "Google Gemini Geral"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -320,
+        6928
+      ],
+      "id": "daccd551-8d36-4ded-83ba-52cf328621ec",
+      "name": "GOTO"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ (() => { const n = $('Normalize Evolution Payload').item.json || {}; const c = $('Load Router Context').item.json || {}; const conv = c.conversation || null; const caps = (c.capabilities || []).map(x => ({ workflow_key: String(x.workflow_key || ''), title: x.title || x.name || '', enabled: x.enabled !== false, maintenance_mode: x.maintenance_mode === true })).filter(x => x.workflow_key); return JSON.stringify({ message: n.message_text || '', current_date: n.current_date || '', timezone: 'America/Sao_Paulo', media: { has_media: !!n.media?.has_media, is_pdf: !!n.media?.is_pdf, is_image: !!n.media?.is_image }, conversation: conv ? { id: Number(conv.id || 0), state: conv.state || '', related_purchase_id: conv.related_purchase_id || null } : null, capabilities: caps }); })() }}\n",
+        "options": {
+          "systemMessage": "Você é o classificador leve de rota do WhatsApp do AcerttaPay. Responda SOMENTE JSON válido, sem markdown. Sua única tarefa é escolher o destino da mensagem e dizer se uma conversa pendente deve continuar ou ser interrompida. Não escreva mensagem bonita, não formate menu e não execute ação financeira.\n\nSchema obrigatório:\n{\"intent\":\"help|greeting|conversation_reply|create_purchase|edit_purchase|delete_purchase|set_participants_later|query|recent_purchases|create_reminder|monthly_finance|pdf_import|unsupported_removed_feature|unknown\",\"workflow_key\":\"1.1|1.2|1.3|1.4|2.1|3.1|5.1|7.1|null\",\"confidence\":0,\"direct_reply\":false,\"reply_text\":null,\"conversation_action\":\"none|continue|new_topic\",\"interrupt_conversation\":false,\"interrupted_reason\":null}\n\nRotas:\n1.1 criar compra no cartão. Ex.: \"Compra em Sam's Club no cartão Inter, 100 reais hoje\", \"comprei 42,26 no mercado\". Não precisa ter a palavra nova.\n1.2 editar, corrigir, apagar, remover ou excluir compra.\n1.3 dividir, ratear ou definir participantes de compra.\n2.1 consultas: resumo, fatura, saldo, quanto gastei, últimas compras, compras recentes, compras por cartão/pessoa.\n3.1 lembretes.\n5.1 receitas/despesas mensais fora do cartão: salário, aluguel, internet, luz, água, boleto, conta mensal.\n7.1 PDF de fatura.\n\nConversa pendente:\nSe conversation.state existir e a mensagem for curta ou parecer resposta à pergunta pendente, use intent conversation_reply e a rota do estado.\nEstados 1.1: awaiting_purchase_create_confirmation, awaiting_card_confirmation, awaiting_card_selection, awaiting_card_choice, awaiting_split_confirmation.\nEstados 1.3: awaiting_split_participants, awaiting_split_mode, awaiting_exact_amounts.\nEstados 1.4: awaiting_receipt_purchase_confirmation, awaiting_receipt_purchase_details.\nEstados 1.2: awaiting_purchase_edit_confirmation, awaiting_purchase_delete_confirmation, awaiting_purchase_mutation_period, awaiting_purchase_selection_for_correction, awaiting_purchase_correction_details.\nEstados 1.3: awaiting_split_participants, awaiting_split_mode, awaiting_exact_amounts, awaiting_purchase_participants_period, awaiting_purchase_selection_for_participants.\nEstados 2.1: awaiting_purchase_query_period.\nEstados 5.1/7.1 seguem seus números.\n\nSe houver conversa pendente, mas o usuário mudar claramente de assunto, defina conversation_action new_topic e interrupt_conversation true, roteando o novo pedido. Exemplos: \"minhas últimas compras\", \"resumo do mês\", \"nova compra no mercado\", \"criar lembrete\", \"fatura do Inter\", \"menu\".\nSe for ajuda/menu/oi sem outro pedido: direct_reply true, workflow_key null, reply_text curto com o objetivo, como \"menu\". A resposta final será escrita por outra IA.\nSe for ação financeira, direct_reply false; o backend confirma.\n\nExemplos:\n{\"message\":\"Compra em Sam's Club no cartão Inter, 100 reais hoje\"} => {\"intent\":\"create_purchase\",\"workflow_key\":\"1.1\",\"confidence\":0.95,\"direct_reply\":false,\"reply_text\":null,\"conversation_action\":\"none\",\"interrupt_conversation\":false,\"interrupted_reason\":null}\nCom conversation.state awaiting_purchase_delete_confirmation e message \"Apagar\" => {\"intent\":\"conversation_reply\",\"workflow_key\":\"1.2\",\"confidence\":0.95,\"direct_reply\":false,\"reply_text\":null,\"conversation_action\":\"continue\",\"interrupt_conversation\":false,\"interrupted_reason\":null}\nCom conversa pendente e message \"minhas últimas compras\" => {\"intent\":\"recent_purchases\",\"workflow_key\":\"2.1\",\"confidence\":0.93,\"direct_reply\":false,\"reply_text\":null,\"conversation_action\":\"new_topic\",\"interrupt_conversation\":true,\"interrupted_reason\":\"user_changed_subject\"}\nFunções removidas do WhatsApp: Central de Acertos/Pix de acerto/cobranças, fechamento/reabertura de mês, categorias/regras e resumos inteligentes. Se o usuário pedir uma dessas, retorne direct_reply=true, workflow_key=null, intent=\"unsupported_removed_feature\" e reply_text curto dizendo que essa parte fica no app.\nPara listar compras, corrigir compra ou dividir gasto sem mês claro, roteie para o fluxo correto; o backend vai perguntar a fatura/mês.\n",
+          "maxIterations": 1,
+          "returnIntermediateSteps": false
+        }
+      },
+      "id": "d3ffe6c9-1ca9-4a1c-8d04-d109834c4010",
+      "name": "AI Initial Router1",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -1216,
+        6784
+      ]
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-120b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        -1216,
+        7008
+      ],
+      "id": "73b128da-b905-466e-bbf9-8e6ac6fb5aac",
+      "name": "Groq Chat Model",
+      "credentials": {
+        "groqApi": {
+          "id": "K16gIRrLP1lEWe1I",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        7504
+      ],
+      "id": "31650f4d-763c-43d5-9500-0942ca4e6cc9",
+      "name": "GOTO1"
     }
   ],
   "pinData": {},
@@ -600,6 +704,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "AI Initial Router1",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -629,7 +740,7 @@
       "main": [
         [
           {
-            "node": "Build Direct Reply",
+            "node": "AI Reply Formatter",
             "type": "main",
             "index": 0
           }
@@ -658,12 +769,12 @@
       "main": [
         [
           {
-            "node": "Log Router Intent",
+            "node": "Send Final WhatsApp Reply",
             "type": "main",
             "index": 0
           },
           {
-            "node": "Send Final WhatsApp Reply",
+            "node": "GOTO1",
             "type": "main",
             "index": 0
           }
@@ -732,6 +843,94 @@
           }
         ]
       ]
+    },
+    "AI Reply Formatter": {
+      "main": [
+        [
+          {
+            "node": "GOTO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Chat Model - Reply Formatter": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Reply Formatter",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis Chat Memory - Reply Formatter": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Reply Formatter",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Think Tool - Reply Formatter": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Reply Formatter",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GOTO": {
+      "main": [
+        [
+          {
+            "node": "Build Direct Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Initial Router1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Initial Router1": {
+      "main": [
+        [
+          {
+            "node": "Build Route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GOTO1": {
+      "main": [
+        [
+          {
+            "node": "Log Router Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": true,
@@ -743,7 +942,7 @@
     "callerPolicy": "workflowsFromSameOwner",
     "availableInMCP": false
   },
-  "versionId": "613347f2-abd7-4ef6-a501-c2eff78f6308",
+  "versionId": "9cd16ba1-7220-4f45-b57c-112ba5d37597",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "54c1e6e642219d63bcca2e850583056b9d4a7efdf129870e6550b48695aa00e1"

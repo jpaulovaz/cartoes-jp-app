@@ -800,11 +800,19 @@ function createAutomationApiRepository() {
     const windowHours = Math.max(1, Math.min(24 * 30, Number(options.windowHours || getIntegerSetting('AUTOMATION_PURCHASE_MUTATION_WINDOW_HOURS', 72)) || 72));
     const hoursModifier = `-${windowHours} hours`;
     const eligibleOnly = options.eligibleOnly === true || options.onlyEligible === true;
+    const month = Number(options.month || options.dueMonth || options.due_month || 0) || 0;
+    const year = Number(options.year || options.dueYear || options.due_year || 0) || 0;
     const where = [
       't.user_id = ?',
       'COALESCE(t.parent_txn_id, 0) = 0'
     ];
     const params = [hoursModifier, Number(userId || 0)];
+
+    if (month && year) {
+      where.push('COALESCE(t.due_month, i.month) = ?');
+      where.push('COALESCE(t.due_year, i.year) = ?');
+      params.push(month, year);
+    }
 
     if (eligibleOnly) {
       where.push(`(
@@ -897,7 +905,7 @@ function createAutomationApiRepository() {
       LEFT JOIN imports i ON i.id = t.import_id AND i.user_id = t.user_id
       LEFT JOIN cards c ON c.id = t.card_id AND c.user_id = t.user_id
       WHERE ${where.join('\n        AND ')}
-      ORDER BY datetime(t.created_at) DESC, t.id DESC
+      ORDER BY ${month && year ? 'substr(COALESCE(t.txn_date, t.created_at), 1, 10) DESC, t.id DESC' : 'datetime(t.created_at) DESC, t.id DESC'}
       LIMIT ?
     `).all(...params);
   }

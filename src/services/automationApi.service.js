@@ -81,6 +81,169 @@ function normalizeIntentText(value) {
     .trim();
 }
 
+
+const AUTOMATION_WHATSAPP_SIMPLE_WORKFLOWS = new Set(['1.1', '1.2', '1.3', '1.4', '2.1', '3.1', '5.1', '7.1']);
+const PURCHASE_PERIOD_MONTH_NAMES = [
+  '', 'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+  'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
+];
+const PURCHASE_PERIOD_ALIASES = {
+  janeiro: 1, jan: 1,
+  fevereiro: 2, fev: 2,
+  marco: 3, março: 3, mar: 3,
+  abril: 4, abr: 4,
+  maio: 5, mai: 5,
+  junho: 6, jun: 6,
+  julho: 7, jul: 7,
+  agosto: 8, ago: 8,
+  setembro: 9, set: 9,
+  outubro: 10, out: 10,
+  novembro: 11, nov: 11,
+  dezembro: 12, dez: 12
+};
+
+function currentSaoPauloParts() {
+  const [year, month] = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' }).split('-').map(Number);
+  return { month, year };
+}
+
+function addPurchasePeriodMonths(year, month, delta) {
+  const date = new Date(Date.UTC(Number(year || 0), Number(month || 1) - 1 + Number(delta || 0), 1));
+  return { month: date.getUTCMonth() + 1, year: date.getUTCFullYear() };
+}
+
+function normalizePeriodText(value) {
+  return normalizeIntentText(value)
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function resolvePurchasePeriodInput(input = {}) {
+  const source = input && typeof input === 'object' ? input : {};
+  const today = currentSaoPauloParts();
+  const month = Number(source.month || source.due_month || source.dueMonth || source.mes || 0) || 0;
+  const year = Number(source.year || source.due_year || source.dueYear || source.ano || 0) || 0;
+  if (month >= 1 && month <= 12) {
+    return { month, year: year >= 2000 && year <= 2100 ? year : today.year, explicit: true };
+  }
+
+  const rawPeriod = normalizePeriodText(source.period || source.when || '');
+  if (['last_month', 'last month', 'previous_month', 'previous month', 'mes passado', 'mês passado'].includes(rawPeriod)) return { ...addPurchasePeriodMonths(today.year, today.month, -1), explicit: true };
+  if (['next_month', 'next month', 'proximo mes', 'próximo mês', 'mes que vem', 'mês que vem'].includes(rawPeriod)) return { ...addPurchasePeriodMonths(today.year, today.month, 1), explicit: true };
+
+  const rawTextSource = [
+    source.period,
+    source.when,
+    source.raw_text,
+    source.text,
+    source.message_text,
+    source.query_text,
+    source.source?.raw_text,
+    source.source?.rawText,
+    source.whatsapp?.message_text
+  ].filter(Boolean).join(' ');
+  const numericRaw = String(rawTextSource || '').match(/\b(0?[1-9]|1[0-2])\s*[\/\-]\s*(20\d{2}|21\d{2})\b/);
+  if (numericRaw) return { month: Number(numericRaw[1]), year: Number(numericRaw[2]), explicit: true };
+
+  const text = normalizePeriodText(rawTextSource);
+  if (!text) return null;
+  if (/\b(mes passado|fatura passada)\b/.test(text)) return { ...addPurchasePeriodMonths(today.year, today.month, -1), explicit: true };
+  if (/\b(mes que vem|proximo mes|fatura que vem|proxima fatura)\b/.test(text)) return { ...addPurchasePeriodMonths(today.year, today.month, 1), explicit: true };
+  if (/\b(este|esse|deste|desse|atual)\s+mes\b|\bmes\s+(atual|corrente)\b|\bfatura\s+(atual|desse mes|deste mes)\b/.test(text)) return { month: today.month, year: today.year, explicit: true };
+
+  const numeric = text.match(/\b(0?[1-9]|1[0-2])(?:[\/\-]|\s+)(20\d{2}|21\d{2})\b/);
+  if (numeric) return { month: Number(numeric[1]), year: Number(numeric[2]), explicit: true };
+
+  for (const [alias, aliasMonth] of Object.entries(PURCHASE_PERIOD_ALIASES)) {
+    const re = new RegExp(`\\b${alias}\\b`, 'i');
+    if (!re.test(text)) continue;
+    const yearMatch = text.match(/\b(20\d{2}|21\d{2})\b/);
+    return { month: aliasMonth, year: yearMatch ? Number(yearMatch[1]) : today.year, explicit: true };
+  }
+  return null;
+}
+
+function purchasePeriodLabel(month, year) {
+  const m = Number(month || 0);
+  return `${PURCHASE_PERIOD_MONTH_NAMES[m] || String(m).padStart(2, '0')}/${year}`;
+}
+
+function purposeWantsParticipants(purpose = '') {
+  const normalized = normalizeIntentText(purpose);
+  return normalized.includes('participant') || normalized.includes('divid') || normalized.includes('rate');
+}
+
+function purposeWantsQuery(purpose = '') {
+  const normalized = normalizeIntentText(purpose);
+  return normalized.includes('query') || normalized.includes('consulta') || normalized.includes('list');
+}
+
+function monthQuestionForPurpose(purpose = '') {
+  if (purposeWantsParticipants(purpose)) return 'Qual fatura/mês você quer olhar para dividir uma compra? Ex.: *junho*, *06/2026* ou *mês passado*.';
+  if (purposeWantsQuery(purpose)) return 'Qual fatura/mês você quer listar? Ex.: *junho*, *06/2026* ou *mês passado*.';
+  return 'Qual fatura/mês você quer olhar para corrigir ou apagar uma compra? Ex.: *junho*, *06/2026* ou *mês passado*.';
+}
+
+function periodStateForPurpose(purpose = '') {
+  if (purposeWantsParticipants(purpose)) return 'awaiting_purchase_participants_period';
+  if (purposeWantsQuery(purpose)) return 'awaiting_purchase_query_period';
+  return 'awaiting_purchase_mutation_period';
+}
+
+function selectionStateForPurpose(purpose = '') {
+  return purposeWantsParticipants(purpose) ? 'awaiting_purchase_selection_for_participants' : 'awaiting_purchase_selection_for_correction';
+}
+
+function detectPurchaseMutationAction(text = '') {
+  const normalized = normalizeIntentText(text);
+  if (/\b(apagar|apaga|excluir|exclui|deletar|deleta|remover|remove)\b/.test(normalized)) return 'delete';
+  if (/\b(dividir|divide|ratear|rateia|participante|participantes)\b/.test(normalized)) return 'split';
+  return 'edit';
+}
+
+function parsePurchaseSelectionFromText(text = '', purchases = []) {
+  const normalized = normalizeIntentText(text);
+  if (!normalized) return 0;
+  const hashMatch = normalized.match(/#\s*(\d+)/);
+  if (hashMatch) return Number(hashMatch[1]);
+  const optionMatch = normalized.match(/(?:^|\b)(?:opcao|opção|numero|n|item)?\s*(\d{1,3})(?:\b|$)/);
+  if (optionMatch) {
+    const value = Number(optionMatch[1]);
+    const byOption = (purchases || []).find((item) => Number(item.option || 0) === value);
+    if (byOption) return Number(byOption.id || byOption.purchase_id || 0);
+    const byId = (purchases || []).find((item) => Number(item.id || item.purchase_id || 0) === value);
+    if (byId) return Number(byId.id || byId.purchase_id || 0);
+  }
+  return 0;
+}
+
+function parseSimpleEditPatchFromText(text = '') {
+  const normalized = normalizeIntentText(text);
+  const patch = {};
+  if (/\b(valor|preco|preço|custou|era|corrige|corrigir|ajusta|ajustar)\b/.test(normalized)) {
+    const moneyMatches = Array.from(normalized.matchAll(/(?:r\$\s*)?(\d{1,7})(?:[,.](\d{1,2}))?\s*(?:reais|real|rs)?/g));
+    const moneyMatch = moneyMatches.length ? moneyMatches[moneyMatches.length - 1] : null;
+    if (moneyMatch) {
+      patch.amount_cents = Number(moneyMatch[1]) * 100 + Number(String(moneyMatch[2] || '').padEnd(2, '0') || 0);
+    }
+  }
+  const installmentsMatch = normalized.match(/\b(?:em\s*)?(\d{1,2})\s*x\b|\bparcelas?\s*(?:para|em)?\s*(\d{1,2})\b/);
+  if (installmentsMatch) patch.installments = Number(installmentsMatch[1] || installmentsMatch[2]);
+  return patch;
+}
+
+function selectedPurchaseLabelFromRows(rows = []) {
+  const root = rows[0] || {};
+  const total = rows.reduce((sum, row) => sum + Number(row.amount_cents || 0), 0);
+  return {
+    description: stripInstallmentMarker(root.description || 'Compra'),
+    amount_cents: total,
+    card_name: root.card_name || 'cartão',
+    installments: rows.length || 1
+  };
+}
+
 function formatAutomationDateBR(value) {
   if (!value) return '';
   const parsed = dayjs(value);
@@ -771,6 +934,23 @@ function createAutomationApiService(deps = {}) {
     };
   }
 
+  function buildPurchasePeriodPrompt({ resolved, payload = {}, purpose = 'mutation' }) {
+    const conversation = repository.createConversationState({
+      userId: resolved.user.id,
+      phoneE164: resolved.normalized.e164,
+      channel: payload.source?.channel || payload.channel || 'whatsapp',
+      state: periodStateForPurpose(purpose),
+      relatedPurchaseId: null,
+      payload: { purpose, source: payload.source || {}, limit: payload.limit || null }
+    });
+    return makeResult({
+      ok: false,
+      code: 'NEEDS_PURCHASE_PERIOD',
+      conversation: publicConversation(conversation, repository),
+      whatsapp: { text: monthQuestionForPurpose(purpose) }
+    });
+  }
+
   function listRecentPurchases(payload = {}, meta = {}) {
     let resolved = null;
     try {
@@ -782,17 +962,35 @@ function createAutomationApiService(deps = {}) {
           statusCode: 403
         });
       }
-      const limit = Math.max(1, Math.min(20, Number(payload.limit || 5) || 5));
+      const limit = Math.max(1, Math.min(20, Number(payload.limit || 8) || 8));
       const purpose = normalizeIntentText(payload.purpose || payload.reason || 'mutation');
+      const period = resolvePurchasePeriodInput({ ...payload, raw_text: payload.source?.raw_text || payload.source?.rawText || payload.raw_text || payload.text || '' });
+      if (!period) {
+        const response = buildPurchasePeriodPrompt({ resolved, payload, purpose });
+        repository.logRequest({
+          userId: resolved.user.id,
+          phoneE164: resolved.normalized.e164,
+          channel: payload.source?.channel || payload.channel || 'whatsapp',
+          operation: 'purchase.period.prompt',
+          statusCode: response.statusCode,
+          resultCode: response.code,
+          sourceMessageId: payload.source?.message_id || payload.message_id || null,
+          ipAddress: meta.ipAddress || null
+        });
+        return response;
+      }
+
       const rows = repository.getRecentPurchasesForAutomation(resolved.user.id, {
         limit,
         windowHours: payload.window_hours || payload.windowHours || null,
-        eligibleOnly: true
+        eligibleOnly: true,
+        month: period.month,
+        year: period.year
       });
       const purchases = rows.map((row, index) => ({
         option: index + 1,
         id: Number(row.purchase_id || row.id || 0),
-        description: row.description,
+        description: stripInstallmentMarker(row.description || ''),
         amount_cents: Number(row.amount_cents || 0),
         card_id: Number(row.card_id || 0),
         card_name: row.card_name,
@@ -806,44 +1004,64 @@ function createAutomationApiService(deps = {}) {
         month_closed: Number(row.closed_month_count || 0) > 0,
         protected_shared_debt: Number(row.protected_shared_debt_count || 0) > 0
       }));
-      const title = purpose.includes('participant') || purpose.includes('divid')
-        ? '🧾 *Últimas compras lançadas para dividir*'
-        : '🧾 *Últimas compras lançadas para ajustar*';
+      const periodText = purchasePeriodLabel(period.month, period.year);
+      const isParticipants = purposeWantsParticipants(purpose);
+      const title = isParticipants
+        ? `🧾 *Compras da fatura ${periodText} para dividir*`
+        : `🧾 *Compras da fatura ${periodText} para ajustar*`;
       const lines = purchases.length
         ? purchases.map((purchase) => {
           const metaParts = [];
-          const createdAt = formatAutomationDateBR(purchase.created_at);
-          const duePeriod = formatAutomationPeriod(purchase.due_month, purchase.due_year);
-          if (createdAt) metaParts.push(`lançada em ${createdAt}`);
-          if (duePeriod) metaParts.push(`fatura ${duePeriod}`);
+          const txnDate = formatAutomationDateBR(purchase.date);
+          if (txnDate) metaParts.push(txnDate);
+          if (purchase.installments > 1) metaParts.push(`${purchase.installments}x`);
           return `${purchase.option}. #${purchase.id} — ${purchase.description} — *${formatBRLFromCents(purchase.amount_cents)}* no ${purchase.card_name || 'cartão'}${metaParts.length ? ` · ${metaParts.join(' · ')}` : ''}`;
         })
-        : ['Não encontrei compras recentes que dê para mexer pelo WhatsApp.'];
-      const guidance = purpose.includes('participant') || purpose.includes('divid')
-        ? 'Quer dividir alguma? Pode dizer: *dividir #123 com Ana*.'
-        : 'Quer corrigir alguma? Pode dizer: *corrige #123 para R$ 189,90*, *apaga #123* ou *dividir #123 com Ana*.';
-      const appFallback = `Mostrei até ${limit} compras recentes que dá para mexer pelo WhatsApp. Se quiser alterar outra, procure pelo app.`;
-      const emptyFallback = 'Para compras mais antigas, faturas fechadas ou acertos já enviados, faça o ajuste pelo app.';
+        : ['Não encontrei compras elegíveis nessa fatura para mexer pelo WhatsApp.'];
+      const guidance = isParticipants
+        ? 'Escolhe pelo *número* da lista ou pelo *código #*. Ex.: *2* ou *#123*.'
+        : 'Escolhe pelo *número* ou *#* e já me fala o ajuste. Ex.: *2 valor 89,90*, *#123 apagar* ou *#123 dividir*.';
+      let conversation = null;
+      if (purchases.length) {
+        conversation = repository.createConversationState({
+          userId: resolved.user.id,
+          phoneE164: resolved.normalized.e164,
+          channel: payload.source?.channel || payload.channel || 'whatsapp',
+          state: selectionStateForPurpose(purpose),
+          relatedPurchaseId: null,
+          payload: {
+            purpose,
+            period: { month: period.month, year: period.year },
+            purchases,
+            source: payload.source || {}
+          }
+        });
+      }
+      const emptyFallback = 'Para faturas fechadas, compras protegidas por acerto ou itens fora da janela segura, faça o ajuste pelo app.';
       const response = makeResult({
         ok: true,
-        code: 'RECENT_PURCHASES',
+        code: 'PURCHASES_FOR_PERIOD',
         purchases,
+        period: { month: period.month, year: period.year, label: periodText },
+        conversation: conversation ? publicConversation(conversation, repository) : null,
         criteria: {
-          ordered_by: 'created_at_desc',
+          ordered_by: 'txn_date_desc',
           eligible_only: true,
-          limit
+          limit,
+          month: period.month,
+          year: period.year
         },
         whatsapp: {
           text: purchases.length
-            ? [title, '', ...lines, '', appFallback, guidance].join('\n')
-            : ['Não encontrei compras recentes que dê para mexer pelo WhatsApp.', emptyFallback].join('\n')
+            ? [title, '', ...lines, '', guidance].join('\n')
+            : [`Não encontrei compras elegíveis na fatura ${periodText}.`, emptyFallback].join('\n')
         }
       });
       repository.logRequest({
         userId: resolved.user.id,
         phoneE164: resolved.normalized.e164,
         channel: payload.source?.channel || payload.channel || 'whatsapp',
-        operation: 'purchase.recent',
+        operation: 'purchase.period_list',
         statusCode: response.statusCode,
         resultCode: response.code,
         sourceMessageId: payload.source?.message_id || payload.message_id || null,
@@ -856,7 +1074,7 @@ function createAutomationApiService(deps = {}) {
         userId: resolved?.user?.id || null,
         phoneE164: resolved?.normalized?.e164 || null,
         channel: payload.source?.channel || payload.channel || 'whatsapp',
-        operation: 'purchase.recent',
+        operation: 'purchase.period_list',
         statusCode: response.statusCode,
         resultCode: response.code,
         sourceMessageId: payload.source?.message_id || payload.message_id || null,
@@ -926,7 +1144,7 @@ function createAutomationApiService(deps = {}) {
     const protectedRows = repository.getProtectedSharedDebtRowsForTransactions(userId, cleanRows.map((row) => row.id));
     if (protectedRows.length) {
       const first = protectedRows[0];
-      throw new AutomationApiError(`Essa compra já foi enviada para ${first.receiver_name || 'alguém'} na Central de Acertos. Para não bagunçar saldo combinado, segura esse ajuste pelo app.`, {
+      throw new AutomationApiError(`Essa compra já foi enviada para ${first.receiver_name || 'alguém'} no app. Para não bagunçar saldo combinado, segura esse ajuste pelo app.`, {
         code: 'SHARED_DEBT_ALREADY_SENT',
         statusCode: 409,
         details: { request_count: protectedRows.length }
@@ -1266,7 +1484,7 @@ function createAutomationApiService(deps = {}) {
             `🧾 ${stripInstallmentMarker(rootAfter.description || plan.baseDescription)} — *${formatBRLFromCents(after.total_cents)}*`,
             `💳 Cartão: *${rootAfter.card_name || plan.card.name}*`,
             `🔢 Parcelas: *${afterRows.length}x*`,
-            queueSummary.itemCount > 0 ? `📬 ${queueSummary.itemCount} rascunho(s) atualizado(s) na Central de Acertos.` : '📌 Divisão interna atualizada sem enviar nada automaticamente.'
+            queueSummary.itemCount > 0 ? `📬 ${queueSummary.itemCount} rascunho(s) atualizado(s) no app.` : '📌 Divisão interna atualizada sem enviar nada automaticamente.'
           ].join('\n')
         }
       });
@@ -1485,23 +1703,41 @@ function createAutomationApiService(deps = {}) {
       resolved = resolveAuthorizedPhone(payload.phone || payload.user_phone || payload.number);
       if (!resolved.authorized) throw new AutomationApiError('Esse número ainda não está liberado no AcerttaPay.', { code: 'NOT_AUTHORIZED', statusCode: 403 });
       const purchaseId = resolvePurchaseIdForMutation(resolved.user.id, payload.purchaseId || payload.purchase_id || payload.id || 'last');
+      const rows = repository.getPurchaseScopeRows(resolved.user.id, purchaseId);
+      assertRowsMutable(resolved.user.id, rows);
+      const selected = selectedPurchaseLabelFromRows(rows);
       const options = purchaseService.getSplitOptions({ userId: resolved.user.id, purchaseId });
-      assertRowsMutable(resolved.user.id, repository.getPurchaseScopeRows(resolved.user.id, purchaseId));
       const conversation = repository.createConversationState({
         userId: resolved.user.id,
         phoneE164: resolved.normalized.e164,
         channel: payload.source?.channel || payload.channel || 'whatsapp',
         state: 'awaiting_split_participants',
         relatedPurchaseId: purchaseId,
-        payload: { purchase_id: purchaseId, options: options.options }
+        payload: {
+          purchase_id: purchaseId,
+          options: options.options,
+          purchase_total_cents: selected.amount_cents,
+          purchase_description: selected.description,
+          purchase_card_name: selected.card_name
+        }
       });
       const names = options.options.map((option, index) => `${index + 1}. ${option.label || option.name}`).join('\n');
       const response = makeResult({
         ok: false,
         code: 'NEEDS_SPLIT_PARTICIPANTS',
         conversation: publicConversation(conversation, repository),
+        purchase: { id: purchaseId, ...selected },
         options: options.options,
-        whatsapp: { text: `Vamos definir os participantes dessa compra. ${names}. Pode responder *Apenas eu*, *Eu, Ana e Bruno* ou só os nomes. Se você quiser entrar no rateio, escreva *Eu* junto.` }
+        whatsapp: {
+          text: [
+            `Vamos dividir: *${selected.description}* — *${formatBRLFromCents(selected.amount_cents)}* no ${selected.card_name}.`,
+            '',
+            '*Com quem vai ficar essa compra?*',
+            names,
+            '',
+            'Pode responder *Apenas eu*, *Ana* ou *Eu, Ana e Bruno*. Se você também entra no rateio, escreva *Eu* junto.'
+          ].join('\n')
+        }
       });
       repository.logRequest({ userId: resolved.user.id, phoneE164: resolved.normalized.e164, channel: payload.source?.channel || payload.channel || 'whatsapp', operation: 'purchase.participants.reopen', statusCode: response.statusCode, resultCode: response.code, sourceMessageId: payload.source?.message_id || payload.message_id || null, ipAddress: meta.ipAddress || null });
       return response;
@@ -1600,7 +1836,10 @@ function createAutomationApiService(deps = {}) {
 
   function buildRouterCapabilitiesForUser(userId) {
     return operationsRepository.listWorkflows()
-      .filter((workflow) => !['automation-api', '9.1'].includes(String(workflow.workflow_key || '')))
+      .filter((workflow) => {
+        const key = String(workflow.workflow_key || '');
+        return !['automation-api', '9.1'].includes(key) && AUTOMATION_WHATSAPP_SIMPLE_WORKFLOWS.has(key);
+      })
       .map((workflow) => ({
         workflow_key: workflow.workflow_key,
         family_key: workflow.family_key,
@@ -1617,14 +1856,11 @@ function createAutomationApiService(deps = {}) {
   function buildRouterMenuText(capabilities = []) {
     const enabled = new Set((capabilities || []).filter((item) => item.enabled).map((item) => item.workflow_key));
     const sections = [];
-    if (enabled.has('1.1') || enabled.has('1.2') || enabled.has('1.3') || enabled.has('1.4')) sections.push(['🧾 Compras', '• registrar compra', '• enviar foto de comprovante', '• corrigir ou apagar compra recente', '• dividir com amigos ou contatos'].join('\n'));
-    if (enabled.has('2.1')) sections.push(['📊 Consultas', '• gastos do mês', '• fatura do cartão', '• últimas compras'].join('\n'));
+    if (enabled.has('1.1') || enabled.has('1.2') || enabled.has('1.3') || enabled.has('1.4')) sections.push(['🧾 Compras', '• registrar compra por texto', '• enviar foto de comprovante', '• corrigir ou apagar compra por fatura/mês', '• dividir uma compra escolhida com amigos ou contatos'].join('\n'));
+    if (enabled.has('2.1')) sections.push(['📊 Consultas', '• gastos do mês', '• fatura do cartão', '• listar compras por fatura/mês'].join('\n'));
     if (enabled.has('3.1')) sections.push(['⏰ Lembretes', '• criar, listar, concluir ou adiar lembretes'].join('\n'));
-    if (enabled.has('4.1')) sections.push(['🤝 Central de Acertos', '• ver quem deve', '• enviar rascunhos', '• marcar pagamento', '• gerar Pix'].join('\n'));
     if (enabled.has('5.1')) sections.push(['📒 Finanças mensais', '• lançar aluguel, salário, contas e receitas fora do cartão'].join('\n'));
-    if (enabled.has('6.1')) sections.push(['🔒 Fechamento', '• conferir se o mês pode ser fechado'].join('\n'));
     if (enabled.has('7.1')) sections.push(['📄 PDF', '• enviar fatura para revisão no app'].join('\n'));
-    if (enabled.has('8.1') || enabled.has('8.2')) sections.push(['🏷️ Inteligência', '• categorizar compras', '• criar regras', '• receber resumos'].join('\n'));
     const body = sections.length ? sections.join('\n\n') : 'Nenhuma função do WhatsApp está liberada para este usuário agora.';
     return ['Oi! Eu sou o concierge do AcerttaPay. 🟢', '', 'Posso te ajudar com:', '', body, '', 'Me manda do seu jeito. Ex.: “Quanto gastei esse mês?” ou “Nova compra hoje de R$ 50 no iFood”.'].join('\n');
   }
@@ -1974,7 +2210,7 @@ function createAutomationApiService(deps = {}) {
         ok: true,
         code: 'SPLIT_OPTIONS',
         ...options,
-        whatsapp: { text: `Quem participa dessa compra? ${names}. Se você também entra no rateio, responda "Eu" junto com os nomes. Ex.: "Eu, Ana e Bruno". Para deixar só com você, responda "Apenas eu". Contatos locais entram só no seu controle interno; amigos com Acerto disponível geram rascunho na Central de Acertos.` }
+        whatsapp: { text: `Quem participa dessa compra? ${names}. Se você também entra no rateio, responda "Eu" junto com os nomes. Ex.: "Eu, Ana e Bruno". Para deixar só com você, responda "Apenas eu". Contatos locais entram só no seu controle interno; amigos com Acerto disponível geram rascunho no app.` }
       });
     } catch (error) {
       return handleServiceError(error);
@@ -2005,7 +2241,7 @@ function createAutomationApiService(deps = {}) {
         split: result,
         whatsapp: {
           text: queueCount > 0
-            ? `Divisão salva. ${queueCount} item(ns) foram para a caixa de saída da Central de Acertos, sem enviar nada automaticamente.`
+            ? `Divisão salva. ${queueCount} item(ns) foram para a área de acertos do app, sem enviar nada automaticamente.`
             : 'Divisão salva. Ficou tudo redondinho por aqui.'
         }
       });
@@ -2138,6 +2374,89 @@ function createAutomationApiService(deps = {}) {
           ok: true,
           code: 'CONVERSATION_INTERRUPTED',
           whatsapp: { text: 'Parei aquela ação pendente para não misturar assuntos. Me manda o novo pedido do jeito que você quer seguir.' }
+        });
+      }
+
+      if (state === 'awaiting_purchase_mutation_period' || state === 'awaiting_purchase_participants_period') {
+        const purpose = state === 'awaiting_purchase_participants_period' ? 'participants' : 'mutation';
+        const period = resolvePurchasePeriodInput({ raw_text: rawText, text: rawText, ...reply });
+        if (!period) {
+          return makeResult({
+            ok: false,
+            code: 'NEEDS_PURCHASE_PERIOD',
+            conversation: publicConversation(conversation, repository),
+            whatsapp: { text: monthQuestionForPurpose(purpose) }
+          });
+        }
+        repository.resolveConversationState(conversation.id);
+        return listRecentPurchases({
+          phone: resolved.normalized.e164,
+          source: payload.source || data.source || {},
+          purpose,
+          limit: data.limit || (purposeWantsParticipants(purpose) ? 8 : 8),
+          month: period.month,
+          year: period.year
+        }, meta);
+      }
+
+      if (state === 'awaiting_purchase_selection_for_participants') {
+        const purchases = Array.isArray(data.purchases) ? data.purchases : [];
+        const purchaseId = Number(reply.purchase_id || reply.purchaseId || parsePurchaseSelectionFromText(rawText, purchases) || data.selected_purchase_id || 0);
+        if (!purchaseId) {
+          return makeResult({
+            ok: false,
+            code: 'NEEDS_PURCHASE_SELECTION',
+            conversation: publicConversation(conversation, repository),
+            whatsapp: { text: 'Me diz qual compra da lista você quer dividir. Pode responder com o *número* ou com o *código #*.' }
+          });
+        }
+        repository.resolveConversationState(conversation.id);
+        return reopenParticipantsForPurchase({
+          phone: resolved.normalized.e164,
+          source: payload.source || data.source || {},
+          purchaseId,
+          purchase_id: purchaseId
+        }, meta);
+      }
+
+      if (state === 'awaiting_purchase_selection_for_correction' || state === 'awaiting_purchase_correction_details') {
+        const purchases = Array.isArray(data.purchases) ? data.purchases : [];
+        const selectedId = Number(data.selected_purchase_id || 0);
+        const purchaseId = Number(reply.purchase_id || reply.purchaseId || parsePurchaseSelectionFromText(rawText, purchases) || selectedId || 0);
+        if (!purchaseId) {
+          return makeResult({
+            ok: false,
+            code: 'NEEDS_PURCHASE_SELECTION',
+            conversation: publicConversation(conversation, repository),
+            whatsapp: { text: 'Me diz qual compra da lista você quer ajustar. Pode responder com o *número* ou com o *código #*.' }
+          });
+        }
+        const action = detectPurchaseMutationAction(rawText || reply.intent || '');
+        const patch = normalizeEditPatch(reply.patch || parseSimpleEditPatchFromText(rawText));
+        if (action === 'delete') {
+          repository.resolveConversationState(conversation.id);
+          return preparePurchaseDelete({ phone: resolved.normalized.e164, source: payload.source || data.source || {}, purchaseId, purchase_id: purchaseId }, meta);
+        }
+        if (action === 'split') {
+          repository.resolveConversationState(conversation.id);
+          return reopenParticipantsForPurchase({ phone: resolved.normalized.e164, source: payload.source || data.source || {}, purchaseId, purchase_id: purchaseId }, meta);
+        }
+        if (patchHasMutation(patch)) {
+          repository.resolveConversationState(conversation.id);
+          return preparePurchaseEdit({ phone: resolved.normalized.e164, source: payload.source || data.source || {}, purchaseId, purchase_id: purchaseId, patch }, meta);
+        }
+        const rows = repository.getPurchaseScopeRows(resolved.user.id, purchaseId);
+        const selected = selectedPurchaseLabelFromRows(rows);
+        const next = repository.updateConversationState(conversation.id, {
+          state: 'awaiting_purchase_correction_details',
+          payload: { ...data, selected_purchase_id: purchaseId, selected_purchase: selected },
+          relatedPurchaseId: purchaseId
+        });
+        return makeResult({
+          ok: false,
+          code: 'NEEDS_PURCHASE_CORRECTION_DETAILS',
+          conversation: publicConversation(next, repository),
+          whatsapp: { text: [`Beleza, achei: *${selected.description}* — *${formatBRLFromCents(selected.amount_cents)}* no ${selected.card_name}.`, '', 'O que você quer fazer?', '• *valor 89,90*', '• *apagar*', '• *dividir*'].join('\n') }
         });
       }
 
@@ -2299,14 +2618,15 @@ function createAutomationApiService(deps = {}) {
         }
         const mode = parseModeFromReply(reply, rawText);
         const purchaseId = Number(data.purchase_id || conversation.related_purchase_id || 0);
-        if (participants.length === 1 && String(participants[0]) === 'self') {
-          const split = applySplitForConversation({ userId: resolved.user.id, purchaseId, mode: 'equal', participants: ['self'] });
+        if (participants.length === 1) {
+          const split = applySplitForConversation({ userId: resolved.user.id, purchaseId, mode: 'equal', participants });
           repository.resolveConversationState(conversation.id);
+          const onlySelf = String(participants[0]) === 'self';
           return makeResult({
             ok: true,
             code: 'SPLIT_APPLIED',
             split,
-            whatsapp: { text: 'Pronto, essa compra ficou só com você. Lance solo confirmado.' }
+            whatsapp: { text: onlySelf ? 'Pronto, essa compra ficou só com você. Lance solo confirmado.' : 'Pronto, atribuí essa compra para a pessoa escolhida. Sem rateio freestyle por aqui.' }
           });
         }
         if (mode === 'equal') {
@@ -2317,7 +2637,7 @@ function createAutomationApiService(deps = {}) {
             ok: true,
             code: 'SPLIT_APPLIED',
             split,
-            whatsapp: { text: queueCount > 0 ? `Divisão em partes iguais salva. ${queueCount} item(ns) ficaram em rascunho na Central de Acertos.` : 'Divisão em partes iguais salva.' }
+            whatsapp: { text: queueCount > 0 ? `Divisão em partes iguais salva. ${queueCount} item(ns) ficaram em rascunho no app.` : 'Divisão em partes iguais salva.' }
           });
         }
         if (mode === 'exact' && Array.isArray(reply.shares) && reply.shares.length) {
@@ -2328,7 +2648,7 @@ function createAutomationApiService(deps = {}) {
             ok: true,
             code: 'SPLIT_APPLIED',
             split,
-            whatsapp: { text: queueCount > 0 ? `Divisão por valores salva. ${queueCount} item(ns) ficaram em rascunho na Central de Acertos.` : 'Divisão por valores salva.' }
+            whatsapp: { text: queueCount > 0 ? `Divisão por valores salva. ${queueCount} item(ns) ficaram em rascunho no app.` : 'Divisão por valores salva.' }
           });
         }
         const next = repository.updateConversationState(conversation.id, {
@@ -2340,7 +2660,7 @@ function createAutomationApiService(deps = {}) {
           ok: false,
           code: 'NEEDS_SPLIT_MODE',
           conversation: publicConversation(next, repository),
-          whatsapp: { text: 'Vai ser em partes iguais ou você quer definir o valor de cada um?' }
+          whatsapp: { text: [`Compra total: *${formatBRLFromCents(Number(data.purchase_total_cents || 0))}*`, '', 'Vai ser em *partes iguais* ou você quer *definir o valor de cada um*?'].join('\n') }
         });
       }
 
@@ -2356,7 +2676,7 @@ function createAutomationApiService(deps = {}) {
             ok: true,
             code: 'SPLIT_APPLIED',
             split,
-            whatsapp: { text: queueCount > 0 ? `Divisão em partes iguais salva. ${queueCount} item(ns) ficaram em rascunho na Central de Acertos.` : 'Divisão em partes iguais salva.' }
+            whatsapp: { text: queueCount > 0 ? `Divisão em partes iguais salva. ${queueCount} item(ns) ficaram em rascunho no app.` : 'Divisão em partes iguais salva.' }
           });
         }
         if (mode === 'exact') {
@@ -2369,7 +2689,7 @@ function createAutomationApiService(deps = {}) {
             ok: false,
             code: 'NEEDS_EXACT_AMOUNTS',
             conversation: publicConversation(next, repository),
-            whatsapp: { text: 'Me diga quanto fica para cada pessoa, por exemplo: Eu 99,90, Ana 50, Bruno 50.' }
+            whatsapp: { text: [`Compra total: *${formatBRLFromCents(Number(data.purchase_total_cents || 0))}*`, '', 'Me diga quanto fica para cada pessoa. Ex.: *Eu 99,90, Ana 50, Bruno 50*.', '', 'A soma precisa bater com o total, sem malabarismo de centavos.'].join('\n') }
           });
         }
         return makeResult({
@@ -2387,7 +2707,7 @@ function createAutomationApiService(deps = {}) {
             ok: false,
             code: 'NEEDS_EXACT_AMOUNTS',
             conversation: publicConversation(conversation, repository),
-            whatsapp: { text: 'Ainda faltaram os valores de cada pessoa. Me manda no formato: Eu 99,90, Ana 50, Bruno 50.' }
+            whatsapp: { text: [`Compra total: *${formatBRLFromCents(Number(data.purchase_total_cents || 0))}*`, '', 'Ainda faltaram os valores de cada pessoa. Me manda no formato: *Eu 99,90, Ana 50, Bruno 50*.'].join('\n') }
           });
         }
         const split = applySplitForConversation({ userId: resolved.user.id, purchaseId, mode: 'exact', shares: reply.shares });
@@ -2397,7 +2717,7 @@ function createAutomationApiService(deps = {}) {
           ok: true,
           code: 'SPLIT_APPLIED',
           split,
-          whatsapp: { text: queueCount > 0 ? `Divisão por valores salva. ${queueCount} item(ns) ficaram em rascunho na Central de Acertos.` : 'Divisão por valores salva.' }
+          whatsapp: { text: queueCount > 0 ? `Divisão por valores salva. ${queueCount} item(ns) ficaram em rascunho no app.` : 'Divisão por valores salva.' }
         });
       }
 

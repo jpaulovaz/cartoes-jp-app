@@ -193,9 +193,6 @@ purchases_by_day
 purchases_by_card
 purchases_by_person
 person_summary
-who_owes_me
-what_do_i_owe
-debt_summary
 out_of_scope
 ```
 
@@ -215,8 +212,9 @@ POST /api/automation/v1/queries/debt-summary
 MONTH_SUMMARY
 CARD_SUMMARY
 CARD_SUMMARY_LIST
-RECENT_PURCHASES
+PURCHASES_BY_PERIOD
 PURCHASES_BY_DAY
+NEEDS_PURCHASE_PERIOD
 PERSON_SUMMARY
 PERSON_SUMMARY_LIST
 DEBT_SUMMARY
@@ -231,7 +229,7 @@ QUERY_INTERNAL_ERROR
 ### Regras da família 2.x
 
 - Consultas não criam, editam, removem, pagam ou enviam cobranças.
-- Quando o usuário não informar período, usar o mês atual em `America/Sao_Paulo`.
+- Para listar compras, o usuário precisa informar fatura/mês. Se não informar, o backend cria estado pendente e pergunta o mês antes de listar. Para resumos mensais, `esse mês` usa o mês atual em `America/Sao_Paulo`.
 - Cartões e pessoas citadas por nome são resolvidos no backend.
 - Em caso de ambiguidade, o backend pede esclarecimento.
 - O N8N pode dar tom de concierge, mas não inventa dados financeiros.
@@ -246,7 +244,7 @@ QUERY_INTERNAL_ERROR
 
 Responsabilidades:
 
-- consultar compras recentes;
+- perguntar fatura/mês antes de listar compras elegíveis;
 - preparar correção de valor, data, cartão, descrição ou quantidade de parcelas;
 - preparar exclusão de compra recente;
 - exigir confirmação antes de qualquer escrita;
@@ -284,7 +282,9 @@ POST /api/automation/v1/purchases/:id/participants/reopen
 ### Códigos de resposta de correção/exclusão
 
 ```txt
-RECENT_PURCHASES
+PURCHASES_FOR_PERIOD
+NEEDS_PURCHASE_PERIOD
+NEEDS_PURCHASE_SELECTION
 NO_RECENT_PURCHASE
 NEEDS_PURCHASE_EDIT_CONFIRMATION
 PURCHASE_EDITED
@@ -303,9 +303,9 @@ IDEMPOTENCY_IN_PROGRESS
 
 - Correções e remoções só são aplicadas após confirmação explícita.
 - A janela padrão para compra que não nasceu da automação é `AUTOMATION_PURCHASE_MUTATION_WINDOW_HOURS`.
-- Compras criadas pela automação podem ser corrigidas mesmo fora da janela, desde que não violem mês fechado ou Central de Acertos.
+- Compras criadas pela automação podem ser corrigidas mesmo fora da janela, desde que não violem mês fechado ou acertos já protegidos.
 - Mês fechado bloqueia qualquer alteração.
-- Rascunhos da Central de Acertos podem ser atualizados/removidos.
+- Rascunhos internos de acerto podem ser atualizados/removidos quando ainda não foram enviados/protegidos.
 - Cobranças já enviadas, pendentes, aceitas ou liquidadas bloqueiam a mutação pelo WhatsApp.
 - Toda mutação grava snapshot antes/depois em `automation_mutation_events`.
 
@@ -319,7 +319,7 @@ IDEMPOTENCY_IN_PROGRESS
 
 Responsabilidades:
 
-- reabrir a seleção de participantes da última compra ou de uma compra indicada;
+- perguntar fatura/mês, listar compras elegíveis e reabrir a seleção de participantes somente após a compra ser escolhida;
 - reaproveitar os estados de divisão do fluxo 1.1;
 - permitir `Apenas eu`, múltiplos participantes, partes iguais e valores definidos;
 - manter o backend como fonte de verdade da divisão.
@@ -339,7 +339,7 @@ out_of_scope
 
 - O usuário precisa responder `Eu` quando quiser entrar no rateio.
 - Contatos locais entram apenas no controle interno.
-- Amigos elegíveis geram rascunho na Central de Acertos.
+- Amigos elegíveis podem gerar rascunhos no app, sem envio automático pelo WhatsApp.
 - Nada é enviado automaticamente.
 
 ---
@@ -986,7 +986,7 @@ A limpeza pode ser acionada pelo dashboard admin. Eventos de mutação financeir
 
 ## Correção arquitetural 4.13.1 — Fluxo Inicial 0.0
 
-A Evolution API deve apontar somente para o webhook do workflow `0.0 - ACERTTAPAY_FLUXO_INICIAL`. Os workflows funcionais `1.1` a `8.2` passam a ser subfluxos acionados pelo orquestrador via `Execute Workflow` e `EntradaWhatsapp`.
+A Evolution API deve apontar somente para o webhook do workflow `0.0 - ACERTTAPAY_FLUXO_INICIAL`. Os workflows funcionais são subfluxos acionados pelo orquestrador via `Execute Workflow` e `EntradaWhatsapp`. A partir da versão 4.14.8, o menu/roteador do WhatsApp expõe apenas funções simples: compras, consultas por mês, lembretes, finanças mensais e PDF.
 
 Responsabilidades do `0.0`:
 
@@ -1017,7 +1017,45 @@ Redis Chat Memory substitui as memórias locais `memoryBufferWindow`. Redis guar
 
 ### Roteamento por IA e troca de assunto
 
-A partir da versão 4.14.4, o fluxo inicial não usa mais regras amplas por expressão regular para decidir intenção textual. O nó `Prepare Deterministic Route` mantém apenas guardrails objetivos de mídia: PDF vai para `7.1`, imagem vai para `1.4` e mídia não suportada recebe orientação curta. Mensagens de texto seguem para o `AI Initial Router`.
+A partir da versão 4.14.4, o fluxo inicial não usa mais regras amplas por expressão regular para decidir intenção textual. O nó `Prepare Deterministic Route` mantém apenas guardrails objetivos de mídia: PDF vai para `7.1`, imagem vai para `1.4` e mídia não suportada recebe orientação direta. Mensagens de texto seguem para o `AI Initial Router`.
+
+A partir da versão 4.14.6, o orquestrador usa duas etapas de IA com responsabilidades separadas:
+
+- `AI Initial Router`: classificador leve. Recebe payload mínimo, sem Redis Memory e sem Think Tool, para viabilizar modelos baratos/gratuitos. Ele só decide `intent`, `workflow_key`, `conversation_action` e se deve interromper conversa pendente.
+- `AI Reply Formatter`: resposta premium. Só roda quando o roteador decidiu por resposta direta, como menu, ajuda, saudação, mídia não suportada ou fallback. Recebe contexto mais completo, Redis Memory e Think Tool para manter a qualidade e o tom das mensagens. Em menus, ele deve usar `menu.text`/`capabilities` como fonte canônica, preservando as funções simples ativas e não oferecendo Central de Acertos, fechamento ou inteligência avançada pelo WhatsApp.
+
+
+Menu recomendado para resposta direta de ajuda/saudação:
+
+```txt
+Oi, João Paulo! 👋 Eu sou o concierge do AcerttaPay.
+
+Posso te ajudar pelo WhatsApp com:
+
+🧾 *Compras*
+• registrar compra por texto
+• enviar foto de comprovante
+• corrigir ou apagar compra por fatura/mês
+• dividir uma compra escolhida com amigos ou contatos
+
+📊 *Consultas*
+• gastos do mês
+• fatura do cartão
+• listar compras por fatura/mês
+
+⏰ *Lembretes*
+• criar, listar, concluir ou adiar lembretes
+
+📒 *Finanças mensais*
+• lançar aluguel, salário, contas e receitas fora do cartão
+
+📄 *PDF*
+• enviar fatura para revisão no app
+
+Me manda do seu jeito. Ex.: “Quanto gastei esse mês?” ou “Nova compra hoje de R$ 50 no iFood”.
+```
+
+A partir da versão 4.14.8, as funções de compra que dependem de contexto mensal não assumem mais "últimas compras" por padrão. Listar compras, corrigir/apagar compras e dividir uma compra perguntam primeiro a fatura/mês quando o usuário não informou período claro. Depois da resposta, o backend lista as compras elegíveis daquela fatura e cria o estado pendente correto para seleção da compra. O WhatsApp deixa de oferecer Central de Acertos, fechamento/reabertura de mês e inteligência avançada; esses recursos continuam no app, mas não são roteados pelo fluxo inicial para reduzir ambiguidade operacional.
 
 O roteador de IA recebe o estado pendente vindo do AcerttaPay e deve decidir entre:
 

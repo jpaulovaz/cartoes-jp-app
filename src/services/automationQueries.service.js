@@ -44,24 +44,30 @@ function resolvePeriod(input = {}) {
   const today = currentSaoPauloDate();
   const [todayYear, todayMonth] = today.split('-').map(Number);
   const rawPeriod = String(input.period || input.when || '').trim().toLowerCase();
-  if (rawPeriod === 'last_month' || rawPeriod === 'previous_month' || rawPeriod === 'mes_passado' || rawPeriod === 'mês passado') {
+  if (rawPeriod === 'last_month' || rawPeriod === 'last month' || rawPeriod === 'previous_month' || rawPeriod === 'previous month' || rawPeriod === 'mes_passado' || rawPeriod === 'mês passado') {
     return addMonths(todayYear, todayMonth, -1);
   }
-  if (rawPeriod === 'next_month' || rawPeriod === 'proximo_mes' || rawPeriod === 'próximo mês' || rawPeriod === 'mes_que_vem' || rawPeriod === 'mês que vem') {
+  if (rawPeriod === 'next_month' || rawPeriod === 'next month' || rawPeriod === 'proximo_mes' || rawPeriod === 'próximo mês' || rawPeriod === 'mes_que_vem' || rawPeriod === 'mês que vem') {
     return addMonths(todayYear, todayMonth, 1);
   }
-  const month = Number(input.month || input.due_month || input.mes || 0);
-  const year = Number(input.year || input.due_year || input.ano || 0);
-  if (month >= 1 && month <= 12 && year >= 2000 && year <= 2100) return { month, year };
-
-  const text = normalizeText([
+  const rawTextSource = [
+    input.period,
+    input.when,
     input.raw_text,
     input.text,
     input.message_text,
     input.source?.raw_text,
     input.whatsapp?.message_text,
     input.query_text
-  ].filter(Boolean).join(' '));
+  ].filter(Boolean).join(' ');
+  const numericRaw = String(rawTextSource || '').match(/\b(0?[1-9]|1[0-2])\s*[\/\-]\s*(20\d{2}|21\d{2})\b/);
+  if (numericRaw) return { month: Number(numericRaw[1]), year: Number(numericRaw[2]) };
+
+  const month = Number(input.month || input.due_month || input.mes || 0);
+  const year = Number(input.year || input.due_year || input.ano || 0);
+  if (month >= 1 && month <= 12 && year >= 2000 && year <= 2100) return { month, year };
+
+  const text = normalizeText(rawTextSource);
   if (text.includes('mes que vem')) return addMonths(todayYear, todayMonth, 1);
   if (text.includes('mes passado')) return addMonths(todayYear, todayMonth, -1);
   for (const [alias, aliasMonth] of Object.entries(MONTH_ALIASES)) {
@@ -138,18 +144,23 @@ function hasExplicitPurchasePeriod(input = {}) {
   if (source.month || source.due_month || source.mes || source.year || source.due_year || source.ano) return true;
 
   const rawPeriod = String(source.period || source.when || '').trim().toLowerCase();
-  if (['last_month', 'previous_month', 'mes_passado', 'mês passado', 'next_month', 'proximo_mes', 'próximo mês', 'mes_que_vem', 'mês que vem'].includes(rawPeriod)) {
+  if (['last_month', 'last month', 'previous_month', 'previous month', 'mes_passado', 'mês passado', 'next_month', 'next month', 'proximo_mes', 'próximo mês', 'mes_que_vem', 'mês que vem'].includes(rawPeriod)) {
     return true;
   }
 
-  const text = normalizeText([
+  const rawTextSource = [
+    source.period,
+    source.when,
     source.raw_text,
     source.text,
     source.message_text,
     source.source?.raw_text,
     source.whatsapp?.message_text,
     source.query_text
-  ].filter(Boolean).join(' '));
+  ].filter(Boolean).join(' ');
+  if (/\b(0?[1-9]|1[0-2])\s*[\/\-]\s*(20\d{2}|21\d{2})\b/.test(String(rawTextSource || ''))) return true;
+
+  const text = normalizeText(rawTextSource);
   if (!text) return false;
 
   const monthNames = Object.keys(MONTH_ALIASES).join('|');
@@ -593,11 +604,37 @@ function createAutomationQueriesService(deps = {}) {
 
 
   function getRecentPurchases(payload = {}, meta = {}) {
-    return withQueryHandling(payload, meta, 'queries.recent_purchases', ({ user }) => {
+    return withQueryHandling(payload, meta, 'queries.recent_purchases', ({ user, phone }) => {
       const query = payload.query || payload;
       const period = resolvePeriod({ ...payload, ...query });
       const date = parseIsoDate(query.date || query.day || '');
       const hasPeriodFilter = !date && hasExplicitPurchasePeriod({ ...payload, ...query });
+      if (!date && !hasPeriodFilter) {
+        const conversation = repository.createConversationState({
+          userId: user.id,
+          phoneE164: phone.e164,
+          channel: payload.source?.channel || payload.channel || 'whatsapp',
+          state: 'awaiting_purchase_query_period',
+          relatedPurchaseId: null,
+          payload: { purpose: 'query_purchases', source: payload.source || {}, query }
+        });
+        return makeResult({
+          ok: false,
+          code: 'NEEDS_PURCHASE_PERIOD',
+          conversation: {
+            id: Number(conversation.id || 0),
+            state: conversation.state,
+            related_purchase_id: Number(conversation.related_purchase_id || 0) || null,
+            expires_at: conversation.expires_at,
+            payload: repository.getConversationPayload(conversation)
+          },
+          whatsapp: { text: 'Qual fatura/mês você quer listar? Ex.: *junho*, *06/2026* ou *mês passado*.' }
+        });
+      }
+      const openConversation = repository.getOpenConversationForUser(user.id, phone.e164);
+      if (openConversation && String(openConversation.state || '') === 'awaiting_purchase_query_period') {
+        repository.resolveConversationState(openConversation.id);
+      }
       let cardId = 0;
       const hint = query.card_hint || query.card || query.card_name || '';
       if (hint) {
@@ -606,25 +643,22 @@ function createAutomationQueriesService(deps = {}) {
         if (resolved.status === 'ambiguous') throw new AutomationApiError(`Encontrei mais de um cartão parecido com "${hint}". Me diz o nome certinho?`, { code: 'NEEDS_CARD_CLARIFICATION', statusCode: 200, details: { matches: resolved.matches } });
         cardId = Number(resolved.item.id || 0);
       }
-      const chronological = !date && !hasPeriodFilter;
       const rows = repository.getRecentPurchases(user.id, {
-        limit: query.limit || 10,
+        limit: query.limit || 12,
         date,
         month: hasPeriodFilter ? period.month : 0,
         year: hasPeriodFilter ? period.year : 0,
         cardId,
-        orderByCreatedAt: chronological
+        orderByCreatedAt: false
       });
       const title = date
         ? `🧾 *Compras de ${formatDateBR(date)}*${hint ? ` no ${hint}` : ''}`
-        : hasPeriodFilter
-          ? `🧾 *Compras de ${periodLabel(period.month, period.year)}*${hint ? ` no ${hint}` : ''}`
-          : `🧾 *Últimas compras*${hint ? ` no ${hint}` : ''}`;
+        : `🧾 *Compras da fatura ${periodLabel(period.month, period.year)}*${hint ? ` no ${hint}` : ''}`;
       return makeResult({
         ok: true,
-        code: date ? 'PURCHASES_BY_DAY' : 'RECENT_PURCHASES',
-        data: { period: hasPeriodFilter ? period : null, date, purchases: rows, chronological },
-        whatsapp: { text: buildPurchasesText({ rows, title, chronological }) }
+        code: date ? 'PURCHASES_BY_DAY' : 'PURCHASES_BY_PERIOD',
+        data: { period: hasPeriodFilter ? period : null, date, purchases: rows, chronological: false },
+        whatsapp: { text: buildPurchasesText({ rows, title, chronological: false }) }
       });
     });
   }

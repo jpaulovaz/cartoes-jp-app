@@ -106,7 +106,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const normalized = $('Normalize Routed Payload').first().json || {};\nconst text = normalized.message_text || normalized.source?.raw_text || '';\nreturn [{ json: {\n  phone: normalized.phone,\n  source: {\n    channel: 'whatsapp',\n    instance: normalized.instance,\n    message_id: normalized.message_id,\n    raw_text: text\n  },\n  reply: {\n    text,\n    raw_text: text,\n    intent: /cancelar|cancela|desistir|descartar/i.test(text) ? 'cancel_receipt_purchase' : undefined,\n    confirm: /^(sim|s|confirmar|confirmo|ok|pode|isso)$/i.test(String(text || '').trim()) ? true : undefined\n  }\n}}];"
+        "jsCode": "const normalized = $('Normalize Routed Payload').first().json || {};\nconst text = normalized.message_text || normalized.source?.raw_text || '';\nreturn [{ json: {\n  phone: normalized.phone,\n  source: {\n    channel: 'whatsapp',\n    instance: normalized.instance,\n    message_id: normalized.message_id,\n    raw_text: text\n  },\n  reply: {\n    text,\n    raw_text: text,\n    intent: /(cancelar|cancela|cancelado|desistir|desisto|desisti|descartar|descarta|parar|para|sair|voltar|deixa pra la|deixa para la|esquece|nao quero|não quero)/i.test(text) ? 'cancel_receipt_purchase' : undefined,\n    confirm: /^(sim|s|confirmar|confirmo|ok|pode|isso)$/i.test(String(text || '').trim()) ? true : undefined\n  }\n}}];"
       },
       "id": "aec93876-79ec-49dc-a5d0-60ed9d29c5ee",
       "name": "Build Receipt Reply Payload",

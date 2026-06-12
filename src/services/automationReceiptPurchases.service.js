@@ -322,6 +322,83 @@ function missingRequiredFields(receipt = {}) {
   return missing;
 }
 
+function hasAllRequiredReceiptFields(receipt = {}) {
+  return missingRequiredFields(receipt).length === 0;
+}
+
+function missingCriticalReceiptFields(receipt = {}) {
+  return missingRequiredFields(receipt).filter((field) => ['estabelecimento', 'data', 'valor'].includes(field));
+}
+
+function shouldKeepReceiptConversation(receipt = {}) {
+  const missing = missingCriticalReceiptFields(receipt);
+  if (!missing.length) return true;
+  const presentCount = ['merchant', 'date', 'amount_cents'].filter((key) => {
+    if (key === 'amount_cents') return Number(receipt.amount_cents || 0) > 0;
+    return Boolean(receipt[key]);
+  }).length;
+  return presentCount >= 2;
+}
+
+function mergeReceiptFields(...items) {
+  const output = {};
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue;
+    for (const [key, value] of Object.entries(item)) {
+      if (value === undefined || value === null || value === '') continue;
+      if (key === 'amount_cents' && !Number(value || 0)) continue;
+      if (key === 'warnings') {
+        const current = Array.isArray(output.warnings) ? output.warnings : [];
+        output.warnings = [...current, ...(Array.isArray(value) ? value : [value])].filter(Boolean);
+        continue;
+      }
+      if (key === 'field_confidence') {
+        output.field_confidence = { ...(output.field_confidence || {}), ...(value || {}) };
+        continue;
+      }
+      if (output[key] === undefined || output[key] === null || output[key] === '' || (key === 'amount_cents' && !Number(output[key] || 0))) {
+        output[key] = value;
+      }
+    }
+  }
+  return sanitizeExtractedReceipt(output);
+}
+
+function enrichReceiptFromOcrText(receipt = {}, parsed = {}, plainText = '') {
+  const ocrText = [
+    plainText,
+    parsed.ocr_text_excerpt,
+    parsed.ocr_text,
+    parsed.raw_text,
+    parsed.transcription,
+    parsed.transcricao,
+    parsed.text
+  ].filter(Boolean).join('\n');
+  if (!ocrText.trim()) return receipt;
+  const fallback = buildReceiptFromPlainText(ocrText);
+  return fallback ? mergeReceiptFields(receipt, fallback) : receipt;
+}
+
+function isReceiptConversationAbort(value = '') {
+  const text = normalizeText(value);
+  return /^(cancelar|cancela|cancelado|desistir|desisto|desisti|descartar|descarta|parar|para|sair|voltar|deixa|deixa pra la|deixa para la|esquece|nao quero|não quero|mudei de assunto)$/i.test(text)
+    || text.includes('pode cancelar')
+    || text.includes('quero cancelar')
+    || text.includes('quero desistir')
+    || text.includes('mudei de assunto')
+    || text.includes('deixa pra la')
+    || text.includes('deixa para la')
+    || text.includes('esquece isso');
+}
+
+function looksLikeReceiptNewTopic(value = '') {
+  const text = normalizeText(value);
+  if (!text || isReceiptConversationAbort(text) || isAffirmative(text)) return false;
+  return /^(oi|ola|olá|bom dia|boa tarde|boa noite|ajuda|menu)$/i.test(text)
+    || /(ultimas compras|ultimos lancamentos|listar.*compras|lista.*compras|minhas compras|gastos?|gastei|fatura|resumo|quem me deve|o que devo|lembrete|central de acertos|fechamento|categoria|pdf)/i.test(text)
+    || /(nova compra|comprei|lancar|lançar|cadastrar|registrar|adicionar|corrigir uma compra|apagar uma compra|dividir uma compra)/i.test(text);
+}
+
 function cardOptionsText(cards = []) {
   if (!Array.isArray(cards) || !cards.length) return '';
   return cards.map((card, index) => `${index + 1}. ${card.name || card.label || `Cartão #${card.id}`}`).join('\n');
@@ -380,8 +457,19 @@ function buildMissingDetailsText(receipt = {}, missing = []) {
     receipt.date ? `Data: *${dayjs(receipt.date).format('DD/MM/YYYY')}*` : '',
     receipt.installments ? `Parcelas: *${receipt.installments}x*` : '',
     '',
-    `Me confirma: *${missing.join(', ')}*.`
+    `Me confirma: *${missing.join(', ')}*.`,
+    'Se preferir parar por aqui, responde *cancelar*.'
   ].filter(Boolean).join('\n');
+}
+
+function buildReceiptParseFailedText() {
+  return [
+    'Não consegui ler os dados principais desse comprovante com segurança.',
+    '',
+    'Para não te prender numa confirmação ruim, descartei essa tentativa.',
+    'Você pode mandar outra foto mais nítida ou registrar por texto, tipo:',
+    '*Nova compra hoje de R$ 42,26 no Inter em Rede Economia*.'
+  ].join('\n');
 }
 
 function isAffirmative(value = '') {
@@ -394,9 +482,15 @@ function isAffirmative(value = '') {
 
 function isNegative(value = '') {
   const text = normalizeText(value);
-  return /^(nao|não|n|cancelar|cancela|descartar|deixa|deixa pra la|deixa para la)$/i.test(text)
+  return /^(nao|não|n|cancelar|cancela|cancelado|desistir|desisto|desisti|descartar|descarta|parar|para|sair|voltar|deixa|deixa pra la|deixa para la|esquece|nao quero|não quero)$/i.test(text)
     || text.includes('cancela')
     || text.includes('cancelar')
+    || text.includes('desist')
+    || text.includes('descartar')
+    || text.includes('parar')
+    || text.includes('deixa pra la')
+    || text.includes('deixa para la')
+    || text.includes('esquece')
     || text.includes('nao quero')
     || text.includes('não quero');
 }
@@ -438,7 +532,7 @@ function parseCorrections(rawText = {}, reply = {}) {
   return patch;
 }
 
-function buildReceiptExtractionPrompt({ retry = false } = {}) {
+function buildReceiptExtractionPrompt({ retry = false, focused = false } = {}) {
   const base = [
     'Você é um extrator de dados de comprovantes de cartão brasileiros.',
     'Responda somente JSON válido, sem markdown e sem texto fora do JSON.',
@@ -448,14 +542,29 @@ function buildReceiptExtractionPrompt({ retry = false } = {}) {
     'A data deve ser a data da transação. Se houver data de impressão e data de transação, use a data da transação.',
     'Se não houver parcelamento claro, use 1 apenas quando o comprovante indicar crédito à vista ou não houver pista de parcelas.',
     'Não retorne número completo de cartão. Se houver só final, use card_last4.',
-    'Se a imagem não for comprovante de cartão, retorne is_credit_card_receipt=false.'
+    'Se a imagem não for comprovante de cartão, retorne is_credit_card_receipt=false.',
+    'Padrões comuns em comprovantes de maquininha brasileiros:',
+    '- estabelecimento pode aparecer no topo ou na linha logo antes da data/hora;',
+    '- valor pode aparecer como VALOR:, TOTAL:, Crédito Self R$, Credito R$ ou somente R$ 42,26;',
+    '- data pode aparecer como 11/06/2026, 11.06.26-17:08 ou 11/06/2026 17:08:39;',
+    '- CNPJ/CPF, cidade, rede, Sitef, autorização, ARQC e AID não são o estabelecimento;',
+    '- se aparecer SUPERMERCADOS FEIRA NOVA LTDA ou SUPERMERC FEIRA NOVA, isso é o estabelecimento.'
   ];
-  if (retry) {
+  if (retry || focused) {
     base.push(
       'A imagem pode estar amassada, com baixo contraste ou parcialmente borrada.',
       'Mesmo assim, retorne os campos que estiverem legíveis e use confidence low ou medium quando houver dúvida.',
       'Não rejeite a imagem apenas por qualidade se valor, data ou estabelecimento estiverem parcialmente legíveis.',
+      'Leia também textos de baixa resolução e abreviações de cupom/maquininha.',
       'Use warnings para dúvidas e campos incertos.'
+    );
+  }
+  if (focused) {
+    base.push(
+      'Faça uma leitura focada nos três campos principais: estabelecimento, data e valor.',
+      'Se conseguir ler uma linha parecida com "VALOR: 42,26", amount_cents deve ser 4226.',
+      'Se conseguir ler uma linha parecida com "11.06.26-17:08", date deve ser 2026-06-11.',
+      'Inclua em ocr_text_excerpt um trecho curto das linhas que você usou para decidir.'
     );
   }
   base.push('Formato exato:', JSON.stringify({
@@ -469,6 +578,7 @@ function buildReceiptExtractionPrompt({ retry = false } = {}) {
     authorization_code: 'string ou null',
     nsu: 'string ou null',
     raw_payment_method: 'string ou null',
+    ocr_text_excerpt: 'string curta ou null',
     confidence: 'high|medium|low',
     field_confidence: { merchant: 'high|medium|low', date: 'high|medium|low', amount: 'high|medium|low', installments: 'high|medium|low', card: 'high|medium|low' },
     warnings: []
@@ -476,14 +586,14 @@ function buildReceiptExtractionPrompt({ retry = false } = {}) {
   return base.join('\n');
 }
 
-async function callGeminiReceiptAttempt({ apiKey, model, file, caption, retry = false } = {}) {
-  const prompt = buildReceiptExtractionPrompt({ retry });
+async function callGeminiReceiptAttempt({ apiKey, model, file, caption, retry = false, focused = false } = {}) {
+  const prompt = buildReceiptExtractionPrompt({ retry, focused });
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
   const generationConfig = {
     temperature: 0,
-    maxOutputTokens: retry ? 1200 : 900
+    maxOutputTokens: retry || focused ? 1400 : 900
   };
-  if (!retry) generationConfig.responseMimeType = 'application/json';
+  if (!retry && !focused) generationConfig.responseMimeType = 'application/json';
   const response = await axios.post(url, {
     contents: [{
       role: 'user',
@@ -493,20 +603,23 @@ async function callGeminiReceiptAttempt({ apiKey, model, file, caption, retry = 
       ]
     }],
     generationConfig
-  }, { timeout: retry ? 60000 : 45000 });
+  }, { timeout: retry || focused ? 60000 : 45000 });
   const text = extractGeminiText(response);
   const parsed = normalizeReceiptPayload(safeJsonParse(text, null));
   return {
     text,
     parsed,
     meta: extractGeminiMeta(response),
-    retry
+    retry,
+    focused
   };
 }
 
 function attemptToReceipt(attempt) {
   if (!attempt) return null;
-  if (attempt.parsed) return sanitizeExtractedReceipt(attempt.parsed);
+  if (attempt.parsed) {
+    return enrichReceiptFromOcrText(sanitizeExtractedReceipt(attempt.parsed), attempt.parsed, attempt.text);
+  }
   return buildReceiptFromPlainText(attempt.text);
 }
 
@@ -516,6 +629,7 @@ function buildReceiptParseFailureDetails(attempts = []) {
     attempts: attempts.map((attempt, index) => ({
       index: index + 1,
       retry: Boolean(attempt?.retry),
+      focused: Boolean(attempt?.focused),
       parsed_json: Boolean(attempt?.parsed),
       text_excerpt: compactLogText(attempt?.text || '', 700),
       meta: attempt?.meta || null
@@ -525,17 +639,39 @@ function buildReceiptParseFailureDetails(attempts = []) {
 
 async function callGeminiForReceipt({ apiKey, model, file, caption, debugEnabled = false }) {
   const attempts = [];
+  const receipts = [];
+
   const first = await callGeminiReceiptAttempt({ apiKey, model, file, caption, retry: false });
   attempts.push(first);
   let receipt = attemptToReceipt(first);
-  if (receipt) return receipt;
+  if (receipt) {
+    receipts.push(receipt);
+    if (hasAllRequiredReceiptFields(receipt)) return receipt;
+  }
 
   const second = await callGeminiReceiptAttempt({ apiKey, model, file, caption, retry: true });
   attempts.push(second);
   receipt = attemptToReceipt(second);
-  if (receipt) return receipt;
+  if (receipt) {
+    receipts.push(receipt);
+    const merged = mergeReceiptFields(...receipts);
+    if (hasAllRequiredReceiptFields(merged)) return merged;
+  }
 
-  throw new ReceiptPurchaseAutomationError('Não consegui ler esse comprovante com segurança. Me manda uma foto mais nítida, pegando o comprovante inteiro, ou registra por texto mesmo.', {
+  const mergedAfterTwo = receipts.length ? mergeReceiptFields(...receipts) : null;
+  if (mergedAfterTwo && shouldKeepReceiptConversation(mergedAfterTwo)) return mergedAfterTwo;
+
+  const third = await callGeminiReceiptAttempt({ apiKey, model, file, caption, retry: true, focused: true });
+  attempts.push(third);
+  receipt = attemptToReceipt(third);
+  if (receipt) receipts.push(receipt);
+
+  const merged = receipts.length ? mergeReceiptFields(...receipts) : null;
+  if (merged) {
+    if (hasAllRequiredReceiptFields(merged) || shouldKeepReceiptConversation(merged)) return merged;
+  }
+
+  throw new ReceiptPurchaseAutomationError(buildReceiptParseFailedText(), {
     code: 'RECEIPT_IMAGE_PARSE_FAILED',
     statusCode: 422,
     details: debugEnabled ? buildReceiptParseFailureDetails(attempts) : null
@@ -853,6 +989,18 @@ function createAutomationReceiptPurchasesService(deps = {}) {
     }
 
     if (missing.length) {
+      if (!shouldKeepReceiptConversation(receipt)) {
+        repository.updateStagingParsed(resolved.user.id, staging.id, { parsed: receipt, confidence: receipt.confidence, status: 'parse_failed' });
+        return makeResult({
+          ok: false,
+          code: 'RECEIPT_IMAGE_PARSE_FAILED',
+          receipt,
+          staging: { id: staging.id, expires_at: staging.expires_at },
+          missing,
+          whatsapp: { text: buildReceiptParseFailedText() },
+          response_meta: { provider: 'gemini', model: repository.getGeminiModel(), confidence: receipt.confidence, missing_fields: missing, receipt_staging_id: staging.id }
+        }, 422);
+      }
       const updated = repository.updateStagingParsed(resolved.user.id, staging.id, { parsed: receipt, confidence: receipt.confidence, status: 'waiting_details' });
       const conversation = repository.createConversationState({
         userId: resolved.user.id,
@@ -1011,7 +1159,16 @@ function createAutomationReceiptPurchasesService(deps = {}) {
         const rawText = payload.source?.raw_text || payload.message_text || payload.text || payload.reply?.text || '';
         const reply = payload.reply || {};
         let receipt = sanitizeExtractedReceipt({ ...(staging.parsed || data.receipt || {}) });
-        if (isNegative(rawText) || reply.confirm === false || reply.intent === 'cancel_receipt_purchase') {
+        if (looksLikeReceiptNewTopic(rawText) || reply.intent === 'new_topic') {
+          repository.cancelStaging(resolved.user.id, staging.id);
+          repository.resolveConversationState(conversation.id);
+          return makeResult({
+            ok: true,
+            code: 'RECEIPT_PURCHASE_INTERRUPTED',
+            whatsapp: { text: 'Parei a leitura daquele comprovante para não misturar assuntos. Me manda o novo pedido do jeito que você quer seguir.' }
+          });
+        }
+        if (isNegative(rawText) || isReceiptConversationAbort(rawText) || reply.confirm === false || reply.intent === 'cancel_receipt_purchase') {
           repository.cancelStaging(resolved.user.id, staging.id);
           repository.resolveConversationState(conversation.id);
           return makeResult({

@@ -1636,19 +1636,25 @@ function createAutomationApiService(deps = {}) {
   function looksLikeRouterNewTopic(rawText) {
     const text = normalizeRouterText(rawText);
     if (!text) return false;
-    const queryLike = /(quanto|qto|gastei|gasto|gastos|ultimas compras|ultimos lancamentos|listar.*compras|lista.*compras|compras?.*(dezembro|janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|mes|ano)|fatura|resumo|quem me deve|o que devo)/i.test(text);
+    const menuLike = /^(oi|ola|bom dia|boa tarde|boa noite|ajuda|menu|o que voce faz\??)$/i.test(text);
+    const queryLike = /(quanto|qto|gastei|gasto|gastos|ultimas compras|ultimos lancamentos|listar.*compras|lista.*compras|compras?.*(dezembro|janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|mes|ano)|fatura|resumo|quem me deve|o que devo|central de acertos|fechamento|categoria)/i.test(text);
     const newActionLike = /(nova compra|comprei|passei no cartao|corrigir uma compra|corrige uma compra|apagar uma compra|dividir uma compra|dividir compras|lancar|lanca|lança|adicionar|cadastrar|criar lembrete|me lembra|enviar.*fatura|mandar.*fatura|pdf|importar.*fatura|comprovante|foto.*compra|imagem.*compra)/i.test(text);
-    return queryLike || newActionLike;
+    return menuLike || queryLike || newActionLike;
   }
 
   function looksLikeRouterContinuation(state, rawText) {
     const text = normalizeRouterText(rawText);
     if (!state || !text) return true;
-    if (/^(sim|s|ok|confirmar|confirma|pode|pode sim|aplica|aplicar|manda|enviar|cancelar|cancela|nao|não|n)$/.test(text)) return true;
+    const commandLike = /^(sim|s|ok|confirmar|confirma|pode|pode sim|aplica|aplicar|manda|enviar|cancelar|cancela|cancelado|desistir|desisto|desisti|descartar|descarta|parar|para|sair|voltar|deixa|deixa pra la|deixa para la|esquece|nao|não|n)$/.test(text);
+    if (commandLike) return true;
     if (/awaiting_card/.test(state)) return /(cartao|cartao|nubank|itau|itaucard|visa|master|elo|\b\d+\b|sim|nao|não|trocar|outro)/i.test(text);
     if (/awaiting_split|awaiting_exact/.test(state)) return /(eu|apenas eu|partes iguais|igual|valores|definidos|ana|bruno|,|\b\d+[,.]?\d*\b)/i.test(text);
     if (/awaiting_pdf_import_details/.test(state)) return /(cartao|nubank|itau|mes|ano|janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|\b20\d{2}\b)/i.test(text);
-    if (/awaiting_receipt_purchase/.test(state)) return /(sim|confirmar|cancelar|corrigir|valor|data|cartao|cartão|parcela|compra|loja|estabelecimento|nubank|inter|itau|itaú|visa|master|elo|\b\d+[,.]?\d*\b)/i.test(text);
+    if (/awaiting_receipt_purchase/.test(state)) {
+      if (looksLikeRouterNewTopic(rawText)) return false;
+      return /(corrigir|valor|data|cartao|cartão|parcela|compra|loja|estabelecimento|nubank|inter|itau|itaú|visa|master|elo|\b\d+[,.]?\d*\b)/i.test(text)
+        || (state === 'awaiting_receipt_purchase_details' && text.length <= 90);
+    }
     if (/awaiting_purchase_(edit|delete|create)_confirmation/.test(state)) return /^(sim|s|ok|confirmar|confirma|pode|aplica|apagar|excluir|deletar|cancelar|cancela|nao|não|n)$/.test(text);
     return /^(sim|s|ok|confirmar|cancelar|nao|não|n)$/.test(text);
   }

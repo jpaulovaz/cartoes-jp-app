@@ -683,7 +683,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"image\": {\n    \"base64\": \"{{receiptImageBase64}}\",\n    \"mime_type\": \"{{receiptImageMimeType}}\",\n    \"filename\": \"{{receiptImageFilename}}\"\n  },\n  \"caption\": \"{{receiptCaption}}\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-receipt-{{$timestamp}}\",\n    \"raw_text\": \"teste de compra por imagem\"\n  }\n}",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"image\": {\n    \"base64\": \"{{receiptImageBase64}}\",\n    \"mime_type\": \"{{receiptImageMimeType}}\",\n    \"filename\": \"{{receiptImageFilename}}\"\n  },\n  \"caption\": \"{{receiptCaption}}\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-receipt-{{$timestamp}}\",\n    \"raw_text\": \"teste de compra por imagem\",\n    \"message_received_at\": \"{{$isoTimestamp}}\"\n  }\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -717,7 +717,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"text\": \"confirmar\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-receipt-confirm-{{$timestamp}}\",\n    \"raw_text\": \"confirmar\"\n  }\n}",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"text\": \"confirmar\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-receipt-confirm-{{$timestamp}}\",\n    \"raw_text\": \"confirmar\",\n    \"message_received_at\": \"{{$isoTimestamp}}\"\n  }\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -752,7 +752,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"text\": \"corrigir valor para 42,26\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-receipt-correct-{{$timestamp}}\",\n    \"raw_text\": \"corrigir valor para 42,26\"\n  }\n}",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"text\": \"corrigir valor para 42,26\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-receipt-correct-{{$timestamp}}\",\n    \"raw_text\": \"corrigir valor para 42,26\",\n    \"message_received_at\": \"{{$isoTimestamp}}\"\n  }\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -787,7 +787,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"text\": \"cancelar\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-receipt-cancel-{{$timestamp}}\",\n    \"raw_text\": \"cancelar\"\n  }\n}",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"text\": \"cancelar\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-receipt-cancel-{{$timestamp}}\",\n    \"raw_text\": \"cancelar\",\n    \"message_received_at\": \"{{$isoTimestamp}}\"\n  }\n}",
               "options": {
                 "raw": {
                   "language": "json"

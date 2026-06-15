@@ -377,8 +377,12 @@ awaiting_receipt_purchase_details
 
 - Imagem de comprovante é compra individual, não importação de fatura PDF.
 - A IA nunca cria compra diretamente. Ela apenas extrai estabelecimento, data, valor, parcelas e pista de cartão.
+- A partir da versão 4.14.14, "imagem de comprovante" também cobre evidências de compra: print de notificação bancária, print do app do banco, confirmação de compra online, cupom ou recibo.
+- Datas relativas como `agora`, `hoje` e `ontem` não são tratadas como data absoluta pelo extrator. O backend apresenta os dados obtidos e pergunta a data antes de lançar.
+- Quando pelo menos um dado central é aproveitado, o backend mantém a conversa em `awaiting_receipt_purchase_details` e solicita os campos faltantes, em vez de descartar a tentativa cedo demais.
 - O backend valida usuário, MIME, tamanho, chave Gemini, mês fechado, cartão, idempotência e duplicidade provável.
 - Se o cartão não vier claro no comprovante, o usuário informa ou escolhe antes da criação.
+- O N8N envia `source.message_received_at` para que respostas como `hoje` ou `ontem` sejam resolvidas com base na mensagem recebida, sem inferir automaticamente a data da imagem.
 - O padrão de modelo é `gemini-2.5-flash`, configurável por `AUTOMATION_RECEIPT_IMAGE_GEMINI_MODEL`.
 - A imagem fica em staging temporário fora de `public` e não deve ser gravada em logs.
 
@@ -1066,6 +1070,14 @@ O roteador de IA recebe o estado pendente vindo do AcerttaPay e deve decidir ent
 Quando houver `new_topic`, o orquestrador remove a conversa pendente do payload enviado ao subfluxo novo e registra `interrupt_conversation_id` no log de roteamento. O backend resolve exatamente essa conversa antiga pelo id, sem depender de regex e sem apagar uma nova conversa criada pelo subfluxo atual.
 
 
+
+## 4.14.14 - Leitura de compra por imagem mais resiliente
+
+- Amplia a leitura de imagem do fluxo 1.4 para aceitar evidências de compra além de comprovantes clássicos, incluindo prints de notificação bancária e confirmação de compra.
+- Adiciona fallback determinístico para frases como "comprar R$ X em LOJA", recuperando valor, estabelecimento, forma de pagamento e final do cartão quando a IA devolver texto livre.
+- Mantém o comportamento seguro de confirmação: se data, valor ou estabelecimento faltar, o WhatsApp mostra os dados lidos e pede o campo ausente antes de lançar.
+- Trata `agora`, `hoje` e `ontem` como pistas relativas: não grava data automaticamente a partir da imagem, mas aceita a resposta do usuário usando a data de recebimento da mensagem como referência.
+- Atualiza o fluxo N8N 1.4 e a coleção Postman com `source.message_received_at` para dar referência temporal às correções do usuário.
 
 ## 4.14.13 - Ajustes de concierge por função
 

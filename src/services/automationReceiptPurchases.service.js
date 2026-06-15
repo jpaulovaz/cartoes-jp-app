@@ -58,6 +58,19 @@ function cleanDisplayText(value, fallback = '') {
     .slice(0, 180);
 }
 
+
+function whatsappDisplayText(value, fallback = '') {
+  return cleanDisplayText(value, fallback)
+    .replace(/\*/g, '\uff0a')
+    .replace(/_/g, '\uff3f')
+    .replace(/~/g, '\u301c')
+    .replace(/`/g, '\u00b4');
+}
+
+function whatsappBold(value, fallback = '') {
+  return `*${whatsappDisplayText(value, fallback)}*`;
+}
+
 function stripDataUrl(raw) {
   return String(raw || '').replace(/^data:[^;]+;base64,/i, '').replace(/\s+/g, '').trim();
 }
@@ -135,6 +148,50 @@ function normalizeDate(value) {
   return '';
 }
 
+
+function currentSaoPauloDate() {
+  return new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+}
+
+function isoDateFromReference(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return currentSaoPauloDate();
+  let date = null;
+  const numeric = Number(raw);
+  if (Number.isFinite(numeric) && numeric > 0) {
+    date = new Date(numeric > 100000000000 ? numeric : numeric * 1000);
+  } else {
+    date = new Date(raw);
+  }
+  if (!date || Number.isNaN(date.getTime())) return currentSaoPauloDate();
+  return date.toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+}
+
+function normalizeRelativeDate(value, referenceDate = '') {
+  const text = normalizeText(value);
+  if (!text) return '';
+  const baseIso = normalizeDate(referenceDate) || isoDateFromReference(referenceDate);
+  const base = dayjs(baseIso).isValid() ? dayjs(baseIso) : dayjs(currentSaoPauloDate());
+  if (/^(hoje|hj|agora|agorinha|neste momento|nesse momento)$/.test(text)) return base.format('YYYY-MM-DD');
+  if (/^(ontem|ont)$/.test(text)) return base.subtract(1, 'day').format('YYYY-MM-DD');
+  if (/^(anteontem|antes de ontem)$/.test(text)) return base.subtract(2, 'day').format('YYYY-MM-DD');
+  return '';
+}
+
+function referenceDateFromPayload(payload = {}) {
+  const source = payload.source || {};
+  return source.message_received_at
+    || source.received_at
+    || source.receivedAt
+    || source.created_at
+    || source.message_timestamp
+    || payload.message_received_at
+    || payload.received_at
+    || payload.message_timestamp
+    || payload.timestamp
+    || '';
+}
+
 function normalizeInstallments(value) {
   const parsed = Number.parseInt(String(value ?? '').replace(/\D/g, ''), 10);
   if (!Number.isFinite(parsed) || parsed < 1) return 1;
@@ -209,7 +266,7 @@ function normalizeReceiptPayload(parsed = {}) {
 
 function parseAmountCentsFromText(text = '') {
   const normalized = String(text || '');
-  const preferred = normalized.match(/(?:valor|total|credito|cr[eé]dito|debito|d[eé]bito)[^\d]{0,18}(?:r\$)?\s*(\d{1,6}(?:[.,]\d{2}))/i);
+  const preferred = normalized.match(/(?:valor|total|credito|cr[e\u00e9]dito|debito|d[e\u00e9]bito|comprar|comprou|compra|pagamento)[^\d]{0,40}(?:r\$)?\s*(\d{1,6}(?:[.,]\d{2}))/i);
   const generic = preferred || normalized.match(/(?:r\$)\s*(\d{1,6}(?:[.,]\d{2}))/i);
   if (!generic) return null;
   const cents = normalizeAmountCents(generic[1]);
@@ -251,14 +308,64 @@ function parsePaymentMethodFromText(text = '') {
   return cleanDisplayText(parts.join(' '));
 }
 
+function parseRelativeDateHintFromText(text = '') {
+  const normalized = normalizeText(text);
+  if (!normalized) return '';
+  if (/\b(agora|agorinha|hoje|hj)\b/.test(normalized) || normalized.includes('acaba de comprar')) return 'agora/hoje';
+  if (/\bontem\b/.test(normalized)) return 'ontem';
+  if (/\banteontem\b|\bantes de ontem\b/.test(normalized)) return 'anteontem';
+  return '';
+}
+
+function looksLikeBankPurchaseNotification(text = '') {
+  const raw = String(text || '');
+  const normalized = normalizeText(raw);
+  if (!normalized) return false;
+  const hasPurchaseVerb = /(acaba de comprar|comprar|comprou|compra aprovada|compra realizada|pagamento aprovado|pagamento realizado)/.test(normalized);
+  const hasMoney = /(?:r\$)\s*\d{1,6}(?:[.,]\d{2})|\b\d{1,6}[,.]\d{2}\b/i.test(raw);
+  const hasCardSignal = /(cartao|credito|debito|final \d{4}|compra)/.test(normalized);
+  return hasPurchaseVerb && hasMoney && hasCardSignal;
+}
+
+function cleanNotificationMerchant(value) {
+  return cleanDisplayText(String(value || '')
+    .replace(/\s*\.\s+(?:a\s+)?compra\s+foi[\s\S]*$/i, '')
+    .replace(/\s+(?:a\s+)?compra\s+foi[\s\S]*$/i, '')
+    .replace(/\s+com\s+(?:o|a)?\s*cart[a\u00e3]o[\s\S]*$/i, '')
+    .replace(/\s+cart[a\u00e3]o\s+final[\s\S]*$/i, '')
+    .replace(/\s+(?:no|na)\s+cr[e\u00e9]dito[\s\S]*$/i, '')
+    .replace(/\n[\s\S]*$/g, '')
+    .replace(/^[\s,.;:-]+|[\s,.;:-]+$/g, '')
+    .trim());
+}
+
+function parseMerchantFromPurchaseNotification(text = '') {
+  const raw = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!raw) return '';
+  const patterns = [
+    /(?:acaba\s+de\s+)?compr(?:ar|ou|a)[\s\S]{0,60}?(?:r\$)?\s*\d{1,6}(?:[.,]\d{2})\s+(?:em|no|na|de)\s+([\s\S]{3,180})/i,
+    /(?:compra|pagamento)[\s\S]{0,40}?(?:aprovad[ao]|realizad[ao])[\s\S]{0,80}?(?:r\$)?\s*\d{1,6}(?:[.,]\d{2})\s+(?:em|no|na|de)\s+([\s\S]{3,180})/i,
+    /(?:r\$)\s*\d{1,6}(?:[.,]\d{2})\s+(?:em|no|na|de)\s+([\s\S]{3,180})/i
+  ];
+  for (const pattern of patterns) {
+    const match = raw.match(pattern);
+    if (!match) continue;
+    const merchant = cleanNotificationMerchant(match[1]);
+    if (merchant && !/^(credito|cr[e\u00e9]dito|debito|d[e\u00e9]bito|cart[a\u00e3]o|compra)$/i.test(merchant)) return merchant;
+  }
+  return '';
+}
+
 function parseMerchantFromText(text = '') {
-  const labelMatch = String(text || '').match(/(?:estabelecimento|loja|merchant|nome)[^a-z0-9À-ÿ]{0,12}([a-zÀ-ÿ0-9 .,&'-]{3,120})/i);
+  const notificationMerchant = parseMerchantFromPurchaseNotification(text);
+  if (notificationMerchant) return notificationMerchant;
+  const labelMatch = String(text || '').match(/(?:estabelecimento|loja|merchant|nome)[^a-z0-9\u00c0-\u00ff]{0,12}([a-z\u00c0-\u00ff0-9 .,&'*-]{3,120})/i);
   if (labelMatch) return cleanDisplayText(labelMatch[1]);
-  const forbidden = /cnpj|cpf|comprovante|valor|total|credito|cr[eé]dito|debito|d[eé]bito|cart[aã]o|cartao|mastercard|visa|elo|rede|sitef|autoriz|arqc|aid|pdv|nfc|transa[cç][aã]o|aprovada|emissor|cidade|endere[cç]o|\br\$\b/i;
+  const forbidden = /cnpj|cpf|comprovante|valor|total|credito|cr[e\u00e9]dito|debito|d[e\u00e9]bito|cart[a\u00e3]o|cartao|mastercard|visa|elo|rede|sitef|autoriz|arqc|aid|pdv|nfc|transa[c\u00e7][a\u00e3]o|aprovada|emissor|cidade|endere[c\u00e7]o|\br\$\b/i;
   const lines = String(text || '')
     .split(/\r?\n|\s{2,}/)
     .map((line) => cleanDisplayText(line))
-    .filter((line) => /[a-zÀ-ÿ]{3,}/i.test(line) && !forbidden.test(line));
+    .filter((line) => /[a-z\u00c0-\u00ff]{3,}/i.test(line) && !forbidden.test(line));
   return lines[0] || '';
 }
 
@@ -271,19 +378,25 @@ function buildReceiptFromPlainText(text = '') {
   const cardLast4 = parseCardLast4FromText(raw);
   const paymentMethod = parsePaymentMethodFromText(raw);
   const authorizationCode = parseAuthorizationFromText(raw);
-  const hasReceiptSignal = /comprovante|valor|total|cr[eé]dito|d[eé]bito|cart[aã]o|cartao|mastercard|visa|elo|autoriz|transa[cç][aã]o|pdv|nfc/i.test(raw);
+  const isNotification = looksLikeBankPurchaseNotification(raw);
+  const relativeDateHint = parseRelativeDateHintFromText(raw);
+  const hasReceiptSignal = /comprovante|valor|total|credito|cr[e\u00e9]dito|debito|d[e\u00e9]bito|cart[a\u00e3]o|cartao|mastercard|visa|elo|autoriz|transa[c\u00e7][a\u00e3]o|pdv|nfc|compr(?:ar|ou|a)|compra aprovada|pagamento aprovado|acaba de comprar|cart[a\u00e3]o final/i.test(raw);
   if (!hasReceiptSignal || (!merchant && !amountCents && !date)) return null;
+  const warnings = ['A leitura veio de texto extra\u00eddo da imagem; confirme antes de lan\u00e7ar.'];
+  if (relativeDateHint && !date) warnings.push(`A imagem trouxe apenas uma data relativa (${relativeDateHint}); confirme a data antes do lan\u00e7amento.`);
   return sanitizeExtractedReceipt({
-    is_credit_card_receipt: /cr[eé]dito|cart[aã]o|cartao|mastercard|visa|elo/i.test(raw) || undefined,
+    evidence_type: isNotification ? 'bank_notification' : 'receipt_image',
+    is_credit_card_receipt: /cr[e\u00e9]dito|cart[a\u00e3]o|cartao|mastercard|visa|elo/i.test(raw) || isNotification || undefined,
     merchant: merchant || null,
     date: date || null,
+    relative_date_hint: relativeDateHint || null,
     amount_cents: amountCents || null,
     installments: 1,
     card_hint: cardLast4 ? `final ${cardLast4}` : null,
     card_last4: cardLast4 || null,
     authorization_code: authorizationCode || null,
     raw_payment_method: paymentMethod || null,
-    confidence: merchant && amountCents && date ? 'medium' : 'low',
+    confidence: merchant && amountCents && date ? 'medium' : ((merchant && amountCents) || (amountCents && date) ? 'medium' : 'low'),
     field_confidence: {
       merchant: merchant ? 'medium' : 'low',
       date: date ? 'medium' : 'low',
@@ -291,16 +404,23 @@ function buildReceiptFromPlainText(text = '') {
       installments: 'low',
       card: cardLast4 ? 'medium' : 'low'
     },
-    warnings: ['Extração recuperada do texto livre retornado pela IA; confirme antes de lançar.']
+    warnings
   });
 }
 
 function sanitizeExtractedReceipt(parsed = {}) {
   const amountCents = normalizeAmountCents(parsed.amount_cents ?? parsed.amountCents ?? parsed.amount ?? parsed.total_amount);
+  const rawDate = parsed.date || parsed.purchase_date || parsed.transaction_date || parsed.data || '';
+  const normalizedDate = normalizeDate(rawDate);
+  const relativeDateHint = cleanDisplayText(parsed.relative_date_hint || parsed.date_hint || parsed.data_relativa || (!normalizedDate ? parseRelativeDateHintFromText(rawDate) : '') || '');
   return {
+    evidence_type: cleanDisplayText(parsed.evidence_type || parsed.receipt_type || parsed.document_type || ''),
     is_credit_card_receipt: parsed.is_credit_card_receipt !== false,
     merchant: cleanDisplayText(parsed.merchant || parsed.establishment || parsed.estabelecimento || parsed.description || ''),
-    date: normalizeDate(parsed.date || parsed.purchase_date || parsed.transaction_date || parsed.data || ''),
+    date: normalizedDate,
+    relative_date_hint: relativeDateHint,
+    date_is_relative: Boolean(parsed.date_is_relative || (relativeDateHint && !normalizedDate)),
+    date_inferred: parsed.date_inferred === true,
     amount_cents: amountCents > 0 ? amountCents : null,
     installments: normalizeInstallments(parsed.installments || parsed.parcelas || 1),
     card_hint: cleanDisplayText(parsed.card_hint || parsed.card || parsed.card_name || parsed.cartao || ''),
@@ -337,7 +457,7 @@ function shouldKeepReceiptConversation(receipt = {}) {
     if (key === 'amount_cents') return Number(receipt.amount_cents || 0) > 0;
     return Boolean(receipt[key]);
   }).length;
-  return presentCount >= 2;
+  return presentCount >= 1;
 }
 
 function mergeReceiptFields(...items) {
@@ -417,57 +537,75 @@ function buildPurchasePayloadFromReceipt(receipt = {}) {
   };
 }
 
+function receiptWarningLines(receipt = {}, limit = 2) {
+  return (Array.isArray(receipt.warnings) ? receipt.warnings : [])
+    .map((warning) => cleanDisplayText(String(warning || '').replace(/^\u26a0\ufe0f\s*/u, '')))
+    .filter(Boolean)
+    .slice(0, Math.max(0, Number(limit || 2)));
+}
+
 function buildReceiptConfirmationText({ receipt, card = null, cardAmbiguous = false, cardMatches = [], similar = null, missingCard = false } = {}) {
   const lines = [
-    '🧾 *Li o comprovante assim:*',
+    '\ud83e\uddfe *Li a compra assim:*',
     '',
-    `Compra: *${receipt.merchant || 'não consegui ler'}*`,
-    `Valor: *${formatBRLFromCents(receipt.amount_cents || 0)}*`,
-    receipt.date ? `Data: *${dayjs(receipt.date).format('DD/MM/YYYY')}*` : 'Data: *não consegui ler*',
-    `Parcelas: *${normalizeInstallments(receipt.installments || 1)}x*`
+    `Compra: ${whatsappBold(receipt.merchant, 'n\u00e3o consegui ler')}`,
+    `Valor: ${whatsappBold(formatBRLFromCents(receipt.amount_cents || 0))}`,
+    receipt.date ? `Data: ${whatsappBold(dayjs(receipt.date).format('DD/MM/YYYY'))}` : `Data: ${whatsappBold('n\u00e3o consegui ler')}`,
+    `Parcelas: ${whatsappBold(`${normalizeInstallments(receipt.installments || 1)}x`)}`
   ];
   if (card) {
-    lines.push(`Cartão identificado: *${card.name}*`);
+    lines.push(`Cart\u00e3o identificado: ${whatsappBold(card.name)}`);
   } else if (receipt.card_hint) {
-    lines.push(`Cartão lido no comprovante: *${receipt.card_hint}*`);
+    lines.push(`Cart\u00e3o lido na imagem: ${whatsappBold(receipt.card_hint)}`);
   } else {
-    lines.push('Cartão: *não encontrei no comprovante*');
+    lines.push(`Cart\u00e3o: ${whatsappBold('n\u00e3o encontrei na imagem')}`);
   }
+  const warnings = receiptWarningLines(receipt);
+  if (warnings.length) lines.push('', ...warnings.map((warning) => `\u26a0\ufe0f ${warning}`));
   if (cardAmbiguous && cardMatches.length) {
-    lines.push('', 'Achei mais de um cartão possível:', cardOptionsText(cardMatches));
+    lines.push('', 'Achei mais de um cart\u00e3o poss\u00edvel:', cardOptionsText(cardMatches));
   }
   if (similar) {
-    lines.push('', `⚠️ Já existe uma compra parecida em *${dayjs(similar.txn_date).format('DD/MM/YYYY')}*: ${similar.description} por ${formatBRLFromCents(similar.amount_cents)}.`);
+    lines.push('', `\u26a0\ufe0f J\u00e1 existe uma compra parecida em *${dayjs(similar.txn_date).format('DD/MM/YYYY')}*: ${whatsappDisplayText(similar.description)} por ${formatBRLFromCents(similar.amount_cents)}.`);
   }
   lines.push('');
   if (missingCard || cardAmbiguous) {
-    lines.push('Me diz qual cartão foi ou responde *cancelar* para descartar. Se estiver tudo certo e eu ainda precisar escolher o cartão, responda *confirmar* que eu te mostro as opções.');
+    lines.push('Me diz qual cart\u00e3o foi ou responde *cancelar* para descartar. Se estiver tudo certo e eu ainda precisar escolher o cart\u00e3o, responda *confirmar* que eu te mostro as op\u00e7\u00f5es.');
   } else {
-    lines.push('Responde *confirmar* para eu lançar ou me diga o que corrigir. Ex.: *corrigir valor para 42,26*.');
+    lines.push('Responde *confirmar* para eu lan\u00e7ar ou me diga o que corrigir. Ex.: *corrigir valor para 42,26*.');
   }
   return lines.join('\n');
 }
 
 function buildMissingDetailsText(receipt = {}, missing = []) {
-  return [
-    '🧾 Consegui ler parte do comprovante, mas faltou uma informação importante.',
+  const exampleByField = {
+    estabelecimento: 'estabelecimento LARISSA',
+    data: 'data 14/06/2026',
+    valor: 'valor 35,96'
+  };
+  const examples = missing.map((field) => exampleByField[field]).filter(Boolean).join('; ');
+  const lines = [
+    '\ud83e\uddfe Consegui ler parte da imagem, mas faltou uma informa\u00e7\u00e3o importante.',
     '',
-    receipt.merchant ? `Compra: *${receipt.merchant}*` : '',
-    receipt.amount_cents ? `Valor: *${formatBRLFromCents(receipt.amount_cents)}*` : '',
-    receipt.date ? `Data: *${dayjs(receipt.date).format('DD/MM/YYYY')}*` : '',
-    receipt.installments ? `Parcelas: *${receipt.installments}x*` : '',
-    '',
-    `Me confirma: *${missing.join(', ')}*.`,
-    'Se preferir parar por aqui, responde *cancelar*.'
-  ].filter(Boolean).join('\n');
+    receipt.merchant ? `Compra: ${whatsappBold(receipt.merchant)}` : '',
+    receipt.amount_cents ? `Valor: ${whatsappBold(formatBRLFromCents(receipt.amount_cents))}` : '',
+    receipt.date ? `Data: ${whatsappBold(dayjs(receipt.date).format('DD/MM/YYYY'))}` : '',
+    receipt.installments ? `Parcelas: ${whatsappBold(`${receipt.installments}x`)}` : ''
+  ].filter(Boolean);
+  const warnings = receiptWarningLines(receipt, 3);
+  if (warnings.length) lines.push('', ...warnings.map((warning) => `\u26a0\ufe0f ${warning}`));
+  lines.push('', `Me confirma: *${missing.join(', ')}*.`);
+  if (examples) lines.push(`Pode responder nesse formato: *${examples}*.`);
+  lines.push('Se preferir parar por aqui, responde *cancelar*.');
+  return lines.join('\n');
 }
 
 function buildReceiptParseFailedText() {
   return [
-    'Não consegui ler os dados principais desse comprovante com segurança.',
+    'N\u00e3o consegui ler os dados principais dessa imagem com seguran\u00e7a.',
     '',
-    'Para não te prender numa confirmação ruim, descartei essa tentativa.',
-    'Você pode mandar outra foto mais nítida ou registrar por texto, tipo:',
+    'Para n\u00e3o te prender numa confirma\u00e7\u00e3o ruim, descartei essa tentativa.',
+    'Voc\u00ea pode mandar outra foto ou print mais n\u00edtido, ou registrar por texto, tipo:',
     '*Nova compra hoje de R$ 42,26 no Inter em Rede Economia*.'
   ].join('\n');
 }
@@ -495,82 +633,110 @@ function isNegative(value = '') {
     || text.includes('não quero');
 }
 
-function parseCorrections(rawText = {}, reply = {}) {
+function parseCorrections(rawText = {}, reply = {}, options = {}) {
   const text = String(rawText || reply.text || reply.raw_text || '').trim();
   const normalized = normalizeText(text);
   const patch = {};
-  const amountMatch = text.match(/(?:valor|total)\s*(?:para|de|é|e)?\s*(?:r\$\s*)?(\d{1,6}(?:[.,]\d{2})?)/i)
+  const referenceDate = options.referenceDate || options.reference_date || reply.reference_date || reply.message_received_at || '';
+  const missingFields = Array.isArray(options.missing) ? options.missing : [];
+
+  const amountMatch = text.match(/(?:valor|total)\s*(?:para|de|\u00e9|e)?\s*(?:r\$\s*)?(\d{1,6}(?:[.,]\d{2})?)/i)
     || text.match(/(?:r\$\s*)?(\d{1,6}[,.]\d{2})/i);
   if (amountMatch) patch.amount_cents = normalizeAmountCents(amountMatch[1]);
 
-  const dateMatch = text.match(/(?:data|dia)\s*(?:para|de|é|e)?\s*(\d{1,2}[\/.-]\d{1,2}(?:[\/.-]\d{2,4})?)/i)
+  const dateMatch = text.match(/(?:data|dia)\s*(?:para|de|\u00e9|e|foi)?\s*(\d{1,2}[\/.-]\d{1,2}(?:[\/.-]\d{2,4})?)/i)
     || text.match(/(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4})/i);
   if (dateMatch) patch.date = normalizeDate(dateMatch[1]);
 
-  const installmentsMatch = normalized.match(/(?:parcela|parcelas|parcelamento)\s*(?:para|de|em|é|e)?\s*(\d{1,3})/i)
+  if (!patch.date) {
+    const relativeDateMatch = normalized.match(/\b(hoje|hj|agora|agorinha|ontem|anteontem|antes de ontem)\b/i);
+    if (relativeDateMatch && (normalized.split(' ').length <= 5 || /\b(data|dia|compra|foi|lancar)\b/.test(normalized))) {
+      const relativeDate = normalizeRelativeDate(relativeDateMatch[1], referenceDate);
+      if (relativeDate) patch.date = relativeDate;
+    }
+  }
+
+  const installmentsMatch = normalized.match(/(?:parcela|parcelas|parcelamento)\s*(?:para|de|em|e)?\s*(\d{1,3})/i)
     || normalized.match(/(\d{1,3})\s*x/);
   if (installmentsMatch) patch.installments = normalizeInstallments(installmentsMatch[1]);
 
-  const cardMatch = text.match(/(?:cart[aã]o|cartao)\s*(?:para|de|é|e|foi|no|na)?\s*([\wÀ-ÿ0-9 .'-]{2,80})/i);
+  const cardMatch = text.match(/(?:cart[a\u00e3]o|cartao)\s*(?:para|de|\u00e9|e|foi|no|na)?\s*([\w\u00c0-\u00ff0-9 .'-]{2,80})/i);
   if (cardMatch) patch.card_hint = cleanDisplayText(cardMatch[1].replace(/^(foi|no|na)\s+/i, ''));
 
-  const merchantMatch = text.match(/(?:compra|estabelecimento|loja|descri[cç][aã]o)\s*(?:para|de|é|e|foi)?\s*([\wÀ-ÿ0-9 .,&'-]{2,120})/i);
+  const merchantMatch = text.match(/(?:compra|estabelecimento|loja|descri[c\u00e7][a\u00e3]o)\s*(?:para|de|\u00e9|e|foi)?\s*([\w\u00c0-\u00ff0-9 .,&'*-]{2,120})/i);
   if (merchantMatch) patch.merchant = cleanDisplayText(merchantMatch[1]);
-
-  if (!patch.card_hint && !patch.amount_cents && !patch.date && !patch.merchant && !patch.installments && normalized && !isAffirmative(normalized) && !isNegative(normalized)) {
-    const cardLike = text.replace(/^(cart[aã]o|cartao)\s*/i, '').trim();
-    if (cardLike && cardLike.length <= 80 && !/\d+[,.]\d{2}/.test(cardLike)) patch.card_hint = cleanDisplayText(cardLike);
-  }
 
   if (reply && typeof reply === 'object') {
     if (reply.amount_cents || reply.amount) patch.amount_cents = normalizeAmountCents(reply.amount_cents ?? reply.amount);
-    if (reply.date) patch.date = normalizeDate(reply.date);
+    if (reply.date) patch.date = normalizeDate(reply.date) || normalizeRelativeDate(reply.date, referenceDate);
     if (reply.installments) patch.installments = normalizeInstallments(reply.installments);
     if (reply.card_hint || reply.card) patch.card_hint = cleanDisplayText(reply.card_hint || reply.card);
     if (reply.merchant || reply.description) patch.merchant = cleanDisplayText(reply.merchant || reply.description);
   }
+
+  if (missingFields.length === 1 && normalized && !isAffirmative(normalized) && !isNegative(normalized)) {
+    const missing = missingFields[0];
+    if (missing === 'estabelecimento' && !patch.merchant && !/\d+[,.]\d{2}/.test(text)) patch.merchant = cleanDisplayText(text);
+    if (missing === 'data' && !patch.date) patch.date = normalizeDate(text) || normalizeRelativeDate(text, referenceDate);
+    if (missing === 'valor' && !patch.amount_cents) {
+      const cents = normalizeAmountCents(text);
+      if (cents > 0) patch.amount_cents = cents;
+    }
+  }
+
+  if (!patch.card_hint && !patch.amount_cents && !patch.date && !patch.merchant && !patch.installments && normalized && !isAffirmative(normalized) && !isNegative(normalized)) {
+    const cardLike = text.replace(/^(cart[a\u00e3]o|cartao)\s*/i, '').trim();
+    if (cardLike && cardLike.length <= 80 && !/\d+[,.]\d{2}/.test(cardLike)) patch.card_hint = cleanDisplayText(cardLike);
+  }
+
   return patch;
 }
 
 function buildReceiptExtractionPrompt({ retry = false, focused = false } = {}) {
   const base = [
-    'Você é um extrator de dados de comprovantes de cartão brasileiros.',
-    'Responda somente JSON válido, sem markdown e sem texto fora do JSON.',
-    'Extraia os dados financeiros do comprovante enviado na imagem.',
-    'Nunca invente cartão, parcelamento, valor, estabelecimento ou data.',
+    'Voc\u00ea \u00e9 um extrator de dados de evid\u00eancias brasileiras de compra no cart\u00e3o.',
+    'Responda somente JSON v\u00e1lido, sem markdown e sem texto fora do JSON.',
+    'A imagem pode ser comprovante de maquininha, cupom, recibo, print de notifica\u00e7\u00e3o banc\u00e1ria, print do app do banco, confirma\u00e7\u00e3o de compra online ou mensagem de compra aprovada.',
+    'Extraia apenas os dados financeiros leg\u00edveis da imagem.',
+    'Nunca invente cart\u00e3o, parcelamento, valor, estabelecimento ou data.',
     'O valor deve ser o valor total da compra. Ignore troco, subtotal, desconto e saldo.',
-    'A data deve ser a data da transação. Se houver data de impressão e data de transação, use a data da transação.',
-    'Se não houver parcelamento claro, use 1 apenas quando o comprovante indicar crédito à vista ou não houver pista de parcelas.',
-    'Não retorne número completo de cartão. Se houver só final, use card_last4.',
-    'Se a imagem não for comprovante de cartão, retorne is_credit_card_receipt=false.',
-    'Padrões comuns em comprovantes de maquininha brasileiros:',
-    '- estabelecimento pode aparecer no topo ou na linha logo antes da data/hora;',
-    '- valor pode aparecer como VALOR:, TOTAL:, Crédito Self R$, Credito R$ ou somente R$ 42,26;',
-    '- data pode aparecer como 11/06/2026, 11.06.26-17:08 ou 11/06/2026 17:08:39;',
-    '- CNPJ/CPF, cidade, rede, Sitef, autorização, ARQC e AID não são o estabelecimento;',
-    '- se aparecer SUPERMERCADOS FEIRA NOVA LTDA ou SUPERMERC FEIRA NOVA, isso é o estabelecimento.'
+    'A data deve ser a data absoluta da transa\u00e7\u00e3o no formato YYYY-MM-DD. Se a imagem mostrar apenas "agora", "hoje", "ontem" ou outra data relativa, retorne date=null, preencha relative_date_hint e explique em warnings.',
+    'Se houver data de impress\u00e3o e data de transa\u00e7\u00e3o, use a data da transa\u00e7\u00e3o.',
+    'Se n\u00e3o houver parcelamento claro, use 1 apenas quando a evid\u00eancia indicar cr\u00e9dito \u00e0 vista ou n\u00e3o houver pista de parcelas.',
+    'N\u00e3o retorne n\u00famero completo de cart\u00e3o. Se houver s\u00f3 final, use card_last4.',
+    'Se a imagem n\u00e3o for evid\u00eancia de compra no cart\u00e3o nem tiver dados financeiros aproveit\u00e1veis, retorne is_credit_card_receipt=false.',
+    'Prints de notifica\u00e7\u00e3o como "Voc\u00ea acaba de comprar R$ 35,96 em LOJA. A compra foi no cr\u00e9dito... cart\u00e3o final 0402" s\u00e3o evid\u00eancias v\u00e1lidas: merchant=LOJA, amount_cents=3596, card_last4=0402, date=null se s\u00f3 houver "agora".',
+    'Padr\u00f5es comuns em comprovantes e prints brasileiros:',
+    '- estabelecimento pode aparecer no topo, logo antes da data/hora, ou depois de "comprar R$ X em";',
+    '- valor pode aparecer como VALOR:, TOTAL:, Cr\u00e9dito Self R$, Credito R$, compra R$ ou somente R$ 42,26;',
+    '- data absoluta pode aparecer como 11/06/2026, 11.06.26-17:08 ou 11/06/2026 17:08:39;',
+    '- CNPJ/CPF, cidade, rede, Sitef, autoriza\u00e7\u00e3o, ARQC e AID n\u00e3o s\u00e3o o estabelecimento;',
+    '- se aparecer SUPERMERCADOS FEIRA NOVA LTDA ou SUPERMERC FEIRA NOVA, isso \u00e9 o estabelecimento.'
   ];
   if (retry || focused) {
     base.push(
-      'A imagem pode estar amassada, com baixo contraste ou parcialmente borrada.',
-      'Mesmo assim, retorne os campos que estiverem legíveis e use confidence low ou medium quando houver dúvida.',
-      'Não rejeite a imagem apenas por qualidade se valor, data ou estabelecimento estiverem parcialmente legíveis.',
-      'Leia também textos de baixa resolução e abreviações de cupom/maquininha.',
-      'Use warnings para dúvidas e campos incertos.'
+      'A imagem pode estar amassada, com baixo contraste, parcialmente borrada ou ser apenas um print de notifica\u00e7\u00e3o.',
+      'Mesmo assim, retorne os campos que estiverem leg\u00edveis e use confidence low ou medium quando houver d\u00favida.',
+      'N\u00e3o rejeite a imagem apenas por qualidade ou por n\u00e3o ser comprovante cl\u00e1ssico se valor, data ou estabelecimento estiverem parcialmente leg\u00edveis.',
+      'Leia tamb\u00e9m textos de baixa resolu\u00e7\u00e3o, notifica\u00e7\u00f5es push e abrevia\u00e7\u00f5es de cupom/maquininha.',
+      'Use warnings para d\u00favidas e campos incertos.'
     );
   }
   if (focused) {
     base.push(
-      'Faça uma leitura focada nos três campos principais: estabelecimento, data e valor.',
+      'Fa\u00e7a uma leitura focada nos tr\u00eas campos principais: estabelecimento, data absoluta e valor.',
       'Se conseguir ler uma linha parecida com "VALOR: 42,26", amount_cents deve ser 4226.',
       'Se conseguir ler uma linha parecida com "11.06.26-17:08", date deve ser 2026-06-11.',
-      'Inclua em ocr_text_excerpt um trecho curto das linhas que você usou para decidir.'
+      'Se conseguir ler "comprar R$ 35,96 em IFD*61.022.399 LARISSA", merchant deve ser IFD*61.022.399 LARISSA e amount_cents deve ser 3596.',
+      'Inclua em ocr_text_excerpt um trecho curto das linhas que voc\u00ea usou para decidir.'
     );
   }
   base.push('Formato exato:', JSON.stringify({
+    evidence_type: 'receipt_image|bank_notification|app_screenshot|online_confirmation|null',
     is_credit_card_receipt: true,
     merchant: 'string ou null',
     date: 'YYYY-MM-DD ou null',
+    relative_date_hint: 'agora/hoje/ontem ou null',
     amount_cents: 4226,
     installments: 1,
     card_hint: 'string ou null',
@@ -963,7 +1129,7 @@ function createAutomationReceiptPurchasesService(deps = {}) {
         related_purchase_id: Number(conversation.related_purchase_id || 0) || null,
         expires_at: conversation.expires_at
       },
-      whatsapp: { text: `Compra lançada pelo comprovante: *${created.description}* por *${formatBRLFromCents(created.amount_cents)}* no *${created.card_name}*. Quer definir os participantes dessa compra?` }
+      whatsapp: { text: `Compra lançada pela imagem: ${whatsappBold(created.description)} por ${whatsappBold(formatBRLFromCents(created.amount_cents))} no ${whatsappBold(created.card_name)}. Quer definir os participantes dessa compra?` }
     }, 200);
   }
 
@@ -1178,7 +1344,11 @@ function createAutomationReceiptPurchasesService(deps = {}) {
           });
         }
 
-        const patch = parseCorrections(rawText, reply);
+        const patch = parseCorrections(rawText, reply, {
+          referenceDate: referenceDateFromPayload({ ...payload, source: payload.source || data.source || {} }),
+          missing: data.missing || missingRequiredFields(receipt),
+          conversationState: conversation.state
+        });
         if (Object.keys(patch).length) {
           receipt = sanitizeExtractedReceipt({ ...receipt, ...patch });
           const updated = repository.updateStagingParsed(resolved.user.id, staging.id, { parsed: receipt, confidence: receipt.confidence, status: 'waiting_confirmation' });

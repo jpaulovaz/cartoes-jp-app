@@ -383,9 +383,11 @@ function parseCardIdFromReply(reply = {}, text = '', cards = []) {
 
   const raw = normalizeIntentText(text || reply.text || reply.raw_text || '');
   if (!raw) return 0;
-  const asNumber = Number.parseInt(raw, 10);
-  if (Number.isFinite(asNumber) && asNumber > 0) {
-    const byIndex = cards[asNumber - 1];
+  const explicitNumber = raw.match(/(?:cartao|cartão|opcao|opção)\s*(\d{1,3})\b/) || (/^\d{1,3}$/.test(raw) ? raw.match(/^(\d{1,3})$/) : null);
+  if (explicitNumber) {
+    const asNumber = Number.parseInt(explicitNumber[1], 10);
+    const byOption = cards.find((card) => Number(card.option || 0) === asNumber);
+    const byIndex = byOption || cards[asNumber - 1];
     if (byIndex) return Number(byIndex.id || 0);
     if (cards.some((card) => Number(card.id || 0) === asNumber)) return asNumber;
   }
@@ -879,30 +881,56 @@ function createAutomationApiService(deps = {}) {
   }
 
 
-  function buildPurchaseCreateConfirmationResponse({ userId, phoneE164, purchase, source }) {
-    const conversation = repository.createConversationState({
-      userId,
-      phoneE164,
-      channel: source?.channel || 'whatsapp',
-      state: 'awaiting_purchase_create_confirmation',
-      payload: { purchase, source }
-    });
+  function buildPurchaseCreateConfirmationText({ purchase = {}, cards = [], requiresCardChoice = false, cardChoiceRetry = false } = {}) {
     const lines = [
       '🧾 *Confirmar nova compra?*',
       '',
       `Compra: *${purchase.description || 'sem descrição'}*`,
       `Valor: *${formatBRLFromCents(purchase.amount_cents || 0)}*`,
       purchase.date ? `Data: *${purchase.date}*` : '',
-      purchase.installments && Number(purchase.installments) > 1 ? `Parcelas: *${purchase.installments}x*` : 'Parcelas: *1x*',
-      purchase.card_hint ? `Cartão informado: *${purchase.card_hint}*` : 'Cartão: vou confirmar antes de lançar.',
-      '',
-      'Responde *confirmar* para eu seguir ou *cancelar* para descartar. Sem chute na fatura. 😉'
+      purchase.installments && Number(purchase.installments) > 1 ? `Parcelas: *${purchase.installments}x*` : 'Parcelas: *1x*'
     ].filter(Boolean);
+
+    if (purchase.card_hint) {
+      lines.push(`Cartão informado: *${purchase.card_hint}*`);
+    } else if (requiresCardChoice) {
+      lines.push('Cartão: *preciso que você escolha*');
+    } else if (cards.length === 1) {
+      lines.push(`Cartão: *${cards[0].label || cards[0].name}*`);
+    } else {
+      lines.push('Cartão: *não informado*');
+    }
+
+    if (requiresCardChoice && cards.length) {
+      lines.push('', cardChoiceRetry ? 'Antes de lançar, preciso do cartão:' : 'Cartões disponíveis:');
+      lines.push(...cards.map((card) => `${card.option}. ${card.label}`));
+      lines.push('', 'Para lançar, responda com o *número* ou *nome* do cartão. Para descartar, responda *cancelar*.');
+    } else {
+      lines.push('', 'Responda *confirmar* para lançar ou *cancelar* para descartar.');
+    }
+
+    return lines.join('\n');
+  }
+
+  function buildPurchaseCreateConfirmationResponse({ userId, phoneE164, purchase, source }) {
+    const activeCards = repository.getActiveCards(userId);
+    const cardOptions = buildCardOptions(activeCards);
+    const cardHint = purchase.card_hint || purchase.cardHint || '';
+    const resolvedCardForHint = cardHint ? resolveCardByHint(activeCards, cardHint) : null;
+    const requiresCardChoice = cardOptions.length > 0 && ((!cardHint && cardOptions.length > 1) || (cardHint && !resolvedCardForHint));
+    const conversation = repository.createConversationState({
+      userId,
+      phoneE164,
+      channel: source?.channel || 'whatsapp',
+      state: 'awaiting_purchase_create_confirmation',
+      payload: { purchase, source, cards: cardOptions, requires_card_choice: requiresCardChoice }
+    });
     return makeResult({
       ok: false,
       code: 'NEEDS_PURCHASE_CREATE_CONFIRMATION',
       conversation: publicConversation(conversation, repository),
-      whatsapp: { text: lines.join('\n') }
+      cards: requiresCardChoice ? cardOptions : undefined,
+      whatsapp: { text: buildPurchaseCreateConfirmationText({ purchase, cards: cardOptions, requiresCardChoice }) }
     }, 202);
   }
 
@@ -2696,19 +2724,44 @@ function createAutomationApiService(deps = {}) {
           return makeResult({
             ok: true,
             code: 'PURCHASE_CREATE_CANCELLED',
-            whatsapp: { text: 'Fechado, não lancei essa compra. Cartão salvo do susto. 😉' }
+            whatsapp: { text: 'Compra descartada. Nenhuma compra foi lançada.' }
           });
         }
+
+        const confirmedPurchase = data.purchase || {};
+        const cards = Array.isArray(data.cards) ? data.cards : [];
+        const requiresCardChoice = data.requires_card_choice === true;
+        const selectedCardId = requiresCardChoice ? parseCardIdFromReply(reply, rawText, cards) : 0;
+
+        if (requiresCardChoice) {
+          if (!selectedCardId) {
+            return makeResult({
+              ok: false,
+              code: 'NEEDS_PURCHASE_CREATE_CONFIRMATION',
+              conversation: publicConversation(conversation, repository),
+              cards,
+              whatsapp: { text: buildPurchaseCreateConfirmationText({ purchase: confirmedPurchase, cards, requiresCardChoice: true, cardChoiceRetry: true }) }
+            });
+          }
+          repository.resolveConversationState(conversation.id);
+          return createPurchaseFromAutomation({
+            phone: resolved.normalized.e164,
+            purchase: { ...confirmedPurchase, card_id: selectedCardId },
+            source: payload.source || data.source || {},
+            confirmed: true,
+            card_hint_confirmed: true
+          }, { ...meta, confirmedByConversationReply: true });
+        }
+
         if (!isAffirmativeText(rawText) && reply.confirm !== true && reply.intent !== 'confirm_purchase_create') {
           return makeResult({
             ok: false,
             code: 'NEEDS_PURCHASE_CREATE_CONFIRMATION',
             conversation: publicConversation(conversation, repository),
-            whatsapp: { text: 'Para lançar essa compra, responde *confirmar*. Para desistir, responde *cancelar*.' }
+            whatsapp: { text: 'Para lançar essa compra, responda *confirmar*. Para desistir, responda *cancelar*.' }
           });
         }
         repository.resolveConversationState(conversation.id);
-        const confirmedPurchase = data.purchase || {};
         const confirmedCardHint = confirmedPurchase.card_hint || confirmedPurchase.cardHint || '';
         return createPurchaseFromAutomation({
           phone: resolved.normalized.e164,

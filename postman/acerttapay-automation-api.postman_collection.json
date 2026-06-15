@@ -752,7 +752,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"text\": \"corrigir valor para 42,26\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-receipt-correct-{{$timestamp}}\",\n    \"raw_text\": \"corrigir valor para 42,26\",\n    \"message_received_at\": \"{{$isoTimestamp}}\"\n  }\n}",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"text\": \"data 14/06/2026; cartão Inter\",\n  \"source\": {\n    \"channel\": \"postman\",\n    \"instance\": \"POSTMAN\",\n    \"message_id\": \"postman-receipt-correct-{{$timestamp}}\",\n    \"raw_text\": \"data 14/06/2026; cartão Inter\",\n    \"message_received_at\": \"{{$isoTimestamp}}\"\n  }\n}",
               "options": {
                 "raw": {
                   "language": "json"

@@ -32,6 +32,7 @@ Responsabilidades:
 - interpretar compras de cartão;
 - chamar a Automation API;
 - formatar respostas amigáveis para WhatsApp;
+- quando houver mais de um dado pendente antes de lançar, pedir tudo na mesma resposta;
 - nunca executar regra financeira fora do AcerttaPay.
 
 ## Intents do fluxo 1.1
@@ -380,8 +381,9 @@ awaiting_receipt_purchase_details
 - A partir da versão 4.14.14, "imagem de comprovante" também cobre evidências de compra: print de notificação bancária, print do app do banco, confirmação de compra online, cupom ou recibo.
 - Datas relativas como `agora`, `hoje` e `ontem` não são tratadas como data absoluta pelo extrator. O backend apresenta os dados obtidos e pergunta a data antes de lançar.
 - Quando pelo menos um dado central é aproveitado, o backend mantém a conversa em `awaiting_receipt_purchase_details` e solicita os campos faltantes, em vez de descartar a tentativa cedo demais.
+- A partir da versão 4.14.15, data, valor, estabelecimento e cartão pendentes são consolidados numa única pergunta sempre que possível.
 - O backend valida usuário, MIME, tamanho, chave Gemini, mês fechado, cartão, idempotência e duplicidade provável.
-- Se o cartão não vier claro no comprovante, o usuário informa ou escolhe antes da criação.
+- Se o cartão não vier claro no comprovante, o usuário informa ou escolhe antes da criação, junto com os demais dados pendentes quando houver.
 - O N8N envia `source.message_received_at` para que respostas como `hoje` ou `ontem` sejam resolvidas com base na mensagem recebida, sem inferir automaticamente a data da imagem.
 - O padrão de modelo é `gemini-2.5-flash`, configurável por `AUTOMATION_RECEIPT_IMAGE_GEMINI_MODEL`.
 - A imagem fica em staging temporário fora de `public` e não deve ser gravada em logs.
@@ -1069,7 +1071,13 @@ O roteador de IA recebe o estado pendente vindo do AcerttaPay e deve decidir ent
 
 Quando houver `new_topic`, o orquestrador remove a conversa pendente do payload enviado ao subfluxo novo e registra `interrupt_conversation_id` no log de roteamento. O backend resolve exatamente essa conversa antiga pelo id, sem depender de regex e sem apagar uma nova conversa criada pelo subfluxo atual.
 
+## 4.14.15 - Confirmação única de dados pendentes
 
+- Ajusta a compra por imagem para pedir, em uma única resposta, todos os dados pendentes detectados antes do lançamento, incluindo cartão quando ele não foi identificado ou ficou ambíguo.
+- Reduz o excesso de alertas na mensagem de dados faltantes, mantendo apenas aviso objetivo quando a data não ficar clara na imagem.
+- Permite que a resposta do usuário informe data e cartão no mesmo texto, por exemplo `data 14/06/2026; cartão Inter`.
+- Ajusta o fluxo principal de compra por texto para incluir a escolha do cartão já na confirmação inicial quando houver vários cartões ativos e o cartão não tiver sido informado.
+- Reforça o prompt do workflow 1.1 para perguntar múltiplos dados faltantes de uma só vez.
 
 ## 4.14.14 - Leitura de compra por imagem mais resiliente
 

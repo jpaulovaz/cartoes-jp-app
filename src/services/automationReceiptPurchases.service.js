@@ -425,6 +425,7 @@ function sanitizeExtractedReceipt(parsed = {}) {
     installments: normalizeInstallments(parsed.installments || parsed.parcelas || 1),
     card_hint: cleanDisplayText(parsed.card_hint || parsed.card || parsed.card_name || parsed.cartao || ''),
     card_last4: cleanDisplayText(parsed.card_last4 || parsed.last4 || ''),
+    card_id: Number(parsed.card_id || parsed.cardId || parsed.selected_card_id || parsed.selectedCardId || 0) || null,
     authorization_code: cleanDisplayText(parsed.authorization_code || parsed.authorization || parsed.autorizacao || ''),
     nsu: cleanDisplayText(parsed.nsu || ''),
     raw_payment_method: cleanDisplayText(parsed.raw_payment_method || parsed.payment_method || ''),
@@ -440,6 +441,52 @@ function missingRequiredFields(receipt = {}) {
   if (!receipt.date) missing.push('data');
   if (!Number(receipt.amount_cents || 0)) missing.push('valor');
   return missing;
+}
+
+function normalizeMissingFieldName(value) {
+  const text = normalizeText(value);
+  if (text.startsWith('cart')) return 'cartao';
+  if (text.startsWith('estabelec') || text === 'loja' || text === 'descricao' || text === 'descrição') return 'estabelecimento';
+  if (text.startsWith('data') || text === 'dia') return 'data';
+  if (text.startsWith('valor') || text === 'total') return 'valor';
+  return text || String(value || '').trim();
+}
+
+function uniqueMissingFields(fields = []) {
+  const seen = new Set();
+  const output = [];
+  for (const field of fields) {
+    const normalized = normalizeMissingFieldName(field);
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    output.push(normalized);
+  }
+  return output;
+}
+
+function missingFieldLabel(field) {
+  const normalized = normalizeMissingFieldName(field);
+  if (normalized === 'cartao') return 'cartão';
+  return normalized;
+}
+
+function joinHumanList(items = []) {
+  const values = items.map((item) => String(item || '').trim()).filter(Boolean);
+  if (values.length <= 1) return values[0] || '';
+  if (values.length === 2) return `${values[0]} e ${values[1]}`;
+  return `${values.slice(0, -1).join(', ')} e ${values[values.length - 1]}`;
+}
+
+function receiptNeedsCardSelection(cardInfo = {}) {
+  const activeCards = Array.isArray(cardInfo.activeCards) ? cardInfo.activeCards : [];
+  if (!activeCards.length) return false;
+  return !cardInfo.card || cardInfo.ambiguous === true;
+}
+
+function missingReceiptConversationFields(receipt = {}, cardInfo = {}) {
+  const missing = missingRequiredFields(receipt);
+  if (receiptNeedsCardSelection(cardInfo)) missing.push('cartao');
+  return uniqueMissingFields(missing);
 }
 
 function hasAllRequiredReceiptFields(receipt = {}) {
@@ -538,10 +585,36 @@ function buildPurchasePayloadFromReceipt(receipt = {}) {
 }
 
 function receiptWarningLines(receipt = {}, limit = 2) {
-  return (Array.isArray(receipt.warnings) ? receipt.warnings : [])
-    .map((warning) => cleanDisplayText(String(warning || '').replace(/^\u26a0\ufe0f\s*/u, '')))
-    .filter(Boolean)
-    .slice(0, Math.max(0, Number(limit || 2)));
+  const seen = new Set();
+  const output = [];
+  for (const item of (Array.isArray(receipt.warnings) ? receipt.warnings : [])) {
+    const raw = cleanDisplayText(String(item || '').replace(/^\u26a0\ufe0f\s*/u, ''));
+    const normalized = normalizeText(raw);
+    if (!raw || normalized.includes('leitura veio de texto extraido da imagem')) continue;
+    if (normalized.includes('data relativa') || normalized.includes('agora hoje') || normalized.includes('agora/hoje')) {
+      if (receipt.date) continue;
+      const message = 'A data não ficou clara na imagem.';
+      if (!seen.has(message)) {
+        seen.add(message);
+        output.push(message);
+      }
+      continue;
+    }
+    if (seen.has(raw)) continue;
+    seen.add(raw);
+    output.push(raw);
+  }
+  return output.slice(0, Math.max(0, Number(limit || 2)));
+}
+
+function missingDetailsAlertLines(receipt = {}, missing = []) {
+  const normalizedMissing = uniqueMissingFields(missing);
+  const alerts = [];
+  if (normalizedMissing.includes('data')) {
+    const hasRelativeHint = Boolean(receipt.relative_date_hint || receipt.date_is_relative);
+    alerts.push(hasRelativeHint ? 'A data não ficou clara na imagem.' : 'Não consegui identificar a data com segurança.');
+  }
+  return alerts.slice(0, 1);
 }
 
 function buildReceiptConfirmationText({ receipt, card = null, cardAmbiguous = false, cardMatches = [], similar = null, missingCard = false } = {}) {
@@ -577,26 +650,37 @@ function buildReceiptConfirmationText({ receipt, card = null, cardAmbiguous = fa
   return lines.join('\n');
 }
 
-function buildMissingDetailsText(receipt = {}, missing = []) {
+function buildMissingDetailsText(receipt = {}, missing = [], options = {}) {
+  const fields = uniqueMissingFields(missing);
   const exampleByField = {
     estabelecimento: 'estabelecimento LARISSA',
     data: 'data 14/06/2026',
-    valor: 'valor 35,96'
+    valor: 'valor 35,96',
+    cartao: 'cartão Inter'
   };
-  const examples = missing.map((field) => exampleByField[field]).filter(Boolean).join('; ');
+  const examples = fields.map((field) => exampleByField[field]).filter(Boolean).join('; ');
+  const fieldText = joinHumanList(fields.map(missingFieldLabel));
+  const cards = Array.isArray(options.cards) ? options.cards : [];
+  const cardOptions = buildCardOptions(cards);
   const lines = [
-    '\ud83e\uddfe Consegui ler parte da imagem, mas faltou uma informa\u00e7\u00e3o importante.',
+    '\ud83e\uddfe Consegui ler parte da imagem.',
     '',
     receipt.merchant ? `Compra: ${whatsappBold(receipt.merchant)}` : '',
     receipt.amount_cents ? `Valor: ${whatsappBold(formatBRLFromCents(receipt.amount_cents))}` : '',
     receipt.date ? `Data: ${whatsappBold(dayjs(receipt.date).format('DD/MM/YYYY'))}` : '',
-    receipt.installments ? `Parcelas: ${whatsappBold(`${receipt.installments}x`)}` : ''
+    receipt.installments ? `Parcelas: ${whatsappBold(`${receipt.installments}x`)}` : '',
+    fields.includes('cartao')
+      ? (receipt.card_hint ? `Cartão lido: ${whatsappBold(receipt.card_hint)}` : `Cartão: ${whatsappBold('não identificado')}`)
+      : ''
   ].filter(Boolean);
-  const warnings = receiptWarningLines(receipt, 3);
-  if (warnings.length) lines.push('', ...warnings.map((warning) => `\u26a0\ufe0f ${warning}`));
-  lines.push('', `Me confirma: *${missing.join(', ')}*.`);
-  if (examples) lines.push(`Pode responder nesse formato: *${examples}*.`);
-  lines.push('Se preferir parar por aqui, responde *cancelar*.');
+  const alerts = missingDetailsAlertLines(receipt, fields);
+  if (alerts.length) lines.push('', ...alerts.map((warning) => `\u26a0\ufe0f ${warning}`));
+  if (fields.includes('cartao') && cardOptions.length) {
+    lines.push('', 'Cartões disponíveis:', ...cardOptions.map((card) => `${card.option}. ${whatsappDisplayText(card.label)}`));
+  }
+  lines.push('', `Me confirma: ${whatsappBold(fieldText)}.`);
+  if (examples) lines.push(`Ex.: ${whatsappBold(examples)}.`);
+  lines.push(`Para cancelar, responda ${whatsappBold('cancelar')}.`);
   return lines.join('\n');
 }
 
@@ -633,12 +717,69 @@ function isNegative(value = '') {
     || text.includes('não quero');
 }
 
+function parseCardIdFromReceiptReply(reply = {}, text = '', cards = []) {
+  const options = Array.isArray(cards) ? cards : [];
+  const direct = Number(reply.card_id || reply.cardId || reply.selected_card_id || reply.selectedCardId || 0);
+  if (direct && options.some((card) => Number(card.id || 0) === direct)) return direct;
+
+  const rawText = String(text || reply.text || reply.raw_text || '').trim();
+  const normalized = normalizeText(rawText);
+  if (!normalized) return 0;
+
+  const explicitNumber = normalized.match(/(?:cartao|opcao|opção)\s*(\d{1,3})\b/) || (/^\d{1,3}$/.test(normalized) ? normalized.match(/^(\d{1,3})$/) : null);
+  if (explicitNumber) {
+    const asNumber = Number.parseInt(explicitNumber[1], 10);
+    const byIndex = options.find((card) => Number(card.option || 0) === asNumber) || options[asNumber - 1];
+    if (byIndex) return Number(byIndex.id || 0);
+    if (options.some((card) => Number(card.id || 0) === asNumber)) return asNumber;
+  }
+
+  const matched = options.find((card) => {
+    const label = normalizeText(card.label || card.name || '');
+    const brand = normalizeText(card.brand || '');
+    return (label && (normalized.includes(label) || label.includes(normalized)))
+      || (brand && (normalized.includes(brand) || brand.includes(normalized)));
+  });
+  return matched ? Number(matched.id || 0) : 0;
+}
+
+function cardOptionLabelById(cards = [], cardId = 0) {
+  const found = (Array.isArray(cards) ? cards : []).find((card) => Number(card.id || 0) === Number(cardId || 0));
+  return cleanDisplayText(found?.label || found?.name || '');
+}
+
+function inferCardHintFromRemainingText(text = '', patch = {}, missingFields = []) {
+  if (!uniqueMissingFields(missingFields).includes('cartao')) return '';
+  let remaining = String(text || '').trim();
+  if (!remaining) return '';
+  remaining = remaining
+    .replace(/(?:data|dia)\s*(?:para|de|é|e|foi)?\s*\d{1,2}[\/.-]\d{1,2}(?:[\/.-]\d{2,4})?/gi, ' ')
+    .replace(/\b\d{1,2}[\/.-]\d{1,2}(?:[\/.-]\d{2,4})?\b/g, ' ')
+    .replace(/(?:valor|total)\s*(?:para|de|é|e)?\s*(?:r\$\s*)?\d{1,6}(?:[.,]\d{2})?/gi, ' ')
+    .replace(/(?:r\$\s*)?\b\d{1,6}[,.]\d{2}\b/gi, ' ')
+    .replace(/\b(hoje|hj|agora|agorinha|ontem|anteontem|antes de ontem)\b/gi, ' ')
+    .replace(/\b(data|dia|valor|total|cart[aã]o|cartao|foi|no|na|em|para|de|é|e)\b/gi, ' ')
+    .replace(/[;,:|-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!remaining || remaining.length > 80 || /\d+[,.]\d{2}/.test(remaining)) return '';
+  return cleanDisplayText(remaining);
+}
+
 function parseCorrections(rawText = {}, reply = {}, options = {}) {
   const text = String(rawText || reply.text || reply.raw_text || '').trim();
   const normalized = normalizeText(text);
   const patch = {};
   const referenceDate = options.referenceDate || options.reference_date || reply.reference_date || reply.message_received_at || '';
-  const missingFields = Array.isArray(options.missing) ? options.missing : [];
+  const missingFields = uniqueMissingFields(Array.isArray(options.missing) ? options.missing : []);
+  const cards = Array.isArray(options.cards) ? options.cards : [];
+
+  const selectedCardId = parseCardIdFromReceiptReply(reply, text, cards);
+  if (selectedCardId) {
+    patch.card_id = selectedCardId;
+    const label = cardOptionLabelById(cards, selectedCardId);
+    if (label) patch.card_hint = label;
+  }
 
   const amountMatch = text.match(/(?:valor|total)\s*(?:para|de|\u00e9|e)?\s*(?:r\$\s*)?(\d{1,6}(?:[.,]\d{2})?)/i)
     || text.match(/(?:r\$\s*)?(\d{1,6}[,.]\d{2})/i);
@@ -661,7 +802,7 @@ function parseCorrections(rawText = {}, reply = {}, options = {}) {
   if (installmentsMatch) patch.installments = normalizeInstallments(installmentsMatch[1]);
 
   const cardMatch = text.match(/(?:cart[a\u00e3]o|cartao)\s*(?:para|de|\u00e9|e|foi|no|na)?\s*([\w\u00c0-\u00ff0-9 .'-]{2,80})/i);
-  if (cardMatch) patch.card_hint = cleanDisplayText(cardMatch[1].replace(/^(foi|no|na)\s+/i, ''));
+  if (cardMatch && !patch.card_id) patch.card_hint = cleanDisplayText(cardMatch[1].replace(/^(foi|no|na)\s+/i, ''));
 
   const merchantMatch = text.match(/(?:compra|estabelecimento|loja|descri[c\u00e7][a\u00e3]o)\s*(?:para|de|\u00e9|e|foi)?\s*([\w\u00c0-\u00ff0-9 .,&'*-]{2,120})/i);
   if (merchantMatch) patch.merchant = cleanDisplayText(merchantMatch[1]);
@@ -670,8 +811,21 @@ function parseCorrections(rawText = {}, reply = {}, options = {}) {
     if (reply.amount_cents || reply.amount) patch.amount_cents = normalizeAmountCents(reply.amount_cents ?? reply.amount);
     if (reply.date) patch.date = normalizeDate(reply.date) || normalizeRelativeDate(reply.date, referenceDate);
     if (reply.installments) patch.installments = normalizeInstallments(reply.installments);
-    if (reply.card_hint || reply.card) patch.card_hint = cleanDisplayText(reply.card_hint || reply.card);
+    if (reply.card_id || reply.cardId || reply.selected_card_id || reply.selectedCardId) {
+      const replyCardId = parseCardIdFromReceiptReply(reply, text, cards);
+      if (replyCardId) {
+        patch.card_id = replyCardId;
+        const label = cardOptionLabelById(cards, replyCardId);
+        if (label) patch.card_hint = label;
+      }
+    }
+    if ((reply.card_hint || reply.card) && !patch.card_id) patch.card_hint = cleanDisplayText(reply.card_hint || reply.card);
     if (reply.merchant || reply.description) patch.merchant = cleanDisplayText(reply.merchant || reply.description);
+  }
+
+  if (!patch.card_hint && !patch.card_id && missingFields.includes('cartao')) {
+    const inferredCardHint = inferCardHintFromRemainingText(text, patch, missingFields);
+    if (inferredCardHint) patch.card_hint = inferredCardHint;
   }
 
   if (missingFields.length === 1 && normalized && !isAffirmative(normalized) && !isNegative(normalized)) {
@@ -682,9 +836,13 @@ function parseCorrections(rawText = {}, reply = {}, options = {}) {
       const cents = normalizeAmountCents(text);
       if (cents > 0) patch.amount_cents = cents;
     }
+    if (missing === 'cartao' && !patch.card_hint && !patch.card_id) {
+      const cardLike = text.replace(/^(cart[a\u00e3]o|cartao)\s*/i, '').trim();
+      if (cardLike && cardLike.length <= 80 && !/\d+[,.]\d{2}/.test(cardLike)) patch.card_hint = cleanDisplayText(cardLike);
+    }
   }
 
-  if (!patch.card_hint && !patch.amount_cents && !patch.date && !patch.merchant && !patch.installments && normalized && !isAffirmative(normalized) && !isNegative(normalized)) {
+  if (!patch.card_hint && !patch.card_id && !patch.amount_cents && !patch.date && !patch.merchant && !patch.installments && normalized && !isAffirmative(normalized) && !isNegative(normalized)) {
     const cardLike = text.replace(/^(cart[a\u00e3]o|cartao)\s*/i, '').trim();
     if (cardLike && cardLike.length <= 80 && !/\d+[,.]\d{2}/.test(cardLike)) patch.card_hint = cleanDisplayText(cardLike);
   }
@@ -1048,6 +1206,19 @@ function createAutomationReceiptPurchasesService(deps = {}) {
 
   function resolveReceiptCard(userId, receipt = {}) {
     const activeCards = repository.getActiveCards(userId);
+    const requestedCardId = Number(receipt.card_id || receipt.cardId || receipt.selected_card_id || receipt.selectedCardId || 0);
+    if (requestedCardId) {
+      const selected = activeCards.find((card) => Number(card.id || 0) === requestedCardId);
+      if (selected) {
+        return {
+          card: selected,
+          cardHint: cleanDisplayText(receipt.card_hint || selected.name || ''),
+          ambiguous: false,
+          matches: [selected],
+          activeCards
+        };
+      }
+    }
     const cardHint = cleanDisplayText(receipt.card_hint || '');
     if (!cardHint) return { card: null, cardHint: '', ambiguous: false, matches: [], activeCards };
     const match = repository.findCardByHint(userId, cardHint);
@@ -1135,7 +1306,8 @@ function createAutomationReceiptPurchasesService(deps = {}) {
 
   function buildConversationForReceipt({ resolved, payload, receipt, staging, statusCode = 202 } = {}) {
     const cardInfo = resolveReceiptCard(resolved.user.id, receipt);
-    const missing = missingRequiredFields(receipt);
+    const requiredMissing = missingRequiredFields(receipt);
+    const missing = missingReceiptConversationFields(receipt, cardInfo);
     const source = payload.source || {};
     const similar = repository.findSimilarPurchase(resolved.user.id, {
       description: receipt.merchant,
@@ -1155,7 +1327,7 @@ function createAutomationReceiptPurchasesService(deps = {}) {
     }
 
     if (missing.length) {
-      if (!shouldKeepReceiptConversation(receipt)) {
+      if (requiredMissing.length && !shouldKeepReceiptConversation(receipt)) {
         repository.updateStagingParsed(resolved.user.id, staging.id, { parsed: receipt, confidence: receipt.confidence, status: 'parse_failed' });
         return makeResult({
           ok: false,
@@ -1167,6 +1339,8 @@ function createAutomationReceiptPurchasesService(deps = {}) {
           response_meta: { provider: 'gemini', model: repository.getGeminiModel(), confidence: receipt.confidence, missing_fields: missing, receipt_staging_id: staging.id }
         }, 422);
       }
+      const cardPromptCards = cardInfo.ambiguous && cardInfo.matches.length ? cardInfo.matches : cardInfo.activeCards;
+      const cardOptions = buildCardOptions(cardPromptCards);
       const updated = repository.updateStagingParsed(resolved.user.id, staging.id, { parsed: receipt, confidence: receipt.confidence, status: 'waiting_details' });
       const conversation = repository.createConversationState({
         userId: resolved.user.id,
@@ -1179,6 +1353,8 @@ function createAutomationReceiptPurchasesService(deps = {}) {
           staging_id: staging.id,
           receipt,
           missing,
+          cards: cardOptions,
+          card_ambiguous: cardInfo.ambiguous === true,
           source
         }
       });
@@ -1188,8 +1364,9 @@ function createAutomationReceiptPurchasesService(deps = {}) {
         receipt,
         staging: { id: updated.id, expires_at: updated.expires_at },
         missing,
+        cards: cardOptions,
         conversation: { id: Number(conversation.id || 0), state: conversation.state, expires_at: conversation.expires_at },
-        whatsapp: { text: buildMissingDetailsText(receipt, missing) },
+        whatsapp: { text: buildMissingDetailsText(receipt, missing, { cards: cardPromptCards }) },
         response_meta: { provider: 'gemini', model: repository.getGeminiModel(), confidence: receipt.confidence, missing_fields: missing, receipt_staging_id: staging.id }
       }, statusCode);
     }
@@ -1344,9 +1521,13 @@ function createAutomationReceiptPurchasesService(deps = {}) {
           });
         }
 
+        const availableCardOptions = Array.isArray(data.cards) && data.cards.length
+          ? data.cards
+          : buildCardOptions(repository.getActiveCards(resolved.user.id));
         const patch = parseCorrections(rawText, reply, {
           referenceDate: referenceDateFromPayload({ ...payload, source: payload.source || data.source || {} }),
           missing: data.missing || missingRequiredFields(receipt),
+          cards: availableCardOptions,
           conversationState: conversation.state
         });
         if (Object.keys(patch).length) {
@@ -1364,30 +1545,34 @@ function createAutomationReceiptPurchasesService(deps = {}) {
           });
         }
 
-        const missing = missingRequiredFields(receipt);
+        const cardInfo = resolveReceiptCard(resolved.user.id, receipt);
+        const missing = missingReceiptConversationFields(receipt, cardInfo);
         if (missing.length) {
+          const cardPromptCards = cardInfo.ambiguous && cardInfo.matches.length ? cardInfo.matches : cardInfo.activeCards;
+          const cardOptions = buildCardOptions(cardPromptCards);
+          const next = repository.updateConversationState(conversation.id, {
+            state: 'awaiting_receipt_purchase_details',
+            payload: {
+              ...data,
+              receipt,
+              missing,
+              cards: cardOptions,
+              card_ambiguous: cardInfo.ambiguous === true
+            },
+            relatedPurchaseId: null
+          });
           return makeResult({
             ok: false,
             code: 'NEEDS_RECEIPT_PURCHASE_DETAILS',
             missing,
-            conversation: { id: Number(conversation.id || 0), state: conversation.state, expires_at: conversation.expires_at },
-            whatsapp: { text: buildMissingDetailsText(receipt, missing) }
+            cards: cardOptions,
+            conversation: { id: Number(next.id || 0), state: next.state, expires_at: next.expires_at },
+            whatsapp: { text: buildMissingDetailsText(receipt, missing, { cards: cardPromptCards }) }
           }, 422);
         }
 
-        const cardInfo = resolveReceiptCard(resolved.user.id, receipt);
         const source = data.source || payload.source || {};
         repository.resolveConversationState(conversation.id);
-        if (!cardInfo.card) {
-          return createCardSelectionConversation({
-            userId: resolved.user.id,
-            phoneE164: resolved.phone.e164,
-            receipt,
-            source,
-            cards: cardInfo.activeCards,
-            stagingId: staging.id
-          });
-        }
         return createPurchaseWithCard({
           resolved,
           receipt,

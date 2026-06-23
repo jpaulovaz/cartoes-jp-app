@@ -11690,6 +11690,14 @@ function deleteTransactionsAndAllocations(userId, rows) {
 
   const deleteAllocation = db.prepare("DELETE FROM allocations WHERE transaction_id = ? AND user_id = ?");
   const deleteTransaction = db.prepare("DELETE FROM transactions WHERE id = ? AND user_id = ?");
+  const deleteImportOverwriteEventsForTransaction = db.prepare("DELETE FROM import_overwrite_events WHERE transaction_id = ? AND user_id = ?");
+  const deleteImportOverwriteEventsForImport = db.prepare("DELETE FROM import_overwrite_events WHERE import_id = ? AND user_id = ?");
+  const hasTransactionsForImport = db.prepare(`
+    SELECT 1
+    FROM transactions
+    WHERE import_id = ? AND user_id = ?
+    LIMIT 1
+  `);
   const deleteImportIfEmpty = db.prepare(`
     DELETE FROM imports
     WHERE id = ? AND user_id = ?
@@ -11706,12 +11714,18 @@ function deleteTransactionsAndAllocations(userId, rows) {
     items.forEach(item => {
       clearDraftSharedDebtSendQueueItemsForTransactions(userId, [item.id]);
       detachSharedDebtRequestsFromDeletedTransaction(userId, item.id);
+      deleteImportOverwriteEventsForTransaction.run(item.id, userId);
       deleteAllocation.run(item.id, userId);
       deleteTransaction.run(item.id, userId);
       if (item.import_id) importIds.add(item.import_id);
     });
 
-    importIds.forEach(importId => deleteImportIfEmpty.run(importId, userId));
+    importIds.forEach(importId => {
+      if (!hasTransactionsForImport.get(importId, userId)) {
+        deleteImportOverwriteEventsForImport.run(importId, userId);
+        deleteImportIfEmpty.run(importId, userId);
+      }
+    });
   })(uniqueRows);
 
   return uniqueRows.length;

@@ -221,6 +221,17 @@ function clearJobNotifications(jobId) {
   `).run(jobId);
 }
 
+function unlinkAutomationPdfStagingFromJob(jobId) {
+  const safeJobId = Number(jobId || 0);
+  if (!safeJobId) return 0;
+  const info = db.prepare(`
+    UPDATE automation_pdf_import_staging
+    SET job_id = NULL, updated_at = ?
+    WHERE job_id = ?
+  `).run(nowIso(), safeJobId);
+  return Number(info?.changes || 0);
+}
+
 function createPdfImportJob({ userId, cardId, month, year, file, preferredProvider = 'gemini' }) {
   const now = nowIso();
   const originalFilename = String(file?.originalname || 'fatura.pdf').trim() || 'fatura.pdf';
@@ -480,6 +491,7 @@ function deleteJob(userId, jobId) {
 
   db.transaction(() => {
     clearJobNotifications(jobId);
+    unlinkAutomationPdfStagingFromJob(jobId);
     db.prepare(`DELETE FROM statement_import_artifacts WHERE job_id = ?`).run(jobId);
     db.prepare(`DELETE FROM statement_import_job_attempts WHERE job_id = ?`).run(jobId);
     db.prepare(`DELETE FROM statement_import_events WHERE job_id = ?`).run(jobId);

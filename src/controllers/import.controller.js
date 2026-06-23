@@ -106,11 +106,17 @@ function createImportController(deps = {}) {
     },
 
     deletePdfImportJob(req, res) {
+      const jobId = Number(req.params.jobId || 0);
       try {
-        const result = service.deletePdfImportJob(req.user.id, Number(req.params.jobId || 0));
+        const result = service.deletePdfImportJob(req.user.id, jobId);
         if (result.flash) setFlash(req, result.flash.type, result.flash.message);
         return res.redirect(result.redirectTo || '/import');
       } catch (error) {
+        console.error('[statement-pdf] falha ao excluir job', {
+          userId: Number(req.user?.id || 0),
+          jobId,
+          error: error && error.stack ? error.stack : String(error || '')
+        });
         setFlash(req, 'error', error.message || 'Nao consegui excluir esse job agora.');
         return res.redirect('/import');
       }

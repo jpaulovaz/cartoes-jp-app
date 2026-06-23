@@ -337,8 +337,8 @@ function runMigrations() {
     after_snapshot_json TEXT NOT NULL,
     created_at TEXT NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id),
-    FOREIGN KEY (transaction_id) REFERENCES transactions(id),
-    FOREIGN KEY (import_id) REFERENCES imports(id),
+    FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE,
+    FOREIGN KEY (import_id) REFERENCES imports(id) ON DELETE SET NULL,
     FOREIGN KEY (card_id) REFERENCES cards(id)
   );
 
@@ -1113,7 +1113,7 @@ function runMigrations() {
     consumed_at TEXT,
     cancelled_at TEXT,
     FOREIGN KEY (user_id) REFERENCES users(id),
-    FOREIGN KEY (job_id) REFERENCES statement_import_jobs(id)
+    FOREIGN KEY (job_id) REFERENCES statement_import_jobs(id) ON DELETE SET NULL
   );
 
 

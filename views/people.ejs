@@ -98,7 +98,7 @@
     const source = String((person && person.name) || '').trim().split(/\s+/).filter(Boolean).slice(0, 2);
     return source.length ? source.map((part) => part.charAt(0).toUpperCase()).join('') : 'OP';
   };
-  const personActionMatchComprasClass = 'inline-flex h-full min-h-[48px] w-full items-center justify-center rounded-2xl border px-4 py-3 text-center text-sm font-black leading-none shadow-sm transition-colors';
+  const personActionMatchComprasClass = 'inline-flex h-full min-h-[48px] w-full items-center justify-center rounded-2xl border px-4 py-3 text-center text-sm font-bold leading-none shadow-sm transition-colors';
   const personActionMatchComprasLabelClass = 'block max-w-full whitespace-normal text-center leading-[1.05rem] sm:max-w-[7rem]';
 
   const renderPersonStatusChips = (person) => {
@@ -116,7 +116,7 @@
     }
 
     if (!person.is_self && person.friendship_state === 'discoverable' && person.has_app_user) {
-      addChip('border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200', 'No app');
+      addChip('border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200', 'No app');
     }
 
     if (!person.email) {
@@ -125,7 +125,7 @@
 
     if (person.is_self) {
       if (person.pix_enabled && person.pix_valid) {
-        addChip('border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200', 'Pix ok');
+        addChip('border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200', 'Pix ok');
       } else if (person.pix_enabled && !person.pix_valid) {
         addChip('border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200', 'Pix pendente');
       }
@@ -139,7 +139,7 @@
         addChip('border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300', 'Acerto pausado');
       }
       if (person.linked_user_pix_ready) {
-        addChip('border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200', 'Pix ok');
+        addChip('border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200', 'Pix ok');
       } else if (person.linked_user_pix_enabled) {
         addChip('border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200', 'Pix pendente');
       } else if (person.has_app_user) {
@@ -161,7 +161,7 @@
         label: 'Minha Rede',
         summary: 'Relacionamento ativo para dividir e cobrar.',
         badgeClasses: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200',
-        barClasses: 'from-emerald-400 via-cyan-400 to-sky-500'
+        barClasses: 'from-emerald-400 via-cyan-400 to-cyan-500'
       };
     }
 
@@ -171,7 +171,7 @@
         label: 'Te chamou',
         summary: 'Aguardando sua resposta.',
         badgeClasses: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200',
-        barClasses: 'from-emerald-400 via-amber-300 to-orange-400'
+        barClasses: 'from-emerald-400 via-amber-300 to-amber-400'
       };
     }
 
@@ -181,7 +181,7 @@
         label: 'Convite enviado',
         summary: 'Convite enviado. Falta retorno.',
         badgeClasses: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200',
-        barClasses: 'from-amber-300 via-orange-400 to-rose-400'
+        barClasses: 'from-amber-300 via-amber-400 to-rose-400'
       };
     }
 
@@ -190,8 +190,8 @@
         key: 'discover',
         label: 'No app',
         summary: 'Contato disponível para convite.',
-        badgeClasses: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200',
-        barClasses: 'from-sky-400 via-cyan-400 to-violet-400'
+        badgeClasses: 'border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200',
+        barClasses: 'from-cyan-400 via-cyan-400 to-cyan-400'
       };
     }
 
@@ -233,7 +233,7 @@
       return {
         label: 'Depois da amizade',
         summary: 'Depois da amizade, o Pix passa a vir do perfil.',
-        badgeClasses: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200'
+        badgeClasses: 'border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200'
       };
     }
 
@@ -619,8 +619,8 @@ function editContactFromButton(button) {
 
   if (submit) {
     submit.innerHTML = `<svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2.5 2.5 0 113.536 3.536L11.828 15H9v-2.828l8.586-8.586z"></path></svg>Salvar mudanças`;
-    submit.classList.remove('bg-sky-600', 'hover:bg-sky-700');
-    submit.classList.add('bg-blue-600', 'hover:bg-blue-700');
+    submit.classList.remove('bg-cyan-600', 'hover:bg-cyan-700');
+    submit.classList.add('bg-cyan-600', 'hover:bg-cyan-700');
   }
 
   if (cancel) cancel.classList.remove('hidden');
@@ -659,8 +659,8 @@ function resetContactForm() {
 
   if (submit) {
     submit.innerHTML = `<svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>Salvar contato`;
-    submit.classList.remove('bg-blue-600', 'hover:bg-blue-700');
-    submit.classList.add('bg-sky-600', 'hover:bg-sky-700');
+    submit.classList.remove('bg-cyan-600', 'hover:bg-cyan-700');
+    submit.classList.add('bg-cyan-600', 'hover:bg-cyan-700');
   }
 
   if (cancel) cancel.classList.add('hidden');
@@ -792,7 +792,7 @@ function bindProfileSignatureForm() {
   const vibeButtons = Array.from(document.querySelectorAll('[data-signature-vibe-option]'));
   if (!textInput || !vibeInput || !previewText || !previewVibe || !vibeButtons.length) return;
 
-  const selectedClasses = ['border-sky-600', 'bg-sky-600', 'text-white', 'shadow-lg', 'shadow-sky-500/15', 'dark:border-sky-400', 'dark:bg-sky-400', 'dark:text-slate-950'];
+  const selectedClasses = ['border-cyan-600', 'bg-cyan-600', 'text-white', 'shadow-lg', 'shadow-cyan-500/15', 'dark:border-cyan-400', 'dark:bg-cyan-400', 'dark:text-slate-950'];
   const idleClasses = ['border-slate-200', 'bg-white', 'text-slate-600', 'dark:border-slate-700', 'dark:bg-slate-900', 'dark:text-slate-300'];
 
   const sanitizeTextLive = (value) => String(value || '')
@@ -813,12 +813,12 @@ function bindProfileSignatureForm() {
     vibeButtons.forEach((button) => {
       const isActive = button === activeButton;
       button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-      button.classList.toggle('hover:border-sky-200', !isActive);
-      button.classList.toggle('hover:bg-sky-50', !isActive);
-      button.classList.toggle('hover:text-sky-700', !isActive);
-      button.classList.toggle('dark:hover:border-sky-800', !isActive);
-      button.classList.toggle('dark:hover:bg-sky-900/20', !isActive);
-      button.classList.toggle('dark:hover:text-sky-200', !isActive);
+      button.classList.toggle('hover:border-cyan-200', !isActive);
+      button.classList.toggle('hover:bg-cyan-50', !isActive);
+      button.classList.toggle('hover:text-cyan-700', !isActive);
+      button.classList.toggle('dark:hover:border-cyan-800', !isActive);
+      button.classList.toggle('dark:hover:bg-cyan-900/20', !isActive);
+      button.classList.toggle('dark:hover:text-cyan-200', !isActive);
       selectedClasses.forEach((className) => button.classList.toggle(className, isActive));
       idleClasses.forEach((className) => button.classList.toggle(className, !isActive));
     });
@@ -894,7 +894,7 @@ function bindPixForm(prefix, options = {}) {
     return new Promise((resolve, reject) => {
       const image = new Image();
       image.onload = () => resolve(image);
-      image.onerror = () => reject(new Error('A imagem não abriu direitinho.'));
+      image.onerror = () => reject(new Error('Não foi possível carregar a imagem.'));
       image.src = src;
     });
   }
@@ -1056,7 +1056,7 @@ function bindPixForm(prefix, options = {}) {
         releaseObjectUrls();
         previewWrap.classList.add('hidden');
         previewWrap.classList.remove('flex');
-        hint.textContent = 'Essa foto tropeçou aqui. Tenta outra imagem rapidinho.';
+        hint.textContent = 'Não foi possível carregar a foto. Tente outra imagem.';
         input.value = '';
         submit.textContent = 'Salvar foto';
       } finally {
@@ -1117,7 +1117,7 @@ function bindPixForm(prefix, options = {}) {
         showPreview(prepared.previewUrl, 'Boa! Agora ela já está pronta para salvar.');
         closeModal();
       } catch (_error) {
-        hint.textContent = 'A foto tropeçou no corte. Tenta de novo rapidinho.';
+        hint.textContent = 'Não foi possível recortar a foto. Tente novamente.';
       } finally {
         applyButton.disabled = false;
         applyButton.textContent = 'Usar essa foto';
@@ -1469,9 +1469,9 @@ function bindPixForm(prefix, options = {}) {
     const setFeedback = (message, tone = 'slate') => {
       const safeMessage = String(message || '').trim();
       feedback.textContent = safeMessage;
-      feedback.classList.remove('text-slate-600', 'text-violet-700', 'text-emerald-700', 'text-amber-700', 'text-rose-700', 'dark:text-slate-300', 'dark:text-violet-200', 'dark:text-emerald-200', 'dark:text-amber-200', 'dark:text-rose-200');
+      feedback.classList.remove('text-slate-600', 'text-cyan-700', 'text-emerald-700', 'text-amber-700', 'text-rose-700', 'dark:text-slate-300', 'dark:text-cyan-200', 'dark:text-emerald-200', 'dark:text-amber-200', 'dark:text-rose-200');
       if (tone === 'violet') {
-        feedback.classList.add('text-violet-700', 'dark:text-violet-200');
+        feedback.classList.add('text-cyan-700', 'dark:text-cyan-200');
       } else if (tone === 'emerald') {
         feedback.classList.add('text-emerald-700', 'dark:text-emerald-200');
       } else if (tone === 'amber') {
@@ -1633,7 +1633,7 @@ function bindPixForm(prefix, options = {}) {
 
     if (!(registerButton instanceof HTMLButtonElement)) {
       if (!hasClientSupport && feedback.textContent.trim()) {
-        setFeedback('Se este navegador topar, depois você consegue preparar o desbloqueio por digital, rosto ou a proteção dele.', 'slate');
+        setFeedback('Se este navegador for compatível, você poderá configurar o desbloqueio por digital ou rosto.', 'slate');
       }
       return;
     }

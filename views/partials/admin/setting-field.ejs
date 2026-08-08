@@ -1,19 +1,19 @@
 <%
   const spanClass = field.fullWidth ? 'md:col-span-2' : '';
   const helperText = field.helper || '';
-  const badgeBase = 'inline-flex items-center rounded-full border px-2.5 py-1 text-[10.5px] font-black uppercase tracking-[0.13em]';
+  const badgeBase = 'inline-flex items-center rounded-full border px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.13em]';
   const appliesBadge = `${badgeBase} ${field.restartRequired ? 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200' : 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300'}`;
-  const secretBadge = `${badgeBase} border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900/60 dark:bg-violet-950/30 dark:text-violet-200`;
+  const secretBadge = `${badgeBase} border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-900/60 dark:bg-cyan-950/30 dark:text-cyan-200`;
   const wrapperClass = 'block rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/30 px-4 py-4';
 %>
 <div class="<%= spanClass %>">
   <% if (field.input === 'switch') { %>
-    <label class="flex h-full flex-wrap items-start gap-4 rounded-[24px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/30 px-4 py-4 cursor-pointer transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-sm dark:hover:border-slate-600">
+    <label class="flex h-full flex-wrap items-start gap-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/30 px-4 py-4 cursor-pointer transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-sm dark:hover:border-slate-600">
       <input type="checkbox" name="<%= field.key %>" value="1" <%= field.boolValue ? 'checked' : '' %>
         class="peer sr-only" aria-label="<%= field.label %>">
       <span class="min-w-0 flex-1 basis-full sm:basis-auto">
         <span class="flex flex-wrap items-center gap-2.5">
-          <span class="text-sm font-black text-slate-900 dark:text-white"><%= field.label %></span>
+          <span class="text-sm font-bold text-slate-900 dark:text-white"><%= field.label %></span>
           <span class="<%= appliesBadge %>"><%= field.appliesLabel %></span>
           <% if (field.secret) { %>
             <span class="<%= secretBadge %>">Sensível</span>
@@ -23,13 +23,13 @@
           <span class="mt-2 block text-sm leading-relaxed text-slate-500 dark:text-slate-400"><%= helperText %></span>
         <% } %>
       </span>
-      <span class="sm:ml-auto inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300 before:content-['Desligado'] peer-checked:border-emerald-200 peer-checked:bg-emerald-50 peer-checked:text-emerald-700 peer-checked:before:content-['Ligado'] dark:peer-checked:border-emerald-900/60 dark:peer-checked:bg-emerald-950/40 dark:peer-checked:text-emerald-200 peer-focus-visible:ring-4 peer-focus-visible:ring-blue-100 dark:peer-focus-visible:ring-blue-900/40"></span>
-      <span aria-hidden="true" class="relative inline-flex h-8 w-14 shrink-0 rounded-full border border-slate-300 bg-slate-200 shadow-inner transition duration-200 ease-out after:absolute after:left-1 after:top-1 after:h-6 after:w-6 after:rounded-full after:bg-white after:shadow-sm after:transition after:duration-200 after:ease-out after:content-[''] peer-checked:border-emerald-500 peer-checked:bg-emerald-500 peer-checked:after:translate-x-6 dark:border-slate-600 dark:bg-slate-700 dark:peer-checked:border-emerald-500 dark:peer-checked:bg-emerald-500 peer-focus-visible:ring-4 peer-focus-visible:ring-blue-100 dark:peer-focus-visible:ring-blue-900/40"></span>
+      <span class="sm:ml-auto inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300 before:content-['Desligado'] peer-checked:border-emerald-200 peer-checked:bg-emerald-50 peer-checked:text-emerald-700 peer-checked:before:content-['Ligado'] dark:peer-checked:border-emerald-900/60 dark:peer-checked:bg-emerald-950/40 dark:peer-checked:text-emerald-200 peer-focus-visible:ring-4 peer-focus-visible:ring-cyan-100 dark:peer-focus-visible:ring-cyan-900/40"></span>
+      <span aria-hidden="true" class="relative inline-flex h-8 w-14 shrink-0 rounded-full border border-slate-300 bg-slate-200 shadow-inner transition duration-200 ease-out after:absolute after:left-1 after:top-1 after:h-6 after:w-6 after:rounded-full after:bg-white after:shadow-sm after:transition after:duration-200 after:ease-out after:content-[''] peer-checked:border-emerald-500 peer-checked:bg-emerald-500 peer-checked:after:translate-x-6 dark:border-slate-600 dark:bg-slate-700 dark:peer-checked:border-emerald-500 dark:peer-checked:bg-emerald-500 peer-focus-visible:ring-4 peer-focus-visible:ring-cyan-100 dark:peer-focus-visible:ring-cyan-900/40"></span>
     </label>
   <% } else if (field.input === 'textarea') { %>
     <label class="<%= wrapperClass %>">
       <span class="flex flex-wrap items-center gap-2.5">
-        <span class="text-sm font-black text-slate-900 dark:text-white"><%= field.label %></span>
+        <span class="text-sm font-bold text-slate-900 dark:text-white"><%= field.label %></span>
         <span class="<%= appliesBadge %>"><%= field.appliesLabel %></span>
         <% if (field.secret) { %>
           <span class="<%= secretBadge %>">Sensível</span>
@@ -44,7 +44,7 @@
   <% } else if (field.input === 'select') { %>
     <label class="<%= wrapperClass %>">
       <span class="flex flex-wrap items-center gap-2.5">
-        <span class="text-sm font-black text-slate-900 dark:text-white"><%= field.label %></span>
+        <span class="text-sm font-bold text-slate-900 dark:text-white"><%= field.label %></span>
         <span class="<%= appliesBadge %>"><%= field.appliesLabel %></span>
         <% if (field.secret) { %>
           <span class="<%= secretBadge %>">Sensível</span>
@@ -66,7 +66,7 @@
   <% } else { %>
     <label class="<%= wrapperClass %>">
       <span class="flex flex-wrap items-center gap-2.5">
-        <span class="text-sm font-black text-slate-900 dark:text-white"><%= field.label %></span>
+        <span class="text-sm font-bold text-slate-900 dark:text-white"><%= field.label %></span>
         <span class="<%= appliesBadge %>"><%= field.appliesLabel %></span>
         <% if (field.secret) { %>
           <span class="<%= secretBadge %>">Sensível</span>

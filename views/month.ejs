@@ -46,7 +46,7 @@
     const tone = String(statusTone || '').toLowerCase();
     if (tone === 'success') return 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200';
     if (tone === 'warning') return 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200';
-    if (tone === 'info') return 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200';
+    if (tone === 'info') return 'border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200';
     return 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300';
   }
 
@@ -98,7 +98,7 @@
               <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c.828 0 1.5.672 1.5 1.5S12.828 14 12 14s-1.5-.672-1.5-1.5S11.172 11 12 11zm6-2h-1V7a5 5 0 10-10 0v2H6a2 2 0 00-2 2v7a2 2 0 002 2h12a2 2 0 002-2v-7a2 2 0 00-2-2zm-8-2a3 3 0 116 0v2h-6V7z"></path>
               </svg>
-              Anotar compra
+              Nova compra
             </button>
           <% } else { %>
             <button type="button" data-manual-modal-open
@@ -106,7 +106,7 @@
               <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
               </svg>
-              Anotar compra
+              Nova compra
             </button>
           <% } %>
 
@@ -150,11 +150,11 @@
       </div>
     <% } %>
 
-    <div class="mb-6 op-surface-card op-month-recurring-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-5">
+    <div class="mb-6 op-surface-card op-month-recurring-card bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-5">
       <details class="group op-month-recurring-toggle">
         <summary class="flex cursor-pointer list-none items-start justify-between gap-3">
           <div>
-            <h2 class="text-lg font-extrabold text-slate-800 dark:text-white">Lançamentos recorrentes</h2>
+            <h2 class="text-lg font-bold text-slate-800 dark:text-white">Lançamentos recorrentes</h2>
             <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Itens que continuam aparecendo em novas competências.</p>
           </div>
           <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-600 transition group-open:rotate-180 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">⌄</span>
@@ -167,7 +167,7 @@
             <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/70 p-4">
               <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                 <div>
-                  <div class="text-base font-extrabold text-slate-800 dark:text-white"><%= rule.description %></div>
+                  <div class="text-base font-bold text-slate-800 dark:text-white"><%= rule.description %></div>
                   <div class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400"><%= rule.card_name %> · <%= formatBRLFromCents(rule.amount_cents) %></div>
                 </div>
                 <% if (rule.status === 'active') { %>
@@ -229,9 +229,9 @@
     <div id="modalManual" data-manual-modal aria-hidden="true"
       class="hidden fixed inset-0 z-[10020] bg-slate-900/60 backdrop-blur-sm px-3 py-3 sm:px-4 sm:py-6">
       <div class="pointer-events-none flex min-h-full items-end justify-center sm:items-center">
-        <div class="pointer-events-auto flex w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800 lg:max-w-4xl xl:max-w-5xl max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)]">
+        <div class="pointer-events-auto flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800 lg:max-w-4xl xl:max-w-5xl max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)]">
         <div class="flex shrink-0 justify-between items-center border-b border-slate-200 px-4 py-4 sm:px-6 dark:border-slate-700">
-          <h2 class="text-xl font-black text-slate-800 dark:text-white">Anotar compra</h2>
+          <h2 class="text-xl font-bold text-slate-800 dark:text-white">Nova compra</h2>
           <button type="button" data-manual-modal-close
             class="op-icon-btn" aria-label="Fechar janela">✕</button>
         </div>
@@ -284,14 +284,14 @@
 
           <div data-purchase-category-control class="space-y-3 lg:col-span-2">
             <div>
-              <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Categoria (se quiser organizar já)</label>
+              <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Categoria (opcional)</label>
               <select name="purchase_category_id" data-purchase-category-select <%= isClosed ? "disabled" : "" %>
                 class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
-                <option value="">Deixar sem categoria por enquanto</option>
+                <option value="">Sem categoria</option>
                 <% sortedActivePurchaseCategories.forEach(category => { %>
                   <option value="<%= category.id %>"><%= category.name %></option>
                 <% }) %>
-                <option value="__new__">Criar categoria nova</option>
+                <option value="__new__">Nova categoria</option>
               </select>
               <p class="mt-1 text-[11px] font-medium text-slate-400 dark:text-slate-500">Opcional. Você pode classificar depois sem perder o lançamento.</p>
             </div>
@@ -326,8 +326,8 @@
             </div>
           <% } else { %>
             <button type="submit"
-              class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-3 rounded-2xl shadow-lg shadow-emerald-500/20 transition-all lg:col-span-2">
-              Salvar compra
+              class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-2xl shadow-lg shadow-emerald-500/20 transition-all lg:col-span-2">
+              Salvar
             </button>
           <% } %>
         </form></div>
@@ -336,10 +336,10 @@
   </div>
 
 
-    <details class="op-surface-card op-month-categories-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 mb-6 group">
+    <details class="op-surface-card op-month-categories-card bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 mb-6 group">
       <summary class="flex cursor-pointer list-none items-start justify-between gap-3">
         <div>
-          <h2 class="text-lg font-extrabold text-slate-800 dark:text-white">Categorias</h2>
+          <h2 class="text-lg font-bold text-slate-800 dark:text-white">Categorias</h2>
           <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Cadastre e archive categorias sem alterar lançamentos antigos.</p>
         </div>
         <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-600 transition group-open:rotate-180 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">⌄</span>
@@ -381,7 +381,7 @@
       </div>
     </details>
 
-    <div class="op-surface-card op-month-filter-card op-month-filter-card--v5 bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 mb-6">
+    <div class="op-surface-card op-month-filter-card op-month-filter-card--v5 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 mb-6">
       <div class="op-month-filter-card__head">
         <div>
           <div class="op-month-filter-card__eyebrow">Busca e filtros</div>
@@ -400,37 +400,37 @@
         <div>
           <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Data</label>
           <input type="date" name="f_date" value="<%= filters.f_date || '' %>"
-            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none" />
+            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-cyan-500 outline-none" />
         </div>
         <div class="md:col-span-2">
           <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Descrição</label>
           <input name="f_desc" value="<%= filters.f_desc || '' %>"
-            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none"
+            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-cyan-500 outline-none"
             placeholder="Ex: Uber, Mercado..." />
         </div>
         <div>
           <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Cartão</label>
           <input name="f_card" value="<%= filters.f_card || '' %>"
-            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none"
+            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-cyan-500 outline-none"
             placeholder="Ex: Nubank" />
         </div>
         <div>
           <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Nº (Final)</label>
           <input name="f_number" value="<%= filters.f_number || '' %>"
-            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none"
+            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-cyan-500 outline-none"
             placeholder="****" />
         </div>
         <div>
           <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Valor</label>
           <input name="f_amount" value="<%= filters.f_amount || '' %>" data-money-mask inputmode="numeric"
-            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none"
+            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-cyan-500 outline-none"
             placeholder="R$ 0,00" />
         </div>
 
         <div class="md:col-span-2 lg:col-span-2 xl:col-span-1">
           <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Categoria</label>
           <select name="f_category"
-            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none">
+            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-cyan-500 outline-none">
             <option value="">Todas</option>
             <option value="none" <%= String(filters.f_category || '') === 'none' ? 'selected' : '' %>>Sem categoria</option>
             <% sortedPurchaseCategories.forEach(category => { %>
@@ -442,7 +442,7 @@
         <div class="md:col-span-2 lg:col-span-1">
           <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Distribuído</label>
           <select name="f_allocated"
-            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none">
+            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-cyan-500 outline-none">
             <option value="">Todos</option>
             <option value="sim" <%=filters.f_allocated==='sim' ? 'selected' : '' %>>Sim</option>
             <option value="nao" <%=filters.f_allocated==='nao' ? 'selected' : '' %>>Não</option>
@@ -453,7 +453,7 @@
           <div class="md:col-span-2 lg:col-span-1">
             <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Origem</label>
             <select name="f_origin"
-              class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none">
+              class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-cyan-500 outline-none">
               <option value="" <%= String(filters.f_origin || '') === '' ? 'selected' : '' %>>Todas</option>
               <option value="own" <%= String(filters.f_origin || '') === 'own' ? 'selected' : '' %>>Próprias</option>
               <option value="shared" <%= String(filters.f_origin || '') === 'shared' ? 'selected' : '' %>>Compartilhadas</option>
@@ -464,7 +464,7 @@
         <div class="md:col-span-2 lg:col-span-1">
           <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Pessoa</label>
           <select name="f_person"
-            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none">
+            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-cyan-500 outline-none">
             <option value="">Todas</option>
             <% sortedPeopleForSelection.forEach(p => { %>
               <option value="<%= p.id %>" <%= String(filters.f_person || '') === String(p.id) ? 'selected' : '' %>><%= getParticipantDisplayName(p) %></option>
@@ -475,7 +475,7 @@
         <div class="md:col-span-2 lg:col-span-2 xl:col-span-2">
           <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">Ordem dos itens</label>
           <select name="order"
-            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none">
+            class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-cyan-500 outline-none">
             <option value="recent" <%= listOrder === 'recent' ? 'selected' : '' %>>Mais recentes primeiro</option>
             <option value="oldest" <%= listOrder === 'oldest' ? 'selected' : '' %>>Mais antigos primeiro</option>
           </select>
@@ -491,11 +491,11 @@
       </form>
     </div>
 
-    <div class="op-surface-card op-month-ledger-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+    <div class="op-surface-card op-month-ledger-card bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
       <div class="op-month-ledger-head border-b border-slate-200 dark:border-slate-700 px-5 py-4">
         <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h2 class="text-lg font-extrabold text-slate-800 dark:text-white">Lançamentos do período</h2>
+            <h2 class="text-lg font-bold text-slate-800 dark:text-white">Lançamentos do período</h2>
             <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
               <% if (isClosed) { %>
                 Período em leitura. Abra um item para consultar os detalhes sem alterar a distribuição.
@@ -524,19 +524,19 @@
           <thead
             class="hidden md:table-header-group bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 uppercase font-bold text-[11px] tracking-wider">
             <tr>
-              <th class="px-4 py-4"><a class="hover:text-blue-600 transition-colors flex items-center"
+              <th class="px-4 py-4"><a class="hover:text-cyan-600 transition-colors flex items-center"
                   href="<%= sortLink('date') %>">Data</a></th>
-              <th class="px-4 py-4"><a class="hover:text-blue-600 transition-colors flex items-center"
+              <th class="px-4 py-4"><a class="hover:text-cyan-600 transition-colors flex items-center"
                   href="<%= sortLink('desc') %>">Descrição</a></th>
               <th class="hidden md:table-cell px-4 py-4 text-center min-w-[13rem]">Categoria</th>
-              <th class="px-4 py-4 text-center min-w-[13rem]"><a class="hover:text-blue-600 transition-colors inline-flex items-center justify-center"
+              <th class="px-4 py-4 text-center min-w-[13rem]"><a class="hover:text-cyan-600 transition-colors inline-flex items-center justify-center"
                   href="<%= sortLink('card') %>">Cartão</a></th>
-              <th class="px-4 py-4 min-w-[9rem] xl:min-w-[8rem]"><a class="hover:text-blue-600 transition-colors flex items-center"
+              <th class="px-4 py-4 min-w-[9rem] xl:min-w-[8rem]"><a class="hover:text-cyan-600 transition-colors flex items-center"
                   href="<%= sortLink('number') %>">Nº</a></th>
-              <th class="px-4 py-4 text-right"><a class="hover:text-blue-600 transition-colors inline-flex items-center"
+              <th class="px-4 py-4 text-right"><a class="hover:text-cyan-600 transition-colors inline-flex items-center"
                   href="<%= sortLink('amount') %>">Valor</a></th>
               <th class="px-4 py-4 text-center"><a
-                  class="hover:text-blue-600 transition-colors inline-flex items-center"
+                  class="hover:text-cyan-600 transition-colors inline-flex items-center"
                   href="<%= sortLink('allocated') %>">Status</a></th>
               <th class="px-4 py-4 pr-8 text-left min-w-[20rem] xl:min-w-[21rem]">Resumo e ações</th>
             </tr>
@@ -547,7 +547,7 @@
                    const item = ledgerRow.shared || ledgerRow;
                    const sharedRequester = getSharedProjectionFirstName(item.requesterName);
               %>
-                <tr id="shared-request-<%= item.sourceRequestId %>" class="op-month-row op-month-ledger-row block md:table-row mb-3 rounded-[28px] border border-violet-100 bg-violet-50/80 p-4 shadow-sm shadow-slate-900/5 dark:border-violet-900/50 dark:bg-violet-950/20 md:mb-0 md:rounded-none md:border-b md:border-x-0 md:border-t-0 md:bg-transparent md:p-0 md:shadow-none hover:bg-violet-50/70 dark:hover:bg-violet-900/20 transition-colors align-middle space-y-1 md:space-y-0"
+                <tr id="shared-request-<%= item.sourceRequestId %>" class="op-month-row op-month-ledger-row block md:table-row mb-3 rounded-2xl border border-cyan-100 bg-cyan-50/80 p-4 shadow-sm shadow-slate-900/5 dark:border-cyan-900/50 dark:bg-cyan-950/20 md:mb-0 md:rounded-none md:border-b md:border-x-0 md:border-t-0 md:bg-transparent md:p-0 md:shadow-none hover:bg-cyan-50/70 dark:hover:bg-cyan-900/20 transition-colors align-middle space-y-1 md:space-y-0"
                   data-month-row data-readonly-row="1" data-shared-request-id="<%= item.sourceRequestId %>" tabindex="0" aria-label="Compra compartilhada <%= item.description %>">
                   <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">
                     <div class="flex items-center justify-between gap-3 md:block">
@@ -559,16 +559,16 @@
                     <div class="flex items-start justify-between gap-3 md:block">
                       <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500 pt-0.5">Descrição</span>
                       <span class="text-right md:text-left break-words whitespace-normal block flex-1"><%= item.description %></span>
-                      <span class="mt-1 inline-flex w-fit items-center rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-black text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200 md:hidden">Compartilhada</span>
+                      <span class="mt-1 inline-flex w-fit items-center rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[11px] font-bold text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200 md:hidden">Compartilhada</span>
                     </div>
                   </td>
                   <td class="hidden md:table-cell px-4 py-3 align-middle text-center min-w-[13rem]">
-                    <span class="inline-flex max-w-full items-center justify-center whitespace-nowrap rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-center text-[11px] font-bold leading-none text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200"><%= item.categoryName || 'Compartilhadas' %></span>
+                    <span class="inline-flex max-w-full items-center justify-center whitespace-nowrap rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-center text-[11px] font-bold leading-none text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200"><%= item.categoryName || 'Compartilhadas' %></span>
                   </td>
                   <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 align-middle text-center min-w-[13rem]">
                     <div class="flex items-center justify-between gap-3 md:block">
                       <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Cartão</span>
-                      <span class="inline-flex max-w-full items-center justify-center whitespace-nowrap rounded-full border border-violet-200 bg-white px-3 py-1 text-center text-[11px] font-bold leading-none text-violet-700 dark:border-violet-800 dark:bg-slate-900 dark:text-violet-200"><%= item.sharedCardLabel || item.ledgerCardName || item.cardName || 'Compartilhada' %></span>
+                      <span class="inline-flex max-w-full items-center justify-center whitespace-nowrap rounded-full border border-cyan-200 bg-white px-3 py-1 text-center text-[11px] font-bold leading-none text-cyan-700 dark:border-cyan-800 dark:bg-slate-900 dark:text-cyan-200"><%= item.sharedCardLabel || item.ledgerCardName || item.cardName || 'Compartilhada' %></span>
                     </div>
                   </td>
                   <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 font-mono text-xs text-slate-500 dark:text-slate-400 md:max-w-[9rem] xl:max-w-[8rem] whitespace-normal break-words">
@@ -577,7 +577,7 @@
                       <span><%= item.cardNumber || '-' %></span>
                     </div>
                   </td>
-                  <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 text-right font-black text-slate-900 dark:text-white">
+                  <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 text-right font-bold text-slate-900 dark:text-white">
                     <div class="flex items-center justify-between gap-3 md:block">
                       <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Valor</span>
                       <span><%= formatBRLFromCents(item.amountCents) %></span>
@@ -586,10 +586,10 @@
                   <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 text-center status-icon">
                     <div class="flex items-center justify-between md:justify-center gap-3">
                       <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Status</span>
-                      <span class="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-black text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200" title="Recebida de <%= item.requesterName || 'amigo' %>">Compartilhada</span>
+                      <span class="inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[11px] font-bold text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200" title="Recebida de <%= item.requesterName || 'amigo' %>">Compartilhada</span>
                     </div>
                   </td>
-                  <td class="op-month-row__meta block md:table-cell px-3 md:px-4 pr-5 md:pr-8 py-3 md:py-3 mt-3 md:mt-0 rounded-2xl border border-violet-100 bg-white/90 dark:border-violet-900/50 dark:bg-slate-900/35 md:min-w-[20rem] xl:min-w-[21rem] md:rounded-none md:border-0 md:bg-transparent md:py-3">
+                  <td class="op-month-row__meta block md:table-cell px-3 md:px-4 pr-5 md:pr-8 py-3 md:py-3 mt-3 md:mt-0 rounded-2xl border border-cyan-100 bg-white/90 dark:border-cyan-900/50 dark:bg-slate-900/35 md:min-w-[20rem] xl:min-w-[21rem] md:rounded-none md:border-0 md:bg-transparent md:py-3">
                     <div class="flex items-start gap-3 md:relative">
                       <div class="min-w-0 flex-1">
                         <div class="flex flex-wrap gap-2">
@@ -597,13 +597,13 @@
                           <span class="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-bold <%= getSharedProjectionStatusClasses(item.statusTone) %>"><%= item.statusLabel || 'Aceita' %></span>
                         </div>
                         <div class="mt-2 flex flex-wrap gap-2">
-                          <span class="inline-flex max-w-full items-center justify-center whitespace-nowrap rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-center text-[11px] font-bold leading-none text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200 md:hidden"><%= item.categoryName || 'Compartilhadas' %></span>
+                          <span class="inline-flex max-w-full items-center justify-center whitespace-nowrap rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-center text-[11px] font-bold leading-none text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200 md:hidden"><%= item.categoryName || 'Compartilhadas' %></span>
                           <% if (item.pendingReportedCents > 0) { %>
                             <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">Em conferência</span>
                           <% } %>
                         </div>
                         <div class="mt-2 flex justify-end">
-                          <a href="<%= item.actionsUrl || '/shared-debts#received' %>" class="inline-flex min-w-max items-center justify-center whitespace-nowrap rounded-full border border-slate-200 bg-white px-3.5 py-2 text-[11px] font-black leading-none text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Ver acerto</a>
+                          <a href="<%= item.actionsUrl || '/shared-debts#received' %>" class="inline-flex min-w-max items-center justify-center whitespace-nowrap rounded-full border border-slate-200 bg-white px-3.5 py-2 text-[11px] font-bold leading-none text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">Ver acerto</a>
                         </div>
                       </div>
                     </div>
@@ -614,7 +614,7 @@
                    const participantPeople = (t.selected_ids || []).map(pid => people.find(p => Number(p.id) === Number(pid))).filter(Boolean);
                    const shortParticipantNames = participantPeople.map(person => getParticipantChipLabel(person, participantPeople.length)).filter(Boolean);
               %>
-              <tr class="op-month-row op-month-ledger-row block md:table-row mb-3 rounded-[28px] border border-slate-200 bg-white/95 p-4 shadow-sm shadow-slate-900/5 dark:border-slate-700 dark:bg-slate-800/60 md:mb-0 md:rounded-none md:border-b md:border-x-0 md:border-t-0 md:border-slate-100 md:bg-transparent md:p-0 md:shadow-none dark:md:border-slate-700 hover:bg-slate-50/60 dark:hover:bg-slate-700/30 transition-colors align-middle space-y-1 md:space-y-0 cursor-pointer"
+              <tr class="op-month-row op-month-ledger-row block md:table-row mb-3 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-sm shadow-slate-900/5 dark:border-slate-700 dark:bg-slate-800/60 md:mb-0 md:rounded-none md:border-b md:border-x-0 md:border-t-0 md:border-slate-100 md:bg-transparent md:p-0 md:shadow-none dark:md:border-slate-700 hover:bg-slate-50/60 dark:hover:bg-slate-700/30 transition-colors align-middle space-y-1 md:space-y-0 cursor-pointer"
                 data-month-row data-txn-id="<%= t.id %>" tabindex="0" role="button" aria-label="Abrir ações para <%= t.description %>">
                 <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">
                   <div class="flex items-center justify-between gap-3 md:block">
@@ -630,7 +630,7 @@
                 </td>
                 <td class="hidden md:table-cell px-4 py-3 align-middle text-center min-w-[13rem]">
                   <% if (t.purchase_category_name) { %>
-                    <span class="inline-flex max-w-full items-center justify-center whitespace-nowrap rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-center text-[11px] font-bold leading-none text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200"><%= t.purchase_category_name %></span>
+                    <span class="inline-flex max-w-full items-center justify-center whitespace-nowrap rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-center text-[11px] font-bold leading-none text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200"><%= t.purchase_category_name %></span>
                   <% } else { %>
                     <span class="text-xs font-semibold text-slate-400 dark:text-slate-500">—</span>
                   <% } %>
@@ -649,7 +649,7 @@
                     <span><%= t.card_number || '-' %></span>
                   </div>
                 </td>
-                <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 text-right font-black text-slate-900 dark:text-white">
+                <td class="block md:table-cell px-0 md:px-4 py-1.5 md:py-3 text-right font-bold text-slate-900 dark:text-white">
                   <div class="flex items-center justify-between gap-3 md:block">
                     <span class="md:hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Valor</span>
                     <span><%= formatBRLFromCents(t.amount_cents) %></span>
@@ -705,13 +705,13 @@
 
                       <div class="mt-2 flex flex-wrap gap-2">
                         <% if (t.purchase_category_name) { %>
-                          <span class="inline-flex max-w-full items-center justify-center whitespace-nowrap rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-center text-[11px] font-bold leading-none text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200 md:hidden"><%= t.purchase_category_name %></span>
+                          <span class="inline-flex max-w-full items-center justify-center whitespace-nowrap rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-center text-[11px] font-bold leading-none text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200 md:hidden"><%= t.purchase_category_name %></span>
                         <% } %>
                         <% if (t.has_future_installments) { %>
-                          <span class="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-bold text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200">Parcelada</span>
+                          <span class="inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[11px] font-bold text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200">Parcelada</span>
                         <% } %>
                         <% if (t.recurring_rule_id) { %>
-                          <span class="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-bold text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200">Recorrente</span>
+                          <span class="inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[11px] font-bold text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200">Recorrente</span>
                         <% } %>
                       </div>
 
@@ -741,14 +741,14 @@
 
   <% if (!isClosed) { %>
     <div id="monthSelectionToolbar"
-      class="op-month-selection-toolbar fixed left-4 right-4 z-50 rounded-[28px] border border-slate-200/80 bg-white/95 p-4 shadow-2xl shadow-slate-900/10 backdrop-blur-md dark:border-slate-700 dark:bg-slate-900/95">
+      class="op-month-selection-toolbar fixed left-4 right-4 z-50 rounded-2xl border border-slate-200/80 bg-white/95 p-4 shadow-lg shadow-slate-900/10 backdrop-blur-md dark:border-slate-700 dark:bg-slate-900/95">
       <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div class="min-w-0">
           <div class="flex items-center gap-3">
             <span id="monthSelectionCount"
-              class="inline-flex h-9 min-w-[2.25rem] items-center justify-center rounded-2xl bg-blue-600 px-3 text-sm font-black text-white shadow-lg shadow-blue-500/25">0</span>
+              class="inline-flex h-9 min-w-[2.25rem] items-center justify-center rounded-2xl bg-cyan-600 px-3 text-sm font-bold text-white shadow-lg shadow-cyan-500/25">0</span>
             <div>
-              <div class="text-sm font-black text-slate-900 dark:text-slate-100">Seleção em lote</div>
+              <div class="text-sm font-bold text-slate-900 dark:text-slate-100">Seleção em lote</div>
               <div id="monthSelectionSummary" class="text-xs font-medium text-slate-500 dark:text-slate-400">Selecione um ou mais lançamentos para liberar as ações em lote.</div>
             </div>
           </div>
@@ -781,15 +781,15 @@
       }
 
       .op-month-row.is-selected {
-        box-shadow: inset 0 0 0 2px rgba(37, 99, 235, 0.92), 0 8px 20px rgba(15, 23, 42, 0.08) !important;
+        box-shadow: inset 0 0 0 2px rgba(14, 116, 144, 0.92), 0 8px 20px rgba(15, 23, 42, 0.08) !important;
       }
 
       .dark .op-month-row.is-selected {
-        box-shadow: inset 0 0 0 2px rgba(96, 165, 250, 0.92), 0 10px 24px rgba(2, 6, 23, 0.28) !important;
+        box-shadow: inset 0 0 0 2px rgba(34, 211, 238, 0.92), 0 10px 24px rgba(2, 6, 23, 0.28) !important;
       }
 
       .op-month-row.is-selected .op-month-row__meta {
-        border-color: rgba(59, 130, 246, 0.42);
+        border-color: rgba(8, 145, 178, 0.42);
       }
 
       .op-month-row__meta {
@@ -812,29 +812,29 @@
 
     @media (min-width: 768px) {
       .op-month-row.is-selected > td {
-        background-color: rgba(239, 246, 255, 0.9) !important;
-        box-shadow: inset 0 2px 0 rgba(37, 99, 235, 0.9), inset 0 -2px 0 rgba(37, 99, 235, 0.9);
+        background-color: rgba(236, 254, 255, 0.9) !important;
+        box-shadow: inset 0 2px 0 rgba(14, 116, 144, 0.9), inset 0 -2px 0 rgba(14, 116, 144, 0.9);
       }
 
       .op-month-row.is-selected > td:first-child {
-        box-shadow: inset 2px 0 0 rgba(37, 99, 235, 0.9), inset 0 2px 0 rgba(37, 99, 235, 0.9), inset 0 -2px 0 rgba(37, 99, 235, 0.9);
+        box-shadow: inset 2px 0 0 rgba(14, 116, 144, 0.9), inset 0 2px 0 rgba(14, 116, 144, 0.9), inset 0 -2px 0 rgba(14, 116, 144, 0.9);
       }
 
       .op-month-row.is-selected > td:last-child {
-        box-shadow: inset -2px 0 0 rgba(37, 99, 235, 0.9), inset 0 2px 0 rgba(37, 99, 235, 0.9), inset 0 -2px 0 rgba(37, 99, 235, 0.9);
+        box-shadow: inset -2px 0 0 rgba(14, 116, 144, 0.9), inset 0 2px 0 rgba(14, 116, 144, 0.9), inset 0 -2px 0 rgba(14, 116, 144, 0.9);
       }
 
       .dark .op-month-row.is-selected > td {
         background-color: rgba(30, 41, 59, 0.92) !important;
-        box-shadow: inset 0 2px 0 rgba(96, 165, 250, 0.92), inset 0 -2px 0 rgba(96, 165, 250, 0.92);
+        box-shadow: inset 0 2px 0 rgba(34, 211, 238, 0.92), inset 0 -2px 0 rgba(34, 211, 238, 0.92);
       }
 
       .dark .op-month-row.is-selected > td:first-child {
-        box-shadow: inset 2px 0 0 rgba(96, 165, 250, 0.92), inset 0 2px 0 rgba(96, 165, 250, 0.92), inset 0 -2px 0 rgba(96, 165, 250, 0.92);
+        box-shadow: inset 2px 0 0 rgba(34, 211, 238, 0.92), inset 0 2px 0 rgba(34, 211, 238, 0.92), inset 0 -2px 0 rgba(34, 211, 238, 0.92);
       }
 
       .dark .op-month-row.is-selected > td:last-child {
-        box-shadow: inset -2px 0 0 rgba(96, 165, 250, 0.92), inset 0 2px 0 rgba(96, 165, 250, 0.92), inset 0 -2px 0 rgba(96, 165, 250, 0.92);
+        box-shadow: inset -2px 0 0 rgba(34, 211, 238, 0.92), inset 0 2px 0 rgba(34, 211, 238, 0.92), inset 0 -2px 0 rgba(34, 211, 238, 0.92);
       }
     }
 
@@ -1097,11 +1097,11 @@
           if (indicator) {
             indicator.classList.toggle('hidden', !selectionMode);
             indicator.classList.toggle('flex', selectionMode);
-            indicator.classList.toggle('border-blue-600', isSelected);
-            indicator.classList.toggle('bg-blue-600', isSelected);
+            indicator.classList.toggle('border-cyan-600', isSelected);
+            indicator.classList.toggle('bg-cyan-600', isSelected);
             indicator.classList.toggle('text-white', isSelected);
             indicator.classList.toggle('shadow-lg', isSelected);
-            indicator.classList.toggle('shadow-blue-500/20', isSelected);
+            indicator.classList.toggle('shadow-cyan-500/20', isSelected);
             indicator.classList.toggle('border-slate-200', !isSelected);
             indicator.classList.toggle('bg-white', !isSelected);
             indicator.classList.toggle('text-slate-300', !isSelected);
@@ -1169,7 +1169,7 @@
         root.innerHTML = `
           <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-month-sheet-backdrop></div>
           <div class="relative z-10 flex min-h-full items-end justify-center p-2 sm:items-center sm:p-4">
-            <div class="flex h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] w-full max-w-lg flex-col overflow-hidden rounded-[28px] bg-white shadow-2xl ring-1 ring-slate-200 sm:h-auto sm:max-h-[calc(100dvh-2rem)] dark:bg-slate-900 dark:ring-slate-700" data-month-sheet-surface>
+            <div class="flex h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-lg ring-1 ring-slate-200 sm:h-auto sm:max-h-[calc(100dvh-2rem)] dark:bg-slate-900 dark:ring-slate-700" data-month-sheet-surface>
               <div class="shrink-0 border-b border-slate-200 px-4 py-4 sm:px-5 dark:border-slate-800" data-month-sheet-header>
                 <div class="flex items-center justify-between gap-3">
                   <div>
@@ -1226,7 +1226,7 @@
         const state = ensureMonthSheet();
         const surfaceSizeClass = size === 'people' ? 'sm:max-w-6xl' : (size === 'wide' ? 'sm:max-w-5xl' : 'sm:max-w-lg');
         state.onClose = typeof onClose === 'function' ? onClose : null;
-        state.surface.className = `flex h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] w-full ${surfaceSizeClass} flex-col overflow-hidden rounded-[28px] bg-white shadow-2xl ring-1 ring-slate-200 sm:h-auto sm:max-h-[calc(100dvh-2rem)] dark:bg-slate-900 dark:ring-slate-700`;
+        state.surface.className = `flex h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] w-full ${surfaceSizeClass} flex-col overflow-hidden rounded-2xl bg-white shadow-lg ring-1 ring-slate-200 sm:h-auto sm:max-h-[calc(100dvh-2rem)] dark:bg-slate-900 dark:ring-slate-700`;
         state.header.className = 'shrink-0 border-b border-slate-200 px-4 py-4 sm:px-5 dark:border-slate-800';
         state.body.className = `min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5 ${size === 'people' ? 'xl:px-6 xl:py-5' : ''}`.trim();
         state.actions.className = 'shrink-0 flex flex-col gap-2 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 sm:px-5 sm:py-4';
@@ -1479,7 +1479,7 @@ Tente novamente em instantes.`,
         const initials = initialsSource.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join('') || 'OP';
 
         const card = document.createElement('span');
-        card.className = 'flex min-h-[96px] flex-col items-center justify-center gap-2 rounded-[20px] border border-slate-200/80 bg-white/90 px-3 py-3 text-center shadow-sm transition-all group-hover:border-blue-300 group-hover:shadow-md peer-checked:border-blue-500 peer-checked:bg-blue-50 peer-checked:shadow-lg dark:border-slate-700 dark:bg-slate-900/60 dark:group-hover:border-blue-500 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-950/35';
+        card.className = 'flex min-h-[96px] flex-col items-center justify-center gap-2 rounded-xl border border-slate-200/80 bg-white/90 px-3 py-3 text-center shadow-sm transition-all group-hover:border-cyan-300 group-hover:shadow-md peer-checked:border-cyan-500 peer-checked:bg-cyan-50 peer-checked:shadow-lg dark:border-slate-700 dark:bg-slate-900/60 dark:group-hover:border-cyan-500 dark:peer-checked:border-cyan-500 dark:peer-checked:bg-cyan-950/35';
 
         if (photoUrl) {
           const avatar = document.createElement('img');
@@ -1491,13 +1491,13 @@ Tente novamente em instantes.`,
           card.appendChild(avatar);
         } else {
           const avatarFallback = document.createElement('span');
-          avatarFallback.className = 'inline-flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-sm font-black text-slate-700 dark:bg-slate-800 dark:text-slate-100';
+          avatarFallback.className = 'inline-flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-100';
           avatarFallback.textContent = initials;
           card.appendChild(avatarFallback);
         }
 
         const name = document.createElement('span');
-        name.className = 'min-w-0 text-sm font-black leading-5 text-slate-800 dark:text-slate-100';
+        name.className = 'min-w-0 text-sm font-bold leading-5 text-slate-800 dark:text-slate-100';
         name.textContent = displayName || 'Pessoa';
 
         const hint = document.createElement('span');
@@ -1570,14 +1570,14 @@ Tente novamente em instantes.`,
 
       function buildImpactPanel({ tone = 'info', title = '', body = '' } = {}) {
         const palette = {
-          info: 'border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-100',
+          info: 'border-cyan-200 bg-cyan-50 text-cyan-900 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-100',
           warning: 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-100',
           danger: 'border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-100',
           success: 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-100'
         };
         const panel = document.createElement('div');
-        panel.className = `rounded-[22px] border px-4 py-3 text-sm ${palette[tone] || palette.info}`;
-        panel.innerHTML = `<div class="text-sm font-black">${escapeHtml(title)}</div><p class="mt-1 leading-6 opacity-90">${escapeHtml(body)}</p>`;
+        panel.className = `rounded-xl border px-4 py-3 text-sm ${palette[tone] || palette.info}`;
+        panel.innerHTML = `<div class="text-sm font-bold">${escapeHtml(title)}</div><p class="mt-1 leading-6 opacity-90">${escapeHtml(body)}</p>`;
         return panel;
       }
 
@@ -1654,7 +1654,7 @@ Tente novamente em instantes.`,
         }
 
         if (dateInput && dateInput.value && dateInput.value !== String(item.txn_date || '')) {
-          refs.stack.appendChild(buildImpactPanel({ tone: 'info', title: 'Data da compra mudou', body: 'O app recalcula a sugestão de fatura com base no cartão escolhido. Se você travar a fatura manualmente, a gente respeita.' }));
+          refs.stack.appendChild(buildImpactPanel({ tone: 'info', title: 'Data da compra mudou', body: 'O app recalcula a sugestão de fatura com base no cartão escolhido. Faturas travadas manualmente são preservadas.' }));
         }
       }
 
@@ -1663,13 +1663,13 @@ Tente novamente em instantes.`,
         wrapper.className = 'space-y-4';
 
         const summary = document.createElement('div');
-        summary.className = 'rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-200';
-        summary.innerHTML = `<div class="flex flex-wrap items-center gap-2"><span class="inline-flex items-center rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">Edição segura</span><span class="inline-flex items-center rounded-full bg-slate-900/5 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-600 dark:bg-slate-100/10 dark:text-slate-300">${escapeHtml(item.recurring_rule_id ? 'Recorrente' : (item.has_future_installments ? 'Parcelada' : 'Única'))}</span></div><div class="mt-2 text-sm font-black text-slate-900 dark:text-slate-100">${escapeHtml(formatMoney(item.amount_cents))} · ${escapeHtml(formatMonthLabel(item.month, item.year))}</div><p class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Revise os dados do lançamento. Se houver parcelas ou recorrência, o alcance será confirmado antes de salvar.</p>${item.card_name ? `<div class="mt-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Cartão atual: ${escapeHtml(item.card_name)}</div>` : ''}</div>`;
+        summary.className = 'rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-200';
+        summary.innerHTML = `<div class="flex flex-wrap items-center gap-2"><span class="inline-flex items-center rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">Edição segura</span><span class="inline-flex items-center rounded-full bg-slate-900/5 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600 dark:bg-slate-100/10 dark:text-slate-300">${escapeHtml(item.recurring_rule_id ? 'Recorrente' : (item.has_future_installments ? 'Parcelada' : 'Única'))}</span></div><div class="mt-2 text-sm font-bold text-slate-900 dark:text-slate-100">${escapeHtml(formatMoney(item.amount_cents))} · ${escapeHtml(formatMonthLabel(item.month, item.year))}</div><p class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Revise os dados do lançamento. Se houver parcelas ou recorrência, o alcance será confirmado antes de salvar.</p>${item.card_name ? `<div class="mt-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Cartão atual: ${escapeHtml(item.card_name)}</div>` : ''}</div>`;
         wrapper.appendChild(summary);
 
         if (item.import_id && !item.can_edit_purchase) {
           const warning = document.createElement('div');
-          warning.className = 'rounded-[22px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-100';
+          warning.className = 'rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-100';
           warning.textContent = 'Compras importadas ainda não entram na edição completa. Por enquanto, esse ajuste segue no combo excluir e lançar de novo.';
           wrapper.appendChild(warning);
           return { wrapper, form: null, submitButtonLabel: 'Fechar' };
@@ -1747,7 +1747,7 @@ Tente novamente em instantes.`,
         categorySelect.setAttribute('data-purchase-category-select', '1');
         const emptyOption = document.createElement('option');
         emptyOption.value = '';
-        emptyOption.textContent = 'Deixar sem categoria por enquanto';
+        emptyOption.textContent = 'Sem categoria';
         categorySelect.appendChild(emptyOption);
         sortedPurchaseCategories.forEach((category) => {
           const option = document.createElement('option');
@@ -1758,7 +1758,7 @@ Tente novamente em instantes.`,
         });
         const newOption = document.createElement('option');
         newOption.value = '__new__';
-        newOption.textContent = 'Criar categoria nova';
+        newOption.textContent = 'Nova categoria';
         categorySelect.appendChild(newOption);
         categoryBlock.appendChild(buildPurchaseFormField('Categoria', categorySelect));
 
@@ -1917,8 +1917,8 @@ Tente novamente em instantes.`,
         input.checked = checked;
 
         const card = document.createElement('span');
-        card.className = `flex h-full items-start gap-3 rounded-[20px] border border-slate-200 bg-white px-4 py-3.5 shadow-sm transition-all group-hover:border-slate-300 group-hover:shadow-md ${accentClass} dark:border-slate-700 dark:bg-slate-900/60`;
-        card.innerHTML = `<span class="mt-0.5 inline-flex h-9 w-9 flex-none items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-500 transition-all peer-checked:border-current peer-checked:bg-current peer-checked:text-white dark:border-slate-700 dark:bg-slate-950">${value === 'exact' ? '<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-3.314 0-6 2.239-6 5 0 1.657.97 3.126 2.465 4.038L8 21l3.211-2.14A7.43 7.43 0 0012 19c3.314 0 6-2.239 6-5s-2.686-5-6-5z"></path></svg>' : '<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>'}</span><span class="min-w-0"><span class="block text-sm font-black text-slate-900 dark:text-slate-100">${escapeHtml(title)}</span><span class="mt-1 block text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">${escapeHtml(description)}</span></span>`;
+        card.className = `flex h-full items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3.5 shadow-sm transition-all group-hover:border-slate-300 group-hover:shadow-md ${accentClass} dark:border-slate-700 dark:bg-slate-900/60`;
+        card.innerHTML = `<span class="mt-0.5 inline-flex h-9 w-9 flex-none items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-500 transition-all peer-checked:border-current peer-checked:bg-current peer-checked:text-white dark:border-slate-700 dark:bg-slate-950">${value === 'exact' ? '<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-3.314 0-6 2.239-6 5 0 1.657.97 3.126 2.465 4.038L8 21l3.211-2.14A7.43 7.43 0 0012 19c3.314 0 6-2.239 6-5s-2.686-5-6-5z"></path></svg>' : '<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>'}</span><span class="min-w-0"><span class="block text-sm font-bold text-slate-900 dark:text-slate-100">${escapeHtml(title)}</span><span class="mt-1 block text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">${escapeHtml(description)}</span></span>`;
 
         label.appendChild(input);
         label.appendChild(card);
@@ -1933,7 +1933,7 @@ Tente novamente em instantes.`,
         wrapper.className = 'space-y-4';
 
         const summary = document.createElement('div');
-        summary.className = 'rounded-[22px] border border-slate-200 bg-slate-50/90 px-4 py-3 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-200';
+        summary.className = 'rounded-xl border border-slate-200 bg-slate-50/90 px-4 py-3 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-200';
         summary.textContent = items.length > 1
           ? `${items.length} compra(s) selecionada(s) · ${formatMoney(sumAmounts(items))}`
           : `${items[0].description} · ${formatMoney(items[0].amount_cents)}`;
@@ -1949,7 +1949,7 @@ Tente novamente em instantes.`,
 
         if (uniformSelection === null && items.length > 1) {
           const note = document.createElement('div');
-          note.className = 'rounded-[22px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200';
+          note.className = 'rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200';
           note.textContent = 'Os itens selecionados têm distribuições diferentes. A seleção abaixo substituirá a distribuição atual de todos eles.';
           wrapper.appendChild(note);
         }
@@ -1962,7 +1962,7 @@ Tente novamente em instantes.`,
         selectionHeader.className = 'flex flex-wrap items-start justify-between gap-3';
         selectionHeader.innerHTML = `
           <div>
-            <div class="text-sm font-black text-slate-900 dark:text-slate-100">Quem entra nessa divisão?</div>
+            <div class="text-sm font-bold text-slate-900 dark:text-slate-100">Quem entra nessa divisão?</div>
             <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Selecione quem participa do rateio deste lançamento.</p>
           </div>
         `;
@@ -1974,7 +1974,7 @@ Tente novamente em instantes.`,
 
         if (!people.length) {
           const empty = document.createElement('div');
-          empty.className = 'rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-300';
+          empty.className = 'rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-300';
           empty.textContent = 'Nenhuma pessoa visível neste mês para aplicar a distribuição.';
           selectionSection.appendChild(empty);
         } else {
@@ -1987,7 +1987,7 @@ Tente novamente em instantes.`,
         }
 
         const outboxNote = document.createElement('div');
-        outboxNote.className = 'rounded-[22px] border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-900 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200';
+        outboxNote.className = 'rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-medium text-cyan-900 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200';
         outboxNote.textContent = 'Ao guardar, a divisão fica salva e o que virar acerto segue para a caixa de saída.';
         wrapper.appendChild(outboxNote);
 
@@ -1997,7 +1997,7 @@ Tente novamente em instantes.`,
 
         const splitModeHeader = document.createElement('div');
         splitModeHeader.innerHTML = `
-          <div class="text-sm font-black text-slate-900 dark:text-slate-100">Como você quer dividir essa compra?</div>
+          <div class="text-sm font-bold text-slate-900 dark:text-slate-100">Como você quer dividir essa compra?</div>
           <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Quando houver 2 ou mais participantes, escolha a regra de divisão antes de salvar.</p>
         `;
         splitModeSection.appendChild(splitModeHeader);
@@ -2020,18 +2020,18 @@ Tente novamente em instantes.`,
           description: 'Você dita o valor de cada pessoa, sem chute e sem susto.',
           value: 'exact',
           checked: false,
-          accentClass: 'peer-checked:border-violet-400 peer-checked:bg-violet-50 peer-checked:text-violet-700 dark:peer-checked:border-violet-500 dark:peer-checked:bg-violet-950/25'
+          accentClass: 'peer-checked:border-cyan-400 peer-checked:bg-cyan-50 peer-checked:text-cyan-700 dark:peer-checked:border-cyan-500 dark:peer-checked:bg-cyan-950/25'
         });
         splitModeGrid.appendChild(equalOption);
         splitModeGrid.appendChild(exactOption);
         splitModeBody.appendChild(splitModeGrid);
 
         const exactPanel = document.createElement('div');
-        exactPanel.className = 'space-y-4 rounded-[24px] border border-violet-200 bg-violet-50/80 p-4 dark:border-violet-900/70 dark:bg-violet-950/20 hidden';
+        exactPanel.className = 'space-y-4 rounded-xl border border-cyan-200 bg-cyan-50/80 p-4 dark:border-cyan-900/70 dark:bg-cyan-950/20 hidden';
         exactPanel.hidden = true;
 
         const exactIntro = document.createElement('div');
-        exactIntro.className = 'text-sm font-semibold text-violet-900 dark:text-violet-200';
+        exactIntro.className = 'text-sm font-semibold text-cyan-900 dark:text-cyan-200';
         exactIntro.textContent = singleItem
           ? `Total da compra: ${formatMoney(singleItem.amount_cents)}. Preencha até fechar certinho.`
           : 'Valor definido fica disponível quando você abre uma compra por vez.';
@@ -2042,7 +2042,7 @@ Tente novamente em instantes.`,
         exactPanel.appendChild(exactFields);
 
         const exactTotals = document.createElement('div');
-        exactTotals.className = 'rounded-[18px] border border-white/70 bg-white/85 px-4 py-3 text-sm dark:border-slate-800 dark:bg-slate-900/60';
+        exactTotals.className = 'rounded-xl border border-white/70 bg-white/85 px-4 py-3 text-sm dark:border-slate-800 dark:bg-slate-900/60';
         exactPanel.appendChild(exactTotals);
 
         splitModeBody.appendChild(exactPanel);
@@ -2050,7 +2050,7 @@ Tente novamente em instantes.`,
         wrapper.appendChild(splitModeSection);
 
         const multiExactNote = document.createElement('div');
-        multiExactNote.className = 'rounded-[22px] border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-800 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200';
+        multiExactNote.className = 'rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-semibold text-cyan-800 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200';
         multiExactNote.textContent = 'Quer usar valores definidos? Abra uma compra por vez. Em seleção múltipla, o app mantém só a divisão em partes iguais para não misturar os totais.';
         multiExactNote.hidden = items.length === 1;
         multiExactNote.classList.toggle('hidden', items.length === 1);
@@ -2099,14 +2099,14 @@ Tente novamente em instantes.`,
             if (draftShares[personId] === undefined) draftShares[personId] = defaultMap[personId] || 0;
 
             const row = document.createElement('label');
-            row.className = 'rounded-[20px] border border-white/80 bg-white/90 px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-900/70';
+            row.className = 'rounded-xl border border-white/80 bg-white/90 px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-900/70';
 
             const header = document.createElement('div');
             header.className = 'mb-2 flex items-center justify-between gap-3';
             const isSelfPerson = person.is_self || String(person.profile_kind || '').toLowerCase() === 'self' || person.is_owner;
             const personTitle = isSelfPerson ? 'Minha parte' : person.name;
             const personHint = isSelfPerson ? 'Minha parte' : 'Digite a parte dessa pessoa';
-            header.innerHTML = `<span class="text-sm font-black text-slate-900 dark:text-slate-100">${escapeHtml(personTitle)}</span><span class="text-xs font-semibold text-slate-500 dark:text-slate-400">${escapeHtml(personHint)}</span>`;
+            header.innerHTML = `<span class="text-sm font-bold text-slate-900 dark:text-slate-100">${escapeHtml(personTitle)}</span><span class="text-xs font-semibold text-slate-500 dark:text-slate-400">${escapeHtml(personHint)}</span>`;
             row.appendChild(header);
 
             const input = document.createElement('input');
@@ -2116,7 +2116,7 @@ Tente novamente em instantes.`,
             input.value = window.OPMoneyMask && typeof window.OPMoneyMask.formatFromCents === 'function'
               ? window.OPMoneyMask.formatFromCents(getMoneyInputDisplayCents(draftShares[personId]))
               : formatMoney(getMoneyInputDisplayCents(draftShares[personId]));
-            input.className = 'w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 shadow-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 dark:border-violet-900/70 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-violet-500 dark:focus:ring-violet-500/20';
+            input.className = 'w-full rounded-2xl border border-cyan-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 shadow-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100 dark:border-cyan-900/70 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-cyan-500 dark:focus:ring-cyan-500/20';
             input.setAttribute('data-money-mask', '1');
             bindDynamicMoneyMask(input);
             input.addEventListener('input', () => {
@@ -2154,12 +2154,12 @@ Tente novamente em instantes.`,
           exactTotals.innerHTML = `
             <div class="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">Resumo da divisão</div>
+                <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">Resumo da divisão</div>
                 <div class="mt-1 text-sm font-semibold text-slate-600 dark:text-slate-300">Compra: ${escapeHtml(formatMoney(targetTotal))}</div>
               </div>
               <div class="text-right">
-                <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">Somando agora</div>
-                <div class="mt-1 text-lg font-black text-slate-900 dark:text-slate-100">${escapeHtml(formatMoney(typedTotal))}</div>
+                <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">Somando agora</div>
+                <div class="mt-1 text-lg font-bold text-slate-900 dark:text-slate-100">${escapeHtml(formatMoney(typedTotal))}</div>
               </div>
             </div>
             <div class="mt-3 text-sm font-bold ${toneClass}">${escapeHtml(helperText)}</div>
@@ -2290,8 +2290,8 @@ Tente novamente em instantes.`,
         wrapper.className = 'space-y-4';
 
         const summary = document.createElement('div');
-        summary.className = 'rounded-[22px] border border-slate-200 bg-slate-50/90 px-4 py-3 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-200';
-        summary.innerHTML = `<div class="text-xs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Seleção</div><div class="mt-1 text-sm font-black">${items.length > 1 ? `${items.length} compra(s)` : escapeHtml(items[0].description)} · ${escapeHtml(formatMoney(sumAmounts(items)))}</div>`;
+        summary.className = 'rounded-xl border border-slate-200 bg-slate-50/90 px-4 py-3 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-200';
+        summary.innerHTML = `<div class="text-xs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Seleção</div><div class="mt-1 text-sm font-bold">${items.length > 1 ? `${items.length} compra(s)` : escapeHtml(items[0].description)} · ${escapeHtml(formatMoney(sumAmounts(items)))}</div>`;
         wrapper.appendChild(summary);
 
         const categoryIds = Array.from(new Set(items.map(item => Number(item.purchase_category_id || 0)).filter((value) => Number.isInteger(value) && value > 0)));
@@ -2303,11 +2303,11 @@ Tente novamente em instantes.`,
 
         const currentState = document.createElement('div');
         currentState.className = hasMixedCategories
-          ? 'rounded-[22px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200'
-          : 'rounded-[22px] border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-900 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200';
+          ? 'rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200'
+          : 'rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-semibold text-cyan-900 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200';
         currentState.innerHTML = hasMixedCategories
           ? '<div class="text-xs font-bold uppercase tracking-wide text-amber-500/80 dark:text-amber-300/80">Estado atual</div><div class="mt-1">As compras selecionadas estão com categorias diferentes. O que você escolher agora substitui tudo de uma vez.</div>'
-          : `<div class="text-xs font-bold uppercase tracking-wide text-blue-500/80 dark:text-blue-300/80">Estado atual</div><div class="mt-1">${uniformCategoryId ? `Categoria de agora: <strong>${escapeHtml(uniformCategoryName || 'Categoria de agora')}</strong>.` : 'As compras selecionadas estão sem categoria por enquanto.'}</div>`;
+          : `<div class="text-xs font-bold uppercase tracking-wide text-cyan-500/80 dark:text-cyan-300/80">Estado atual</div><div class="mt-1">${uniformCategoryId ? `Categoria de agora: <strong>${escapeHtml(uniformCategoryName || 'Categoria de agora')}</strong>.` : 'As compras selecionadas estão sem categoria por enquanto.'}</div>`;
         wrapper.appendChild(currentState);
 
         const selectorShell = document.createElement('div');
@@ -2320,8 +2320,8 @@ Tente novamente em instantes.`,
         const select = document.createElement('select');
         select.name = 'purchase_category_id';
         select.setAttribute('data-purchase-category-select', '');
-        select.className = 'w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:bg-slate-950';
-        select.innerHTML = '<option value="">Deixar sem categoria por enquanto</option>';
+        select.className = 'w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none transition focus:border-cyan-400 focus:bg-white focus:ring-2 focus:ring-cyan-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:bg-slate-950';
+        select.innerHTML = '<option value="">Sem categoria</option>';
 
         sortedPurchaseCategories.forEach((category) => {
           const option = document.createElement('option');
@@ -2341,7 +2341,7 @@ Tente novamente em instantes.`,
 
         const newOption = document.createElement('option');
         newOption.value = '__new__';
-        newOption.textContent = 'Criar categoria nova';
+        newOption.textContent = 'Nova categoria';
         select.appendChild(newOption);
         selectorField.appendChild(select);
         selectorShell.appendChild(selectorField);
@@ -2349,7 +2349,7 @@ Tente novamente em instantes.`,
         const customShell = document.createElement('div');
         customShell.hidden = true;
         customShell.setAttribute('data-purchase-category-custom-shell', '');
-        customShell.innerHTML = '<label class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Nome da nova categoria</label><input type="text" maxlength="60" placeholder="Ex: Feira de sábado" data-purchase-category-custom-input class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:bg-slate-950">';
+        customShell.innerHTML = '<label class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Nome da nova categoria</label><input type="text" maxlength="60" placeholder="Ex: Feira de sábado" data-purchase-category-custom-input class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none transition focus:border-cyan-400 focus:bg-white focus:ring-2 focus:ring-cyan-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:bg-slate-950">';
         selectorShell.appendChild(customShell);
 
         const helper = document.createElement('p');
@@ -2427,8 +2427,8 @@ Tente novamente em instantes.`,
         wrapper.className = 'space-y-4';
 
         const intro = document.createElement('div');
-        intro.className = 'rounded-[22px] border border-slate-200 bg-slate-50/90 px-4 py-3 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-200';
-        intro.innerHTML = `<div class="text-xs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Seleção</div><div class="mt-1 text-sm font-black text-slate-900 dark:text-slate-100">${items.length} compra(s) · ${escapeHtml(formatMoney(sumAmounts(items)))}</div><p class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400">A data da compra será mantida. Apenas a competência e a fatura do lançamento serão ajustadas.</p>`;
+        intro.className = 'rounded-xl border border-slate-200 bg-slate-50/90 px-4 py-3 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-200';
+        intro.innerHTML = `<div class="text-xs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Seleção</div><div class="mt-1 text-sm font-bold text-slate-900 dark:text-slate-100">${items.length} compra(s) · ${escapeHtml(formatMoney(sumAmounts(items)))}</div><p class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400">A data da compra será mantida. Apenas a competência e a fatura do lançamento serão ajustadas.</p>`;
         wrapper.appendChild(intro);
 
         const quickRow = document.createElement('div');
@@ -2452,7 +2452,7 @@ Tente novamente em instantes.`,
         monthLabelEl.className = 'mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400';
         monthLabelEl.textContent = 'Mês da fatura';
         const monthSelect = document.createElement('select');
-        monthSelect.className = 'w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:bg-slate-950';
+        monthSelect.className = 'w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none transition focus:border-cyan-400 focus:bg-white focus:ring-2 focus:ring-cyan-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:bg-slate-950';
         monthNames.forEach((name, index) => {
           const option = document.createElement('option');
           option.value = String(index + 1);
@@ -2468,7 +2468,7 @@ Tente novamente em instantes.`,
         yearLabelEl.className = 'mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400';
         yearLabelEl.textContent = 'Ano da fatura';
         const yearSelect = document.createElement('select');
-        yearSelect.className = 'w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:bg-slate-950';
+        yearSelect.className = 'w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none transition focus:border-cyan-400 focus:bg-white focus:ring-2 focus:ring-cyan-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:bg-slate-950';
         years.forEach(value => {
           const option = document.createElement('option');
           option.value = String(value);
@@ -2484,9 +2484,9 @@ Tente novamente em instantes.`,
         wrapper.appendChild(grid);
 
         const preview = document.createElement('div');
-        preview.className = 'rounded-[22px] border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-900 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200';
+        preview.className = 'rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-semibold text-cyan-900 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200';
         const updatePreview = () => {
-          preview.innerHTML = `<div class="text-xs font-bold uppercase tracking-wide text-blue-500/80 dark:text-blue-300/80">Destino</div><div class="mt-1 text-sm font-black">${escapeHtml(formatMonthLabel(monthSelect.value, yearSelect.value))}</div>`;
+          preview.innerHTML = `<div class="text-xs font-bold uppercase tracking-wide text-cyan-500/80 dark:text-cyan-300/80">Destino</div><div class="mt-1 text-sm font-bold">${escapeHtml(formatMonthLabel(monthSelect.value, yearSelect.value))}</div>`;
         };
         monthSelect.addEventListener('change', updatePreview);
         yearSelect.addEventListener('change', updatePreview);
@@ -2557,15 +2557,15 @@ Tente novamente em instantes.`,
         wrapper.className = 'space-y-4';
 
         const summary = document.createElement('div');
-        summary.className = 'rounded-[22px] border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-900 dark:border-red-800 dark:bg-red-900/20 dark:text-red-100';
-        summary.innerHTML = `<div class="text-xs font-bold uppercase tracking-wide text-red-500/80 dark:text-red-300/80">Exclusão</div><div class="mt-1 text-sm font-black">${items.length} compra(s) · ${escapeHtml(formatMoney(sumAmounts(items)))}</div><p class="mt-2 text-sm font-medium text-red-700/90 dark:text-red-200/90">Isso remove os lançamentos selecionados e suas divisões associadas.</p>`;
+        summary.className = 'rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-900 dark:border-red-800 dark:bg-red-900/20 dark:text-red-100';
+        summary.innerHTML = `<div class="text-xs font-bold uppercase tracking-wide text-red-500/80 dark:text-red-300/80">Exclusão</div><div class="mt-1 text-sm font-bold">${items.length} compra(s) · ${escapeHtml(formatMoney(sumAmounts(items)))}</div><p class="mt-2 text-sm font-medium text-red-700/90 dark:text-red-200/90">Isso remove os lançamentos selecionados e suas divisões associadas.</p>`;
         wrapper.appendChild(summary);
 
         let scopeValue = 'single';
 
         if (futureItems.length) {
           const note = document.createElement('div');
-          note.className = 'rounded-[22px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-100';
+          note.className = 'rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-100';
           note.innerHTML = `<div class="text-xs font-bold uppercase tracking-wide text-amber-500/90 dark:text-amber-300/80">Lançamentos parcelados</div><p class="mt-1">${futureItems.length} item(ns) parcelado(s) exigem definição de alcance antes da exclusão.</p>${nonInstallmentCount > 0 ? `<p class="mt-2 text-sm font-medium text-amber-800/90 dark:text-amber-200/90">Os ${nonInstallmentCount} item(ns) sem parcelamento serão excluídos apenas uma vez.</p>` : ''}`;
           wrapper.appendChild(note);
 
@@ -2608,8 +2608,8 @@ Tente novamente em instantes.`,
             input.checked = index === 0;
 
             const card = document.createElement('span');
-            card.className = 'block rounded-[22px] border border-slate-200 bg-white px-4 py-3 shadow-sm transition-all group-hover:-translate-y-0.5 group-hover:border-red-300 group-hover:shadow-md dark:border-slate-700 dark:bg-slate-900/55 dark:group-hover:border-red-500';
-            card.innerHTML = `<span class="flex items-start justify-between gap-3"><span><span class="block text-sm font-black text-slate-900 dark:text-slate-100">${escapeHtml(option.title)}</span><span class="mt-1 block text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">${escapeHtml(option.description)}</span></span><span data-delete-scope-indicator class="mt-0.5 inline-flex h-6 w-6 flex-none items-center justify-center rounded-full border border-slate-300 bg-white text-transparent transition-colors dark:border-slate-600 dark:bg-slate-950">✓</span></span>`;
+            card.className = 'block rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm transition-all group-hover:-translate-y-0.5 group-hover:border-red-300 group-hover:shadow-md dark:border-slate-700 dark:bg-slate-900/55 dark:group-hover:border-red-500';
+            card.innerHTML = `<span class="flex items-start justify-between gap-3"><span><span class="block text-sm font-bold text-slate-900 dark:text-slate-100">${escapeHtml(option.title)}</span><span class="mt-1 block text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">${escapeHtml(option.description)}</span></span><span data-delete-scope-indicator class="mt-0.5 inline-flex h-6 w-6 flex-none items-center justify-center rounded-full border border-slate-300 bg-white text-transparent transition-colors dark:border-slate-600 dark:bg-slate-950">✓</span></span>`;
 
             const indicator = card.querySelector('[data-delete-scope-indicator]');
             const syncVisualState = () => {

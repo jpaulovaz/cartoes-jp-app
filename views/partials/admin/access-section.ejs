@@ -12,7 +12,7 @@
   <div class="px-6 py-6 sm:px-8 border-b border-slate-200/80 dark:border-slate-700/80 space-y-5">
     <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
       <div class="max-w-3xl">
-        <span class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Acessos</span>
+        <span class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Acessos</span>
         <h2 class="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Gestão de acessos</h2>
         <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
           Tabela única para revisar permissões, status do convite e atividade recente sem fragmentar a leitura em vários blocos.
@@ -34,22 +34,22 @@
 
     <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
       <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40 px-4 py-4">
-        <div class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Total de acessos</div>
+        <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Total de acessos</div>
         <div class="mt-2 text-3xl font-semibold tracking-tight text-slate-900 dark:text-white"><%= usersList.length %></div>
         <p class="mt-1 text-sm text-slate-600 dark:text-slate-300"><%= adminUsersCount %> administrador(es) e <%= Math.max(usersList.length - adminUsersCount, 0) %> usuário(s).</p>
       </div>
       <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40 px-4 py-4">
-        <div class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Importação liberada</div>
+        <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Importação liberada</div>
         <div class="mt-2 text-3xl font-semibold tracking-tight text-slate-900 dark:text-white"><%= importReleasedCount %></div>
         <p class="mt-1 text-sm text-slate-600 dark:text-slate-300"><%= Math.max(usersList.length - importReleasedCount, 0) %> acesso(s) sem permissão de importação.</p>
       </div>
       <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40 px-4 py-4">
-        <div class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Convites pendentes</div>
+        <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Convites pendentes</div>
         <div class="mt-2 text-3xl font-semibold tracking-tight text-slate-900 dark:text-white"><%= welcomePendingCount %></div>
         <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">Usuários sem confirmação de boas-vindas.</p>
       </div>
       <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40 px-4 py-4">
-        <div class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Sem acesso registrado</div>
+        <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Sem acesso registrado</div>
         <div class="mt-2 text-3xl font-semibold tracking-tight text-slate-900 dark:text-white"><%= neverAccessedCount %></div>
         <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">Útil para acompanhar quem recebeu acesso, mas ainda não gerou atividade no app.</p>
       </div>
@@ -57,7 +57,7 @@
 
     <div class="grid gap-3 xl:grid-cols-[minmax(0,1.5fr),220px,180px,180px] xl:items-end">
       <label class="block xl:col-span-1">
-        <span class="block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Buscar usuário</span>
+        <span class="block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Buscar usuário</span>
         <div class="relative mt-2">
           <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 dark:text-slate-500">
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35m1.6-5.15a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
@@ -68,7 +68,7 @@
       </label>
 
       <label class="block">
-        <span class="block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Filtro</span>
+        <span class="block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Filtro</span>
         <select data-access-role-filter
                 class="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-950 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-300 dark:focus:border-slate-500 dark:focus:ring-slate-700">
           <option value="all">Todos</option>
@@ -80,7 +80,7 @@
       </label>
 
       <label class="block">
-        <span class="block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Ordenar por</span>
+        <span class="block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Ordenar por</span>
         <select data-access-sort
                 class="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-950 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-300 dark:focus:border-slate-500 dark:focus:ring-slate-700">
           <option value="name-asc">Nome (A-Z)</option>
@@ -92,7 +92,7 @@
       </label>
 
       <label class="block">
-        <span class="block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Linhas por página</span>
+        <span class="block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Linhas por página</span>
         <select data-access-page-size
                 class="mt-2 w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-950 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-300 dark:focus:border-slate-500 dark:focus:ring-slate-700">
           <option value="10">10</option>

@@ -296,7 +296,7 @@
     if (tone === 'warning') {
       return 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-900/35 dark:text-amber-100';
     }
-    return 'border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-800 dark:bg-sky-900/35 dark:text-sky-100';
+    return 'border-cyan-200 bg-cyan-50 text-cyan-900 dark:border-cyan-800 dark:bg-cyan-900/35 dark:text-cyan-100';
   }
 
   function normalizeToastArgs(message, toneOrOptions, maybeOptions) {
@@ -341,10 +341,10 @@
     root.innerHTML = `
       <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" data-dialog-backdrop></div>
       <div class="relative z-10 flex min-h-full items-end justify-center p-4 sm:items-center">
-        <div class="w-full max-w-md overflow-hidden rounded-[28px] bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700" data-dialog-surface role="dialog" aria-modal="true" aria-labelledby="op-app-dialog-title" aria-describedby="op-app-dialog-message">
+        <div class="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-lg ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700" data-dialog-surface role="dialog" aria-modal="true" aria-labelledby="op-app-dialog-title" aria-describedby="op-app-dialog-message">
           <div class="border-b border-slate-200 px-5 py-4 dark:border-slate-800">
             <div class="hidden pb-2" data-dialog-badge-wrap>
-              <span class="inline-flex items-center rounded-full px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.2em]" data-dialog-badge></span>
+              <span class="inline-flex items-center rounded-full px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.12em]" data-dialog-badge></span>
             </div>
             <h3 class="text-base font-bold text-slate-900 dark:text-slate-100" id="op-app-dialog-title" data-dialog-title></h3>
             <p class="mt-1 hidden text-sm leading-6 text-slate-500 dark:text-slate-400" data-dialog-subtitle></p>
@@ -431,7 +431,7 @@
         : tone === 'warning'
           ? 'Cuidado'
           : 'Aviso';
-    state.badge.className = `inline-flex items-center rounded-full px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.2em] ${classes}`;
+    state.badge.className = `inline-flex items-center rounded-full px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.12em] ${classes}`;
     state.badge.textContent = label;
     state.badgeWrap.classList.remove('hidden');
   }
@@ -702,7 +702,7 @@
     const toast = document.createElement('div');
     toast.dataset.appToast = '1';
     toast.setAttribute('role', tone === 'error' ? 'alert' : 'status');
-    toast.className = `op-app-toast pointer-events-auto w-full max-w-md rounded-[22px] border px-4 py-3 text-sm shadow-2xl backdrop-blur ${getToastToneClasses(tone)}`;
+    toast.className = `op-app-toast pointer-events-auto w-full max-w-md rounded-xl border px-4 py-3 text-sm shadow-lg backdrop-blur ${getToastToneClasses(tone)}`;
 
     if (title) {
       const titleEl = document.createElement('div');
@@ -1362,7 +1362,7 @@
       restoreSubmitButtonsAfterCanceledSubmit(form);
       await window.showActionDialog({
         title: 'Sem internet agora',
-        message: 'Guardamos essa compra como rascunho só neste aparelho. Quando a conexão voltar, é só abrir Anotar compra de novo para revisar e enviar com calma.',
+        message: 'Guardamos essa compra como rascunho só neste aparelho. Quando a conexão voltar, é só abrir Nova compra de novo para revisar e enviar com calma.',
         options: [
           { label: 'Tudo certo', value: 'ok', tone: 'primary' }
         ]
@@ -2032,7 +2032,7 @@
 
 (function () {
   const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
-  const donutPalette = ['#8b5cf6', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#6366f1', '#14b8a6', '#f97316'];
+  const donutPalette = ['#0891b2', '#0891b2', '#10b981', '#f59e0b', '#ef4444', '#0891b2', '#14b8a6', '#d97706'];
   const prefersReducedMotion = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
 
   function formatMoney(cents) {
@@ -2183,7 +2183,7 @@
     const total = filtered.reduce((acc, item) => acc + Number(item.total_cents || 0), 0);
 
     if (!filtered.length || total <= 0) {
-      chartNode.innerHTML = '<div class="flex min-h-[260px] items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Ainda falta categoria suficiente para montar esse retrato. Quando o mês ganhar mais cara, esse gráfico entra no jogo.</div>';
+      chartNode.innerHTML = '<div class="flex min-h-[260px] items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Ainda não há categorias suficientes para montar este gráfico.</div>';
       legendNode.innerHTML = '';
       summaryNode.innerHTML = '';
       return;
@@ -2249,7 +2249,7 @@
           const canOpen = !segment.is_aggregate && !segment.is_uncategorized && Number(segment.id || 0) > 0;
           const sharedCents = Number(segment.shared_total_cents || 0);
           const sharedMeta = sharedCents > 0
-            ? `<span class="op-analytics-category-item__meta text-violet-700 dark:text-violet-300">inclui ${formatMoney(sharedCents)} compartilhado</span>`
+            ? `<span class="op-analytics-category-item__meta text-cyan-700 dark:text-cyan-300">inclui ${formatMoney(sharedCents)} compartilhado</span>`
             : '';
           return `
             <button type="button" class="op-analytics-category-item group" data-summary-category-link data-category-id="${Number(segment.id || 0)}" data-category-label="${String(segment.label || 'Sem nome').replace(/"/g, '&quot;')}" data-segment-index="${index}" ${canOpen ? '' : 'data-category-disabled="true"'}>
@@ -2277,7 +2277,7 @@
         <div class="op-analytics-donut-summary-card">
           <span class="op-analytics-donut-summary-card__label">Campeã</span>
           <strong class="op-analytics-donut-summary-card__value">${topCategory ? topCategory.label : 'Ainda sem líder'}</strong>
-          <span class="op-analytics-donut-summary-card__sub">${topCategory ? `${topCategory.share}% do seu pedaço` : 'Quando pintar gasto, a campeã aparece.'}</span>
+          <span class="op-analytics-donut-summary-card__sub">${topCategory ? `${topCategory.share}% do total` : 'A maior categoria aparece aqui.'}</span>
         </div>
         <div class="op-analytics-donut-summary-card">
           <span class="op-analytics-donut-summary-card__label">Compras lidas</span>
@@ -2309,7 +2309,7 @@
       }
       const activeSegment = segments[Number(index)];
       if (!activeSegment) return;
-      centerCopy.textContent = `${activeSegment.label} · ${activeSegment.share}% do seu pedaço`;
+      centerCopy.textContent = `${activeSegment.label} · ${activeSegment.share}% do total`;
     }
 
     legendButtons.forEach((button) => {
@@ -2344,7 +2344,7 @@
 
     const filtered = Array.isArray(points) ? points : [];
     if (!filtered.length) {
-      chartNode.innerHTML = '<div class="flex min-h-[260px] items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Ainda não deu para desenhar essa linha direitinho.</div>';
+      chartNode.innerHTML = '<div class="flex min-h-[260px] items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Ainda não há dados suficientes para este gráfico.</div>';
       return;
     }
 
@@ -2373,12 +2373,12 @@
     const pointCardsMarkup = coords.map((point, index) => {
       const sharedCents = Number(point.shared_cents || 0);
       const sharedLine = sharedCents > 0
-        ? `<div class="mt-1 text-[11px] font-bold text-violet-700 dark:text-violet-300">+ ${formatMoney(sharedCents)} compartilhado</div>`
+        ? `<div class="mt-1 text-[11px] font-bold text-cyan-700 dark:text-cyan-300">+ ${formatMoney(sharedCents)} compartilhado</div>`
         : '';
       return `
-          <button type="button" class="rounded-2xl border ${point.is_current ? 'border-violet-300 bg-violet-50/70 dark:border-violet-800 dark:bg-violet-900/20' : 'border-slate-200 bg-slate-50/70 dark:border-slate-700 dark:bg-slate-800/70'} px-3 py-2.5 text-left transition duration-200 hover:-translate-y-0.5 hover:border-violet-300 hover:bg-violet-50/80 focus:outline-none focus:ring-2 focus:ring-violet-400 dark:hover:border-violet-700 dark:hover:bg-violet-900/20" data-summary-month-point data-point-index="${index}" data-point-year="${point.year}" data-point-month="${point.month}" data-point-label="${point.label}">
-            <div class="text-[11px] font-bold uppercase tracking-[0.18em] ${point.is_current ? 'text-violet-700 dark:text-violet-300' : 'text-slate-500 dark:text-slate-400'}">${point.label}</div>
-            <div class="mt-1 text-sm font-black ${point.is_current ? 'text-violet-700 dark:text-violet-200' : 'text-slate-900 dark:text-white'}">${formatMoney(point.total_cents)}</div>
+          <button type="button" class="rounded-2xl border ${point.is_current ? 'border-cyan-300 bg-cyan-50/70 dark:border-cyan-800 dark:bg-cyan-900/20' : 'border-slate-200 bg-slate-50/70 dark:border-slate-700 dark:bg-slate-800/70'} px-3 py-2.5 text-left transition duration-200 hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-cyan-50/80 focus:outline-none focus:ring-2 focus:ring-cyan-400 dark:hover:border-cyan-700 dark:hover:bg-cyan-900/20" data-summary-month-point data-point-index="${index}" data-point-year="${point.year}" data-point-month="${point.month}" data-point-label="${point.label}">
+            <div class="text-[11px] font-bold uppercase tracking-[0.12em] ${point.is_current ? 'text-cyan-700 dark:text-cyan-300' : 'text-slate-500 dark:text-slate-400'}">${point.label}</div>
+            <div class="mt-1 text-sm font-bold ${point.is_current ? 'text-cyan-700 dark:text-cyan-200' : 'text-slate-900 dark:text-white'}">${formatMoney(point.total_cents)}</div>
             ${sharedLine}
           </button>
         `;
@@ -2392,8 +2392,8 @@
               <svg viewBox="0 0 ${width} ${height}" class="op-analytics-line-svg" role="img" aria-label="Seu pedaço no cartão, mês a mês">
                 <defs>
                   <linearGradient id="summaryLineFill" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.30"></stop>
-                    <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.02"></stop>
+                    <stop offset="0%" stop-color="#0891b2" stop-opacity="0.30"></stop>
+                    <stop offset="100%" stop-color="#0891b2" stop-opacity="0.02"></stop>
                   </linearGradient>
                 </defs>
                 ${[0.25, 0.5, 0.75, 1].map((step) => {
@@ -2401,10 +2401,10 @@
                   return `<line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" stroke="rgba(148,163,184,0.22)" stroke-dasharray="4 6"></line>`;
                 }).join('')}
                 <polygon points="${areaPolyline}" fill="url(#summaryLineFill)"></polygon>
-                <polyline points="${polyline}" fill="none" stroke="#8b5cf6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></polyline>
+                <polyline points="${polyline}" fill="none" stroke="#0891b2" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></polyline>
                 ${coords.map((point) => `
                   <g>
-                    <circle cx="${point.x}" cy="${point.y}" r="${point.is_current ? 6.5 : 5}" fill="#ffffff" stroke="#8b5cf6" stroke-width="${point.is_current ? 4 : 3}"></circle>
+                    <circle cx="${point.x}" cy="${point.y}" r="${point.is_current ? 6.5 : 5}" fill="#ffffff" stroke="#0891b2" stroke-width="${point.is_current ? 4 : 3}"></circle>
                     <text x="${point.x}" y="${height - 12}" text-anchor="middle" class="fill-slate-500 text-[11px] font-bold">${point.label}</text>
                   </g>
                 `).join('')}
@@ -2412,7 +2412,7 @@
               ${isNarrowScreen ? '' : coords.map((point, index) => `
                 <button
                   type="button"
-                  class="absolute h-11 w-11 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-transparent bg-transparent outline-none transition focus:border-violet-400"
+                  class="absolute h-11 w-11 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-transparent bg-transparent outline-none transition focus:border-cyan-400"
                   style="left:${((point.x / width) * 100).toFixed(3)}%;top:${((point.y / height) * 100).toFixed(3)}%"
                   aria-label="Abrir detalhes de ${point.label}"
                   data-summary-month-hotspot
@@ -2457,7 +2457,7 @@
         const year = Number(button.getAttribute('data-point-year') || 0);
         const month = Number(button.getAttribute('data-point-month') || 0);
         const label = button.getAttribute('data-point-label') || 'esse mês';
-        setInteractionHint(root, `Indo para ${label}. Bora comparar esse capítulo da novela financeira.`);
+        setInteractionHint(root, `Indo para ${label}. `);
         const detailBase = root.getAttribute('data-summary-detail-base') || 'summary';
         window.location.href = buildSummaryUrl(year, month, detailBase);
       });
@@ -3655,7 +3655,7 @@
 
     function handleOnline() {
       if (!hasShownOffline) return;
-      show('Conexão de volta. Bora continuar de onde parou.', 'online', 2600);
+      show('Conexão restabelecida.', 'online', 2600);
     }
 
     if (!navigator.onLine) {
@@ -3776,7 +3776,7 @@
     const nextAppearanceLabel = appearance === 'dark' ? 'Modo claro' : 'Modo escuro';
     const nextAppearanceHelper = appearance === 'dark'
       ? 'Mostra a interface com fundo claro e contraste mais aberto.'
-      : 'Mostra a interface com fundo escuro e contraste mais confortável.';
+      : 'Alterna para o tema escuro.';
 
     document.querySelectorAll('[data-mobile-appearance-mode-label]').forEach((node) => {
       node.textContent = nextAppearanceLabel;

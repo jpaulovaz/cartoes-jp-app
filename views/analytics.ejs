@@ -47,7 +47,7 @@
       <p class="op-page-hero__subtitle mt-3">Resumo executivo das entradas, saídas, cartão e principais pressões do período.</p>
       <div class="op-page-hero__meta mt-4">
         <span class="badge">Cartões próprios: <%= formatBRLFromCents(ownCardSpendCents) %></span>
-        <% if (hasSharedAcceptedAnalytics) { %><span class="badge border-violet-200 bg-violet-50 text-violet-800 dark:border-violet-800 dark:bg-violet-900/30 dark:text-violet-100">Compartilhadas: <%= formatBRLFromCents(sharedAcceptedCents) %></span><% } %>
+        <% if (hasSharedAcceptedAnalytics) { %><span class="badge border-cyan-200 bg-cyan-50 text-cyan-800 dark:border-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-100">Compartilhadas: <%= formatBRLFromCents(sharedAcceptedCents) %></span><% } %>
         <span class="badge">Entradas: <%= formatBRLFromCents(financeTotals.incomeCents || 0) %></span>
         <span class="badge">Saídas: <%= formatBRLFromCents(outsideExpenseCents) %></span>
         <span class="badge"><%= merchantTop ? `Maior pressão: ${merchantTop.label}` : 'Maior pressão: sem destaque no período' %></span>
@@ -69,11 +69,11 @@
     </div>
   </section>
 
-  <section class="mb-8 rounded-[28px] border border-slate-200 bg-white/95 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/90 lg:p-6 op-analytics-shell-card" data-op-tabs>
+  <section class="mb-8 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/90 lg:p-6 op-analytics-shell-card" data-op-tabs>
     <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
       <div>
-        <div class="op-analytics-chip inline-flex items-center gap-2 rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.24em] text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200">Visão do período</div>
-        <h2 class="mt-3 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Resumo analítico do mês</h2>
+        <div class="op-analytics-chip inline-flex items-center gap-2 rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200">Visão do período</div>
+        <h2 class="mt-3 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Resumo analítico do mês</h2>
         <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300">Navegue entre resumo, fluxo, distribuição por pessoas/cartões e estabelecimentos do período.</p>
       </div>
       <div class="flex flex-wrap items-center gap-2 xl:justify-end">
@@ -92,39 +92,39 @@
     <div class="mt-6 space-y-6">
       <div data-op-tab-panel="overview">
         <div class="grid gap-3 lg:grid-cols-4 op-analytics-kpi-grid">
-          <div class="op-analytics-kpi-card op-analytics-kpi-card--income rounded-[24px] border border-emerald-200 bg-emerald-50/90 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
-            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-emerald-700 dark:text-emerald-300">Entradas</div>
-            <div class="mt-2 text-2xl font-black tracking-tight text-emerald-800 dark:text-emerald-100"><%= formatBRLFromCents(financeTotals.incomeCents || 0) %></div>
+          <div class="op-analytics-kpi-card op-analytics-kpi-card--income rounded-xl border border-emerald-200 bg-emerald-50/90 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
+            <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-300">Entradas</div>
+            <div class="mt-2 text-2xl font-bold tracking-tight text-emerald-800 dark:text-emerald-100"><%= formatBRLFromCents(financeTotals.incomeCents || 0) %></div>
             <p class="mt-2 text-xs leading-5 text-emerald-800/80 dark:text-emerald-100/80"><%= leadIncomeLabel ? `Principal origem: ${leadIncomeLabel}.` : 'Sem entradas registradas neste período.' %></p>
           </div>
-          <div class="op-analytics-kpi-card op-analytics-kpi-card--expense rounded-[24px] border border-rose-200 bg-rose-50/90 p-4 dark:border-rose-900/60 dark:bg-rose-950/20">
-            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-rose-700 dark:text-rose-300">Saídas</div>
-            <div class="mt-2 text-2xl font-black tracking-tight text-rose-800 dark:text-rose-100"><%= formatBRLFromCents(financeTotals.expenseCents || 0) %></div>
+          <div class="op-analytics-kpi-card op-analytics-kpi-card--expense rounded-xl border border-rose-200 bg-rose-50/90 p-4 dark:border-rose-900/60 dark:bg-rose-950/20">
+            <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-rose-700 dark:text-rose-300">Saídas</div>
+            <div class="mt-2 text-2xl font-bold tracking-tight text-rose-800 dark:text-rose-100"><%= formatBRLFromCents(financeTotals.expenseCents || 0) %></div>
             <p class="mt-2 text-xs leading-5 text-rose-800/80 dark:text-rose-100/80"><%= leadExpenseLabel ? `Principal saída: ${leadExpenseLabel}.` : 'Sem saídas fora do cartão neste período.' %></p>
           </div>
-          <div class="op-analytics-kpi-card op-analytics-kpi-card--cards rounded-[24px] border border-amber-200 bg-amber-50/90 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
-            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-amber-700 dark:text-amber-300">Gastos do período</div>
-            <div class="mt-2 text-2xl font-black tracking-tight text-amber-900 dark:text-amber-100"><%= formatBRLFromCents(cardSpendCents) %></div>
+          <div class="op-analytics-kpi-card op-analytics-kpi-card--cards rounded-xl border border-amber-200 bg-amber-50/90 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
+            <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-amber-700 dark:text-amber-300">Gastos do período</div>
+            <div class="mt-2 text-2xl font-bold tracking-tight text-amber-900 dark:text-amber-100"><%= formatBRLFromCents(cardSpendCents) %></div>
             <p class="mt-2 text-xs leading-5 text-amber-800/80 dark:text-amber-100/80"><%= hasSharedAcceptedAnalytics ? `${formatBRLFromCents(ownCardSpendCents)} em cartões próprios + ${formatBRLFromCents(sharedAcceptedCents)} em compartilhadas.` : (topCategoryLabel ? `Maior categoria: ${topCategoryLabel}.` : 'Sem pressão relevante no cartão neste período.') %></p>
           </div>
-          <div class="op-analytics-kpi-card op-analytics-kpi-card--balance rounded-[24px] border border-slate-200 bg-slate-900 p-4 text-white dark:border-slate-700 dark:bg-slate-950">
-            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-300">Saldo previsto</div>
-            <div class="mt-2 text-2xl font-black tracking-tight"><%= formatBRLFromCents(overallNetCents) %></div>
+          <div class="op-analytics-kpi-card op-analytics-kpi-card--balance rounded-xl border border-slate-200 bg-slate-900 p-4 text-white dark:border-slate-700 dark:bg-slate-950">
+            <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-300">Saldo previsto</div>
+            <div class="mt-2 text-2xl font-bold tracking-tight"><%= formatBRLFromCents(overallNetCents) %></div>
             <p class="mt-2 text-xs leading-5 text-slate-300"><%= overallNetCents >= 0 ? 'Resultado projetado acima de zero.' : 'Resultado projetado abaixo de zero.' %></p>
           </div>
         </div>
 
-        <section class="mt-6 op-surface-card rounded-[28px] border border-slate-200 bg-white/95 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/90 lg:p-6" data-summary-graphs-root data-summary-year="<%= year %>" data-summary-month="<%= month %>" data-summary-graphs-ready="false" data-summary-detail-base="analytics">
+        <section class="mt-6 op-surface-card rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/90 lg:p-6" data-summary-graphs-root data-summary-year="<%= year %>" data-summary-month="<%= month %>" data-summary-graphs-ready="false" data-summary-detail-base="analytics">
           <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <div class="op-analytics-chip inline-flex items-center gap-2 rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.24em] text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200">Visão do cartão</div>
-              <h3 class="mt-3 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Principais pressões do cartão</h3>
+              <div class="op-analytics-chip inline-flex items-center gap-2 rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200">Visão do cartão</div>
+              <h3 class="mt-3 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Principais pressões do cartão</h3>
               <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300">Distribuição por categoria e evolução mensal do valor que ficou no cartão.</p>
             </div>
             <div class="grid gap-3 sm:grid-cols-2 xl:w-[25rem]">
-              <div class="rounded-[22px] border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-900/50">
-                <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Variação do período</div>
-                <div class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white">
+              <div class="rounded-xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-900/50">
+                <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Variação do período</div>
+                <div class="mt-2 text-lg font-bold tracking-tight text-slate-900 dark:text-white">
                   <% if (graphInsights.currentVsAveragePct === null || graphInsights.currentVsAveragePct === undefined) { %>
                     Ainda sem base histórica para comparação
                   <% } else if (Number(graphInsights.currentVsAveragePct || 0) > 0) { %>
@@ -137,9 +137,9 @@
                 </div>
                 <p class="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">Média de referência: <span class="font-bold text-slate-800 dark:text-slate-100"><%= formatBRLFromCents(graphInsights.averageMonthlySpendCents || 0) %></span>.</p>
               </div>
-              <div class="rounded-[22px] border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-900/50">
-                <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Classificação</div>
-                <div class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white"><%= Number(graphKpis.categoryCoveragePct || 0) %>% em ordem</div>
+              <div class="rounded-xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-900/50">
+                <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Classificação</div>
+                <div class="mt-2 text-lg font-bold tracking-tight text-slate-900 dark:text-white"><%= Number(graphKpis.categoryCoveragePct || 0) %>% em ordem</div>
                 <p class="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400"><%= Number(graphKpis.uncategorizedCents || 0) > 0 ? `${formatBRLFromCents(graphKpis.uncategorizedCents || 0)} ainda sem categoria.` : 'Tudo classificado neste período.' %></p>
               </div>
             </div>
@@ -147,45 +147,45 @@
 
           <div class="mt-5 flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-3 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300">
             <span class="font-bold text-slate-800 dark:text-slate-100">Dica:</span>
-            <span>Tocou numa categoria ou num mês, a gente te leva direto para as compras daquele pedaço.</span>
+            <span>Toque em uma categoria ou mês para ver as compras correspondentes.</span>
             <div class="hidden sm:block h-4 w-px bg-slate-300 dark:bg-slate-700"></div>
             <span data-summary-interaction-hint class="font-medium text-slate-500 dark:text-slate-400">Toque para explorar o detalhe.</span>
           </div>
 
           <div class="mt-6 grid gap-4 xl:grid-cols-2 op-analytics-graph-grid op-analytics-graph-grid--overview">
-            <div class="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40 op-analytics-graph-card">
+            <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40 op-analytics-graph-card">
               <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div class="min-w-0">
-                  <h3 class="text-lg font-black text-slate-900 dark:text-white">Distribuição por categoria</h3>
+                  <h3 class="text-lg font-bold text-slate-900 dark:text-white">Distribuição por categoria</h3>
                   <p class="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400"><%= hasSharedAcceptedAnalytics ? 'Participação das categorias considerando cartões próprios e compartilhadas aceitas.' : 'Participação das categorias no cartão do período.' %></p>
                 </div>
-                <span class="op-analytics-chip inline-flex items-center self-start rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Categorias</span>
+                <span class="op-analytics-chip inline-flex items-center self-start rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Categorias</span>
               </div>
               <div class="mt-4 op-analytics-donut-layout">
-                <div class="op-analytics-donut-stage" data-summary-donut-chart><div class="flex min-h-[260px] animate-pulse items-center justify-center rounded-[24px] border border-slate-200 bg-slate-50/80 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-400 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-500">Assando a pizza financeira...</div></div>
+                <div class="op-analytics-donut-stage" data-summary-donut-chart><div class="flex min-h-[260px] animate-pulse items-center justify-center rounded-xl border border-slate-200 bg-slate-50/80 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-400 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-500">Assando a pizza financeira...</div></div>
                 <div class="op-analytics-donut-legend min-w-0 flex-1" data-summary-donut-legend><div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-2"><div class="h-20 animate-pulse rounded-2xl border border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/60"></div><div class="h-20 animate-pulse rounded-2xl border border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/60"></div><div class="h-20 animate-pulse rounded-2xl border border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/60"></div><div class="h-20 animate-pulse rounded-2xl border border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/60"></div></div></div>
               </div>
               <div class="mt-4" data-summary-donut-summary><div class="grid gap-3 md:grid-cols-3"><div class="h-24 animate-pulse rounded-2xl border border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/60"></div><div class="h-24 animate-pulse rounded-2xl border border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/60"></div><div class="h-24 animate-pulse rounded-2xl border border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/60"></div></div></div>
             </div>
 
-            <div class="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40 op-analytics-graph-card">
+            <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40 op-analytics-graph-card">
               <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div class="min-w-0">
-                  <h3 class="text-lg font-black text-slate-900 dark:text-white">Evolução do seu mês</h3>
+                  <h3 class="text-lg font-bold text-slate-900 dark:text-white">Evolução do seu mês</h3>
                   <p class="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">Histórico dos últimos 6 meses com cartões próprios e compartilhadas aceitas.</p>
                 </div>
-                <span class="op-analytics-chip inline-flex items-center self-start rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Últimos 6 meses</span>
+                <span class="op-analytics-chip inline-flex items-center self-start rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Últimos 6 meses</span>
               </div>
-              <div class="mt-4 op-analytics-line-wrap" data-summary-line-chart><div class="flex min-h-[260px] animate-pulse items-center justify-center rounded-[24px] border border-slate-200 bg-slate-50/80 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-400 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-500">Afinando a linha do tempo das compras...</div></div>
+              <div class="mt-4 op-analytics-line-wrap" data-summary-line-chart><div class="flex min-h-[260px] animate-pulse items-center justify-center rounded-xl border border-slate-200 bg-slate-50/80 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-400 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-500">Afinando a linha do tempo das compras...</div></div>
               <div class="mt-4 grid gap-3 sm:grid-cols-2">
                 <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/70">
-                  <div class="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Vs. mês anterior</div>
-                  <div class="mt-2 text-lg font-black <%= Number(graphKpis.deltaCents || 0) > 0 ? 'text-rose-600 dark:text-rose-300' : 'text-emerald-600 dark:text-emerald-300' %>"><%= Number(graphKpis.deltaCents || 0) > 0 ? '+' : '' %><%= formatBRLFromCents(graphKpis.deltaCents || 0) %></div>
+                  <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Vs. mês anterior</div>
+                  <div class="mt-2 text-lg font-bold <%= Number(graphKpis.deltaCents || 0) > 0 ? 'text-rose-600 dark:text-rose-300' : 'text-emerald-600 dark:text-emerald-300' %>"><%= Number(graphKpis.deltaCents || 0) > 0 ? '+' : '' %><%= formatBRLFromCents(graphKpis.deltaCents || 0) %></div>
                   <p class="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400"><% if (graphKpis.deltaPct === null || graphKpis.deltaPct === undefined) { %>Ainda sem base histórica para comparação.<% } else { %><%= Math.abs(Number(graphKpis.deltaPct || 0)) %>% <%= Number(graphKpis.deltaPct || 0) >= 0 ? 'acima' : 'abaixo' %> do mês anterior.<% } %></p>
                 </div>
                 <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/70">
-                  <div class="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Maior ponto recente</div>
-                  <div class="mt-2 text-lg font-black text-slate-900 dark:text-white"><%= graphInsights.peakPoint ? graphInsights.peakPoint.label : 'Ainda sem pico' %></div>
+                  <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Maior ponto recente</div>
+                  <div class="mt-2 text-lg font-bold text-slate-900 dark:text-white"><%= graphInsights.peakPoint ? graphInsights.peakPoint.label : 'Ainda sem pico' %></div>
                   <p class="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400"><%= graphInsights.peakPoint ? `${formatBRLFromCents(graphInsights.peakPoint.total_cents || 0)} foi o maior total dos últimos meses.` : 'Quando houver histórico suficiente, o maior ponto recente aparecerá aqui.' %></p>
                 </div>
               </div>
@@ -199,41 +199,41 @@
 
       <div data-op-tab-panel="flow" hidden>
         <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-          <div class="op-analytics-kpi-card op-analytics-kpi-card--income rounded-[24px] border border-emerald-200 bg-emerald-50/90 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
-            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-emerald-700 dark:text-emerald-300">Entradas</div>
-            <div class="mt-2 text-2xl font-black tracking-tight text-emerald-800 dark:text-emerald-100"><%= formatBRLFromCents(financeTotals.incomeCents || 0) %></div>
+          <div class="op-analytics-kpi-card op-analytics-kpi-card--income rounded-xl border border-emerald-200 bg-emerald-50/90 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
+            <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-300">Entradas</div>
+            <div class="mt-2 text-2xl font-bold tracking-tight text-emerald-800 dark:text-emerald-100"><%= formatBRLFromCents(financeTotals.incomeCents || 0) %></div>
             <p class="mt-2 text-xs leading-5 text-emerald-800/80 dark:text-emerald-100/80"><%= financeIncomeSources[0] ? `${financeIncomeSources[0].label} foi a principal origem no período.` : 'Sem entradas registradas neste período.' %></p>
           </div>
-          <div class="op-analytics-kpi-card op-analytics-kpi-card--expense rounded-[24px] border border-rose-200 bg-rose-50/90 p-4 dark:border-rose-900/60 dark:bg-rose-950/20">
-            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-rose-700 dark:text-rose-300">Saídas</div>
-            <div class="mt-2 text-2xl font-black tracking-tight text-rose-800 dark:text-rose-100"><%= formatBRLFromCents(outsideExpenseCents) %></div>
+          <div class="op-analytics-kpi-card op-analytics-kpi-card--expense rounded-xl border border-rose-200 bg-rose-50/90 p-4 dark:border-rose-900/60 dark:bg-rose-950/20">
+            <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-rose-700 dark:text-rose-300">Saídas</div>
+            <div class="mt-2 text-2xl font-bold tracking-tight text-rose-800 dark:text-rose-100"><%= formatBRLFromCents(outsideExpenseCents) %></div>
             <p class="mt-2 text-xs leading-5 text-rose-800/80 dark:text-rose-100/80"><%= financeExpenseSources[0] ? `${financeExpenseSources[0].label} foi a principal saída do período.` : 'Sem saídas fora do cartão neste período.' %></p>
           </div>
-          <div class="op-analytics-kpi-card op-analytics-kpi-card--cards rounded-[24px] border border-amber-200 bg-amber-50/90 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
-            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-amber-700 dark:text-amber-300">Cartões próprios</div>
-            <div class="mt-2 text-2xl font-black tracking-tight text-amber-900 dark:text-amber-100"><%= formatBRLFromCents(ownCardSpendCents) %></div>
+          <div class="op-analytics-kpi-card op-analytics-kpi-card--cards rounded-xl border border-amber-200 bg-amber-50/90 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
+            <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-amber-700 dark:text-amber-300">Cartões próprios</div>
+            <div class="mt-2 text-2xl font-bold tracking-tight text-amber-900 dark:text-amber-100"><%= formatBRLFromCents(ownCardSpendCents) %></div>
             <p class="mt-2 text-xs leading-5 text-amber-800/80 dark:text-amber-100/80"><%= ownCardSpendCents > 0 ? 'Valor referente apenas à sua divisão nos cartões.' : 'Sem valor de cartão próprio no período.' %></p>
           </div>
-          <div class="op-analytics-kpi-card rounded-[24px] border border-violet-200 bg-violet-50/90 p-4 dark:border-violet-900/60 dark:bg-violet-950/20">
-            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-violet-700 dark:text-violet-300">Compartilhadas</div>
-            <div class="mt-2 text-2xl font-black tracking-tight text-violet-900 dark:text-violet-100"><%= formatBRLFromCents(sharedAcceptedCents) %></div>
-            <p class="mt-2 text-xs leading-5 text-violet-800/80 dark:text-violet-100/80"><%= hasSharedAcceptedAnalytics ? `${sharedAcceptedCount} recebida${sharedAcceptedCount === 1 ? '' : 's'} de amigos.` : 'Nada aceito de amigos neste mês.' %></p>
+          <div class="op-analytics-kpi-card rounded-xl border border-cyan-200 bg-cyan-50/90 p-4 dark:border-cyan-900/60 dark:bg-cyan-950/20">
+            <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-cyan-700 dark:text-cyan-300">Compartilhadas</div>
+            <div class="mt-2 text-2xl font-bold tracking-tight text-cyan-900 dark:text-cyan-100"><%= formatBRLFromCents(sharedAcceptedCents) %></div>
+            <p class="mt-2 text-xs leading-5 text-cyan-800/80 dark:text-cyan-100/80"><%= hasSharedAcceptedAnalytics ? `${sharedAcceptedCount} recebida${sharedAcceptedCount === 1 ? '' : 's'} de amigos.` : 'Nada aceito de amigos neste mês.' %></p>
           </div>
-          <div class="op-analytics-kpi-card rounded-[24px] border border-violet-200 bg-violet-50/90 p-4 dark:border-violet-900/60 dark:bg-violet-950/20">
-            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-violet-700 dark:text-violet-300">Total comprometido</div>
-            <div class="mt-2 text-2xl font-black tracking-tight text-violet-900 dark:text-violet-100"><%= formatBRLFromCents(totalCommittedCents) %></div>
-            <p class="mt-2 text-xs leading-5 text-violet-800/80 dark:text-violet-100/80">Saídas do mês somadas aos cartões próprios e às compartilhadas aceitas.</p>
+          <div class="op-analytics-kpi-card rounded-xl border border-cyan-200 bg-cyan-50/90 p-4 dark:border-cyan-900/60 dark:bg-cyan-950/20">
+            <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-cyan-700 dark:text-cyan-300">Total comprometido</div>
+            <div class="mt-2 text-2xl font-bold tracking-tight text-cyan-900 dark:text-cyan-100"><%= formatBRLFromCents(totalCommittedCents) %></div>
+            <p class="mt-2 text-xs leading-5 text-cyan-800/80 dark:text-cyan-100/80">Saídas do mês somadas aos cartões próprios e às compartilhadas aceitas.</p>
           </div>
-          <div class="op-analytics-kpi-card op-analytics-kpi-card--balance rounded-[24px] border border-slate-200 bg-slate-900 p-4 text-white dark:border-slate-700 dark:bg-slate-950">
-            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-300">Saldo previsto</div>
-            <div class="mt-2 text-2xl font-black tracking-tight"><%= formatBRLFromCents(overallNetCents) %></div>
+          <div class="op-analytics-kpi-card op-analytics-kpi-card--balance rounded-xl border border-slate-200 bg-slate-900 p-4 text-white dark:border-slate-700 dark:bg-slate-950">
+            <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-300">Saldo previsto</div>
+            <div class="mt-2 text-2xl font-bold tracking-tight"><%= formatBRLFromCents(overallNetCents) %></div>
             <p class="mt-2 text-xs leading-5 text-slate-300"><%= overallNetCents >= 0 ? 'Resultado projetado positivo após consolidar o período.' : 'Resultado projetado negativo após consolidar o período.' %></p>
           </div>
         </div>
 
-        <div class="mt-4 flex flex-col gap-3 rounded-[24px] border border-slate-200 bg-white/90 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/50 lg:flex-row lg:items-center lg:justify-between">
+        <div class="mt-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white/90 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/50 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Ajustes operacionais</div>
+            <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Ajustes operacionais</div>
             <p class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">As entradas e saídas fora do cartão continuam disponíveis no painel mensal.</p>
           </div>
           <a href="/detalhamento/<%= year %>/<%= month %>" class="op-btn op-btn-export op-btn--compact whitespace-nowrap">Abrir entra e sai</a>
@@ -241,13 +241,13 @@
 
         <% if (hasFinanceFlow) { %>
           <div class="mt-6 grid gap-4 xl:grid-cols-[1.35fr,1fr]">
-            <section class="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
+            <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
               <div class="flex items-start justify-between gap-3">
                 <div>
-                  <h3 class="text-lg font-black text-slate-900 dark:text-white">Evolução do fluxo</h3>
+                  <h3 class="text-lg font-bold text-slate-900 dark:text-white">Evolução do fluxo</h3>
                   <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Entradas, saídas fora do cartão, cartões próprios e compartilhadas aceitas no mesmo histórico mensal.</p>
                 </div>
-                <span class="op-analytics-chip inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Últimos 6 meses</span>
+                <span class="op-analytics-chip inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Últimos 6 meses</span>
               </div>
               <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 <% financeTrendDisplay.forEach((point) => { 
@@ -256,28 +256,28 @@
                      const cardPct = financeTrendMax > 0 ? Math.max(8, Math.round((Number(point.card_cents || 0) / financeTrendMax) * 100)) : 0;
                      const sharedPct = financeTrendMax > 0 ? Math.max(8, Math.round((Number(point.shared_cents || 0) / financeTrendMax) * 100)) : 0;
                 %>
-                  <div class="rounded-[22px] border <%= point.is_current ? 'border-violet-300 bg-violet-50/70 dark:border-violet-800 dark:bg-violet-900/20' : 'border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/60' %> p-4">
+                  <div class="rounded-xl border <%= point.is_current ? 'border-cyan-300 bg-cyan-50/70 dark:border-cyan-800 dark:bg-cyan-900/20' : 'border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/60' %> p-4">
                     <div class="flex items-center justify-between gap-2">
-                      <div class="text-[11px] font-bold uppercase tracking-[0.2em] <%= point.is_current ? 'text-violet-700 dark:text-violet-300' : 'text-slate-500 dark:text-slate-400' %>"><%= point.label %></div>
-                      <span class="op-analytics-chip inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] <%= Number(point.net_cents || 0) >= 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-200' %>"><%= Number(point.net_cents || 0) >= 0 ? 'sobrou' : 'apertou' %></span>
+                      <div class="text-[11px] font-bold uppercase tracking-[0.12em] <%= point.is_current ? 'text-cyan-700 dark:text-cyan-300' : 'text-slate-500 dark:text-slate-400' %>"><%= point.label %></div>
+                      <span class="op-analytics-chip inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] <%= Number(point.net_cents || 0) >= 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-200' %>"><%= Number(point.net_cents || 0) >= 0 ? 'sobrou' : 'apertou' %></span>
                     </div>
                     <div class="mt-3 space-y-3">
                       <div>
-                        <div class="flex items-center justify-between gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300"><span>Entrou</span><span><%= formatBRLFromCents(point.income_cents || 0) %></span></div>
+                        <div class="flex items-center justify-between gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-300"><span>Entrou</span><span><%= formatBRLFromCents(point.income_cents || 0) %></span></div>
                         <div class="mt-1 h-2 rounded-full bg-emerald-100 dark:bg-emerald-950/40"><div class="h-2 rounded-full bg-emerald-500 dark:bg-emerald-400" style="width:<%= incomePct %>%"></div></div>
                       </div>
                       <div>
-                        <div class="flex items-center justify-between gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-rose-700 dark:text-rose-300"><span>Saiu</span><span><%= formatBRLFromCents(point.expense_cents || 0) %></span></div>
+                        <div class="flex items-center justify-between gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-rose-700 dark:text-rose-300"><span>Saiu</span><span><%= formatBRLFromCents(point.expense_cents || 0) %></span></div>
                         <div class="mt-1 h-2 rounded-full bg-rose-100 dark:bg-rose-950/40"><div class="h-2 rounded-full bg-rose-500 dark:bg-rose-400" style="width:<%= expensePct %>%"></div></div>
                       </div>
                       <div>
-                        <div class="flex items-center justify-between gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300"><span>Cartões próprios</span><span><%= formatBRLFromCents(point.card_cents || 0) %></span></div>
+                        <div class="flex items-center justify-between gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-amber-700 dark:text-amber-300"><span>Cartões próprios</span><span><%= formatBRLFromCents(point.card_cents || 0) %></span></div>
                         <div class="mt-1 h-2 rounded-full bg-amber-100 dark:bg-amber-950/40"><div class="h-2 rounded-full bg-amber-500 dark:bg-amber-400" style="width:<%= cardPct %>%"></div></div>
                       </div>
                       <% if (Number(point.shared_cents || 0) > 0) { %>
                         <div>
-                          <div class="flex items-center justify-between gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300"><span>Compartilhadas</span><span><%= formatBRLFromCents(point.shared_cents || 0) %></span></div>
-                          <div class="mt-1 h-2 rounded-full bg-violet-100 dark:bg-violet-950/40"><div class="h-2 rounded-full bg-violet-500 dark:bg-violet-400" style="width:<%= sharedPct %>%"></div></div>
+                          <div class="flex items-center justify-between gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-cyan-700 dark:text-cyan-300"><span>Compartilhadas</span><span><%= formatBRLFromCents(point.shared_cents || 0) %></span></div>
+                          <div class="mt-1 h-2 rounded-full bg-cyan-100 dark:bg-cyan-950/40"><div class="h-2 rounded-full bg-cyan-500 dark:bg-cyan-400" style="width:<%= sharedPct %>%"></div></div>
                         </div>
                       <% } %>
                     </div>
@@ -288,13 +288,13 @@
             </section>
 
             <section class="space-y-4">
-              <div class="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
+              <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
                 <div class="flex items-start justify-between gap-3">
                   <div>
-                    <h3 class="text-lg font-black text-slate-900 dark:text-white">Principais origens de entrada</h3>
+                    <h3 class="text-lg font-bold text-slate-900 dark:text-white">Principais origens de entrada</h3>
                     <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Entradas organizadas por origem para leitura rápida.</p>
                   </div>
-                  <span class="op-analytics-chip inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/20 dark:text-emerald-300"><%= financeIncomeSources.length %> fonte<%= financeIncomeSources.length === 1 ? '' : 's' %></span>
+                  <span class="op-analytics-chip inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/20 dark:text-emerald-300"><%= financeIncomeSources.length %> fonte<%= financeIncomeSources.length === 1 ? '' : 's' %></span>
                 </div>
                 <% if (financeIncomeSources.length > 0) { %>
                   <div class="mt-4 space-y-3">
@@ -302,27 +302,27 @@
                       <div class="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/60">
                         <div class="flex items-center justify-between gap-3">
                           <div class="min-w-0">
-                            <div class="truncate text-sm font-black text-slate-900 dark:text-white"><%= item.label %></div>
+                            <div class="truncate text-sm font-bold text-slate-900 dark:text-white"><%= item.label %></div>
                             <div class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400"><%= item.share_pct || 0 %>% das entradas</div>
                           </div>
-                          <div class="text-sm font-black text-emerald-700 dark:text-emerald-300"><%= formatBRLFromCents(item.total_cents || 0) %></div>
+                          <div class="text-sm font-bold text-emerald-700 dark:text-emerald-300"><%= formatBRLFromCents(item.total_cents || 0) %></div>
                         </div>
                         <div class="mt-3 h-2 rounded-full bg-emerald-100 dark:bg-emerald-950/40"><div class="h-2 rounded-full bg-emerald-500 dark:bg-emerald-400" style="width:<%= item.intensity_pct || 0 %>%"></div></div>
                       </div>
                     <% }) %>
                   </div>
                 <% } else { %>
-                  <div class="mt-4 rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Não há entradas registradas neste período.</div>
+                  <div class="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Não há entradas registradas neste período.</div>
                 <% } %>
               </div>
 
-              <div class="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
+              <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
                 <div class="flex items-start justify-between gap-3">
                   <div>
-                    <h3 class="text-lg font-black text-slate-900 dark:text-white">Principais saídas fora do cartão</h3>
-                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Bom para ver rapidinho o que saiu sem passar pelo cartão.</p>
+                    <h3 class="text-lg font-bold text-slate-900 dark:text-white">Principais saídas fora do cartão</h3>
+                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Saídas registradas fora do cartão.</p>
                   </div>
-                  <span class="op-analytics-chip inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/20 dark:text-rose-300"><%= financeExpenseSources.length %> saída<%= financeExpenseSources.length === 1 ? '' : 's' %></span>
+                  <span class="op-analytics-chip inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/20 dark:text-rose-300"><%= financeExpenseSources.length %> saída<%= financeExpenseSources.length === 1 ? '' : 's' %></span>
                 </div>
                 <% if (financeExpenseSources.length > 0) { %>
                   <div class="mt-4 space-y-3">
@@ -330,24 +330,24 @@
                       <div class="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/60">
                         <div class="flex items-center justify-between gap-3">
                           <div class="min-w-0">
-                            <div class="truncate text-sm font-black text-slate-900 dark:text-white"><%= item.label %></div>
+                            <div class="truncate text-sm font-bold text-slate-900 dark:text-white"><%= item.label %></div>
                             <div class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400"><%= item.share_pct || 0 %>% das saídas por fora</div>
                           </div>
-                          <div class="text-sm font-black text-rose-700 dark:text-rose-300"><%= formatBRLFromCents(item.total_cents || 0) %></div>
+                          <div class="text-sm font-bold text-rose-700 dark:text-rose-300"><%= formatBRLFromCents(item.total_cents || 0) %></div>
                         </div>
                         <div class="mt-3 h-2 rounded-full bg-rose-100 dark:bg-rose-950/40"><div class="h-2 rounded-full bg-rose-500 dark:bg-rose-400" style="width:<%= item.intensity_pct || 0 %>%"></div></div>
                       </div>
                     <% }) %>
                   </div>
                 <% } else { %>
-                  <div class="mt-4 rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Ainda não pintou saída por fora neste mês.</div>
+                  <div class="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Nenhuma saída avulsa neste mês.</div>
                 <% } %>
               </div>
             </section>
           </div>
         <% } else { %>
-          <div class="mt-6 rounded-[26px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center dark:border-slate-700 dark:bg-slate-800/60">
-            <div class="text-xl font-black text-slate-900 dark:text-white">Essa parte ainda está quietinha</div>
+          <div class="mt-6 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center dark:border-slate-700 dark:bg-slate-800/60">
+            <div class="text-xl font-bold text-slate-900 dark:text-white">Essa parte ainda está quietinha</div>
             <p class="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-300">Assim que você tiver entradas, saídas por fora ou valor dividido no cartão, essa leitura ganha vida.</p>
             <a href="/detalhamento/<%= year %>/<%= month %>" class="op-btn op-btn-export op-btn--compact whitespace-nowrap mt-5">Abrir entra e sai</a>
           </div>
@@ -355,124 +355,124 @@
       </div>
       <div data-op-tab-panel="split" hidden>
         <div class="grid gap-3 lg:grid-cols-5">
-          <div class="rounded-[24px] border border-slate-200 bg-white/90 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/50">
-            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Dividido entre pessoas</div>
-            <div class="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white"><%= formatBRLFromCents(totalKpis.totalPeopleAssignedCents || 0) %></div>
+          <div class="rounded-xl border border-slate-200 bg-white/90 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/50">
+            <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Dividido entre pessoas</div>
+            <div class="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white"><%= formatBRLFromCents(totalKpis.totalPeopleAssignedCents || 0) %></div>
             <p class="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">Tudo que já está repartido dentro das compras do mês.</p>
           </div>
-          <div class="rounded-[24px] border border-amber-200 bg-amber-50/90 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
-            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-amber-700 dark:text-amber-300">Sem dono ainda</div>
-            <div class="mt-2 text-2xl font-black tracking-tight text-amber-900 dark:text-amber-100"><%= formatBRLFromCents(totalKpis.totalUnassignedCents || 0) %></div>
+          <div class="rounded-xl border border-amber-200 bg-amber-50/90 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
+            <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-amber-700 dark:text-amber-300">Sem dono ainda</div>
+            <div class="mt-2 text-2xl font-bold tracking-tight text-amber-900 dark:text-amber-100"><%= formatBRLFromCents(totalKpis.totalUnassignedCents || 0) %></div>
             <p class="mt-2 text-xs leading-5 text-amber-800/80 dark:text-amber-100/80">Bom para achar o que ainda não foi distribuído.</p>
           </div>
-          <div class="rounded-[24px] border border-violet-200 bg-violet-50/90 p-4 dark:border-violet-900/60 dark:bg-violet-950/20">
-            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-violet-700 dark:text-violet-300">Compartilhadas aceitas</div>
-            <div class="mt-2 text-2xl font-black tracking-tight text-violet-900 dark:text-violet-100"><%= formatBRLFromCents(sharedAcceptedCents) %></div>
-            <p class="mt-2 text-xs leading-5 text-violet-800/80 dark:text-violet-100/80">Entram no retrato do mês como recebidas de amigos.</p>
+          <div class="rounded-xl border border-cyan-200 bg-cyan-50/90 p-4 dark:border-cyan-900/60 dark:bg-cyan-950/20">
+            <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-cyan-700 dark:text-cyan-300">Compartilhadas aceitas</div>
+            <div class="mt-2 text-2xl font-bold tracking-tight text-cyan-900 dark:text-cyan-100"><%= formatBRLFromCents(sharedAcceptedCents) %></div>
+            <p class="mt-2 text-xs leading-5 text-cyan-800/80 dark:text-cyan-100/80">Entram no retrato do mês como recebidas de amigos.</p>
           </div>
-          <div class="rounded-[24px] border border-emerald-200 bg-emerald-50/90 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
-            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-emerald-700 dark:text-emerald-300">Pago nos cartões</div>
-            <div class="mt-2 text-2xl font-black tracking-tight text-emerald-800 dark:text-emerald-100"><%= formatBRLFromCents(totalKpis.totalPaidCardsCents || 0) %></div>
+          <div class="rounded-xl border border-emerald-200 bg-emerald-50/90 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
+            <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-300">Pago nos cartões</div>
+            <div class="mt-2 text-2xl font-bold tracking-tight text-emerald-800 dark:text-emerald-100"><%= formatBRLFromCents(totalKpis.totalPaidCardsCents || 0) %></div>
             <p class="mt-2 text-xs leading-5 text-emerald-800/80 dark:text-emerald-100/80">Parte já marcada como quitada no fechamento.</p>
           </div>
-          <div class="rounded-[24px] border border-violet-200 bg-violet-50/90 p-4 dark:border-violet-900/60 dark:bg-violet-950/20">
-            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-violet-700 dark:text-violet-300">Pessoas na roda</div>
-            <div class="mt-2 text-2xl font-black tracking-tight text-violet-900 dark:text-violet-100"><%= peopleRows.length %></div>
-            <p class="mt-2 text-xs leading-5 text-violet-800/80 dark:text-violet-100/80">A maior pressão do período aparece abaixo, junto dos cartões.</p>
+          <div class="rounded-xl border border-cyan-200 bg-cyan-50/90 p-4 dark:border-cyan-900/60 dark:bg-cyan-950/20">
+            <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-cyan-700 dark:text-cyan-300">Pessoas na roda</div>
+            <div class="mt-2 text-2xl font-bold tracking-tight text-cyan-900 dark:text-cyan-100"><%= peopleRows.length %></div>
+            <p class="mt-2 text-xs leading-5 text-cyan-800/80 dark:text-cyan-100/80">A maior pressão do período aparece abaixo, junto dos cartões.</p>
           </div>
         </div>
 
         <div class="mt-6 grid gap-4 xl:grid-cols-2 op-analytics-graph-grid">
-          <section class="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
+          <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
             <div class="flex items-start justify-between gap-3">
               <div>
-                <h3 class="text-lg font-black text-slate-900 dark:text-white">Participantes com maior participação</h3>
+                <h3 class="text-lg font-bold text-slate-900 dark:text-white">Participantes com maior participação</h3>
                 <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Ajuda a entender a divisão do mês pelas pessoas que entraram na conta.</p>
               </div>
-              <span class="op-analytics-chip inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Pessoas</span>
+              <span class="op-analytics-chip inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Pessoas</span>
             </div>
             <% if (peopleRows.length > 0) { %>
               <div class="mt-4 space-y-3">
                 <% peopleRows.slice(0, 6).forEach((person) => { %>
-                  <a href="/month/<%= year %>/<%= month %>?f_person=<%= person.id %>" class="block rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 transition hover:-translate-y-0.5 hover:border-violet-300 hover:bg-violet-50/70 dark:border-slate-700 dark:bg-slate-800/60 dark:hover:border-violet-800 dark:hover:bg-violet-900/20">
+                  <a href="/month/<%= year %>/<%= month %>?f_person=<%= person.id %>" class="block rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 transition hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-cyan-50/70 dark:border-slate-700 dark:bg-slate-800/60 dark:hover:border-cyan-800 dark:hover:bg-cyan-900/20">
                     <div class="flex items-center justify-between gap-3">
                       <div class="min-w-0">
-                        <div class="truncate text-sm font-black text-slate-900 dark:text-white"><%= person.label %></div>
+                        <div class="truncate text-sm font-bold text-slate-900 dark:text-white"><%= person.label %></div>
                         <div class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400"><%= person.share_pct || 0 %>% do mês · já pagou <%= formatBRLFromCents(person.paid_cents || 0) %></div>
                       </div>
                       <div class="text-right">
-                        <div class="text-sm font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(person.total_cents || 0) %></div>
+                        <div class="text-sm font-bold text-slate-900 dark:text-white"><%= formatBRLFromCents(person.total_cents || 0) %></div>
                         <div class="mt-1 text-xs font-semibold <%= Number(person.remaining_cents || 0) > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300' %>"><%= Number(person.remaining_cents || 0) > 0 ? `faltam ${formatBRLFromCents(person.remaining_cents || 0)}` : 'já está zerado' %></div>
                       </div>
                     </div>
-                    <div class="mt-3 h-2 rounded-full bg-violet-100 dark:bg-violet-950/40"><div class="h-2 rounded-full bg-violet-500 dark:bg-violet-400" style="width:<%= person.intensity_pct || 0 %>%"></div></div>
+                    <div class="mt-3 h-2 rounded-full bg-cyan-100 dark:bg-cyan-950/40"><div class="h-2 rounded-full bg-cyan-500 dark:bg-cyan-400" style="width:<%= person.intensity_pct || 0 %>%"></div></div>
                   </a>
                 <% }) %>
               </div>
             <% } else { %>
-              <div class="mt-4 rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Quando houver divisão entre participantes, este ranking aparecerá aqui.</div>
+              <div class="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Quando houver divisão entre participantes, este ranking aparecerá aqui.</div>
             <% } %>
           </section>
 
-          <section class="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
+          <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
             <div class="flex items-start justify-between gap-3">
               <div>
-                <h3 class="text-lg font-black text-slate-900 dark:text-white">Cartões que mais carregaram o mês</h3>
+                <h3 class="text-lg font-bold text-slate-900 dark:text-white">Cartões que mais carregaram o mês</h3>
                 <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Mostra onde o total do mês ficou concentrado e o que ainda está pendente.</p>
               </div>
-              <span class="op-analytics-chip inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Cartões</span>
+              <span class="op-analytics-chip inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Cartões</span>
             </div>
             <% if (cardRows.length > 0) { %>
               <div class="mt-4 space-y-3">
                 <% cardRows.slice(0, 6).forEach((card) => { %>
-                  <a href="/month/<%= year %>/<%= month %>?f_card=<%= encodeURIComponent(card.label) %>" class="block rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 transition hover:-translate-y-0.5 hover:border-sky-300 hover:bg-sky-50/70 dark:border-slate-700 dark:bg-slate-800/60 dark:hover:border-sky-800 dark:hover:bg-sky-900/20">
+                  <a href="/month/<%= year %>/<%= month %>?f_card=<%= encodeURIComponent(card.label) %>" class="block rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 transition hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-cyan-50/70 dark:border-slate-700 dark:bg-slate-800/60 dark:hover:border-cyan-800 dark:hover:bg-cyan-900/20">
                     <div class="flex items-center justify-between gap-3">
                       <div class="min-w-0">
-                        <div class="truncate text-sm font-black text-slate-900 dark:text-white"><%= card.label %></div>
+                        <div class="truncate text-sm font-bold text-slate-900 dark:text-white"><%= card.label %></div>
                         <div class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400"><%= card.share_pct || 0 %>% do mês · pago <%= formatBRLFromCents(card.paid_cents || 0) %></div>
                       </div>
                       <div class="text-right">
-                        <div class="text-sm font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(card.total_cents || 0) %></div>
+                        <div class="text-sm font-bold text-slate-900 dark:text-white"><%= formatBRLFromCents(card.total_cents || 0) %></div>
                         <div class="mt-1 text-xs font-semibold <%= Number(card.remaining_cents || 0) > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300' %>"><%= Number(card.remaining_cents || 0) > 0 ? `faltam ${formatBRLFromCents(card.remaining_cents || 0)}` : 'sem pendência' %></div>
                       </div>
                     </div>
-                    <div class="mt-3 h-2 rounded-full bg-sky-100 dark:bg-sky-950/40"><div class="h-2 rounded-full bg-sky-500 dark:bg-sky-400" style="width:<%= card.intensity_pct || 0 %>%"></div></div>
+                    <div class="mt-3 h-2 rounded-full bg-cyan-100 dark:bg-cyan-950/40"><div class="h-2 rounded-full bg-cyan-500 dark:bg-cyan-400" style="width:<%= card.intensity_pct || 0 %>%"></div></div>
                   </a>
                 <% }) %>
               </div>
             <% } else { %>
-              <div class="mt-4 rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Quando houver compras em cartão no período, este ranking aparecerá aqui.</div>
+              <div class="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Quando houver compras em cartão no período, este ranking aparecerá aqui.</div>
             <% } %>
           </section>
         </div>
 
-        <section class="mt-6 rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
+        <section class="mt-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h3 class="text-lg font-black text-slate-900 dark:text-white">Cartão por cartão, mês a mês</h3>
+              <h3 class="text-lg font-bold text-slate-900 dark:text-white">Cartão por cartão, mês a mês</h3>
               <p class="mt-1 text-sm text-slate-500 dark:text-slate-400"><%= hasSharedAcceptedAnalytics ? 'Total por cartão próprio; recebidas de amigos aparecem em grupo próprio.' : 'Total por cartão usado no período.' %></p>
             </div>
-            <span class="op-analytics-chip inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Últimos 6 meses</span>
+            <span class="op-analytics-chip inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Últimos 6 meses</span>
           </div>
           <% if (cardTrendByCard.length > 0) { %>
             <div class="mt-4 grid gap-4 xl:grid-cols-2">
               <% cardTrendByCardDisplay.forEach((cardTrend) => { const cardPeak = Math.max(1, Number(cardTrend.peak_cents || 0)); %>
-                <section class="rounded-[24px] border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-800/60">
+                <section class="rounded-xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-800/60">
                   <div class="flex items-start justify-between gap-3">
                     <div>
-                      <h4 class="text-base font-black text-slate-900 dark:text-white"><%= cardTrend.label %></h4>
-                      <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Pra sacar rapidinho quando esse cartão engrossou ou deu uma folga.</p>
+                      <h4 class="text-base font-bold text-slate-900 dark:text-white"><%= cardTrend.label %></h4>
+                      <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Evolução do total deste cartão nos últimos meses.</p>
                     </div>
-                    <span class="op-analytics-chip inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/20 dark:text-sky-300"><%= formatBRLFromCents(cardTrend.current_cents || 0) %></span>
+                    <span class="op-analytics-chip inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-cyan-700 dark:border-cyan-900/60 dark:bg-cyan-950/20 dark:text-cyan-300"><%= formatBRLFromCents(cardTrend.current_cents || 0) %></span>
                   </div>
                   <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                     <% cardTrend.series.forEach((point) => { const pointPct = cardPeak > 0 ? Math.max(8, Math.round((Number(point.total_cents || 0) / cardPeak) * 100)) : 8; %>
-                      <a href="/month/<%= point.year %>/<%= point.month %>?f_card=<%= encodeURIComponent(cardTrend.label) %>" class="block rounded-[20px] border <%= point.is_current ? 'border-sky-300 bg-sky-50/80 dark:border-sky-800 dark:bg-sky-900/20' : 'border-slate-200 bg-white/80 dark:border-slate-700 dark:bg-slate-900/50' %> px-4 py-3 transition hover:-translate-y-0.5 hover:border-sky-300 hover:bg-sky-50/80 dark:hover:border-sky-700 dark:hover:bg-sky-900/20">
+                      <a href="/month/<%= point.year %>/<%= point.month %>?f_card=<%= encodeURIComponent(cardTrend.label) %>" class="block rounded-xl border <%= point.is_current ? 'border-cyan-300 bg-cyan-50/80 dark:border-cyan-800 dark:bg-cyan-900/20' : 'border-slate-200 bg-white/80 dark:border-slate-700 dark:bg-slate-900/50' %> px-4 py-3 transition hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-cyan-50/80 dark:hover:border-cyan-700 dark:hover:bg-cyan-900/20">
                         <div class="flex items-center justify-between gap-3">
-                          <div class="text-[11px] font-bold uppercase tracking-[0.18em] <%= point.is_current ? 'text-sky-700 dark:text-sky-300' : 'text-slate-500 dark:text-slate-400' %>"><%= point.label %></div>
-                          <div class="text-sm font-black text-slate-900 dark:text-white"><%= formatBRLFromCents(point.total_cents || 0) %></div>
+                          <div class="text-[11px] font-bold uppercase tracking-[0.12em] <%= point.is_current ? 'text-cyan-700 dark:text-cyan-300' : 'text-slate-500 dark:text-slate-400' %>"><%= point.label %></div>
+                          <div class="text-sm font-bold text-slate-900 dark:text-white"><%= formatBRLFromCents(point.total_cents || 0) %></div>
                         </div>
-                        <div class="mt-3 h-2 rounded-full bg-sky-100 dark:bg-sky-950/40"><div class="h-2 rounded-full bg-sky-500 dark:bg-sky-400" style="width:<%= pointPct %>%"></div></div>
+                        <div class="mt-3 h-2 rounded-full bg-cyan-100 dark:bg-cyan-950/40"><div class="h-2 rounded-full bg-cyan-500 dark:bg-cyan-400" style="width:<%= pointPct %>%"></div></div>
                       </a>
                     <% }) %>
                   </div>
@@ -480,38 +480,38 @@
               <% }) %>
             </div>
           <% } else { %>
-            <div class="mt-4 rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Quando os cartões tiverem histórico suficiente, esta leitura aparecerá aqui.</div>
+            <div class="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Quando os cartões tiverem histórico suficiente, esta leitura aparecerá aqui.</div>
           <% } %>
         </section>
       </div>
 
       <div data-op-tab-panel="places" hidden>
         <div class="grid gap-3 lg:grid-cols-4 mb-6">
-          <div class="rounded-[24px] border border-slate-200 bg-white/90 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/50 lg:col-span-2">
-            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Maior estabelecimento</div>
-            <div class="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white"><%= merchantTop ? merchantTop.label : 'Ainda sem destaque' %></div>
+          <div class="rounded-xl border border-slate-200 bg-white/90 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/50 lg:col-span-2">
+            <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Maior estabelecimento</div>
+            <div class="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white"><%= merchantTop ? merchantTop.label : 'Ainda sem destaque' %></div>
             <p class="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400"><%= merchantTop ? `${formatBRLFromCents(merchantTop.total_cents || 0)} em ${merchantTop.txn_count || 0} compra${Number(merchantTop.txn_count || 0) === 1 ? '' : 's'}.` : 'Quando um estabelecimento concentrar mais valor, ele ganhará destaque aqui.' %></p>
           </div>
-          <div class="rounded-[24px] border border-violet-200 bg-violet-50/90 p-4 dark:border-violet-900/60 dark:bg-violet-950/20">
-            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-violet-700 dark:text-violet-300">Ranking</div>
-            <div class="mt-2 text-2xl font-black tracking-tight text-violet-900 dark:text-violet-100"><%= merchantRanking.length %></div>
-            <p class="mt-2 text-xs leading-5 text-violet-800/80 dark:text-violet-100/80">Quantos lugares entraram no mapa deste mês.</p>
+          <div class="rounded-xl border border-cyan-200 bg-cyan-50/90 p-4 dark:border-cyan-900/60 dark:bg-cyan-950/20">
+            <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-cyan-700 dark:text-cyan-300">Ranking</div>
+            <div class="mt-2 text-2xl font-bold tracking-tight text-cyan-900 dark:text-cyan-100"><%= merchantRanking.length %></div>
+            <p class="mt-2 text-xs leading-5 text-cyan-800/80 dark:text-cyan-100/80">Quantos lugares entraram no mapa deste mês.</p>
           </div>
-          <div class="rounded-[24px] border border-emerald-200 bg-emerald-50/90 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
-            <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-emerald-700 dark:text-emerald-300">Sugestões</div>
-            <div class="mt-2 text-2xl font-black tracking-tight text-emerald-900 dark:text-emerald-100"><%= merchantSuggestions.length %></div>
+          <div class="rounded-xl border border-emerald-200 bg-emerald-50/90 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
+            <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-300">Sugestões</div>
+            <div class="mt-2 text-2xl font-bold tracking-tight text-emerald-900 dark:text-emerald-100"><%= merchantSuggestions.length %></div>
             <p class="mt-2 text-xs leading-5 text-emerald-800/80 dark:text-emerald-100/80">Nomes que o app separou para você confirmar.</p>
           </div>
         </div>
 
-<section class="mb-8 rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40" data-summary-ranking-root>
+<section class="mb-8 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40" data-summary-ranking-root>
         <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h3 class="text-lg font-black text-slate-900 dark:text-white">Ranking dos lugares</h3>
+            <h3 class="text-lg font-bold text-slate-900 dark:text-white">Ranking dos lugares</h3>
             <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Ranking dos estabelecimentos por presença, valor e variação no período.</p>
           </div>
           <div class="flex flex-wrap items-center gap-2 sm:justify-end">
-            <span class="op-analytics-chip inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Leitura por estabelecimento</span>
+            <span class="op-analytics-chip inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Leitura por estabelecimento</span>
             <button type="button" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800" data-summary-ranking-toggle aria-expanded="<%= merchantRankingDefaultOpen ? 'true' : 'false' %>">
               <span data-summary-ranking-toggle-label><%= merchantRankingDefaultOpen ? 'Esconder ranking' : 'Mostrar ranking' %></span>
             </button>
@@ -524,19 +524,19 @@
           <% const rankingPodium = merchantRanking.slice(0, 3); %>
           <% const rankingRest = merchantRanking.slice(3); %>
           <% const medalMeta = {
-            1: { emoji: '🥇', label: 'Ouro do mês', border: 'border-amber-200 dark:border-amber-700', bg: 'bg-amber-50/90 dark:bg-amber-900/20', chip: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-100' },
-            2: { emoji: '🥈', label: 'Prata valente', border: 'border-slate-300 dark:border-slate-600', bg: 'bg-slate-50/90 dark:bg-slate-800/80', chip: 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-100' },
-            3: { emoji: '🥉', label: 'Bronze na cola', border: 'border-orange-200 dark:border-orange-700', bg: 'bg-orange-50/90 dark:bg-orange-900/20', chip: 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-100' }
+            1: { emoji: '1º', label: '1º lugar', border: 'border-amber-200 dark:border-amber-700', bg: 'bg-amber-50/90 dark:bg-amber-900/20', chip: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-100' },
+            2: { emoji: '2º', label: '2º lugar', border: 'border-slate-300 dark:border-slate-600', bg: 'bg-slate-50/90 dark:bg-slate-800/80', chip: 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-100' },
+            3: { emoji: '3º', label: '3º lugar', border: 'border-amber-200 dark:border-amber-700', bg: 'bg-amber-50/90 dark:bg-amber-900/20', chip: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-100' }
           }; %>
           <% const rankingLeader = merchantRanking[0]; %>
 
-          <div class="rounded-[24px] border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-emerald-50 p-5 shadow-sm dark:border-amber-800 dark:from-amber-900/25 dark:via-slate-900 dark:to-emerald-900/20">
+          <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
             <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div class="min-w-0 flex-1">
-                <div class="op-analytics-chip inline-flex items-center gap-2 rounded-full bg-amber-100 px-3 py-1 text-[11px] font-black uppercase tracking-[0.22em] text-amber-800 dark:bg-amber-900/50 dark:text-amber-100">🏆 Campeão do mês</div>
+                <div class="op-analytics-chip inline-flex items-center gap-2 rounded-full bg-amber-100 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-amber-800 dark:bg-amber-900/50 dark:text-amber-100">Maior gasto do mês</div>
                 <div class="mt-3 flex flex-wrap items-center gap-2">
-                  <h4 class="text-2xl font-black tracking-tight text-slate-900 dark:text-white"><%= rankingLeader.label %></h4>
-                  <span class="op-analytics-chip inline-flex items-center rounded-full border border-amber-200 bg-white/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-amber-700 dark:border-amber-700 dark:bg-slate-900/60 dark:text-amber-200"><%= rankingLeader.share_pct || 0 %>% do mês</span>
+                  <h4 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white"><%= rankingLeader.label %></h4>
+                  <span class="op-analytics-chip inline-flex items-center rounded-full border border-amber-200 bg-white/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-amber-700 dark:border-amber-700 dark:bg-slate-900/60 dark:text-amber-200"><%= rankingLeader.share_pct || 0 %>% do mês</span>
                 </div>
                 <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">Estabelecimento com maior valor consolidado no período.</p>
                 <div class="mt-3 flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
@@ -552,9 +552,9 @@
                   <% } %>
                 </div>
               </div>
-              <div class="rounded-[22px] border border-white/70 bg-white/80 px-5 py-4 text-left shadow-sm dark:border-slate-700 dark:bg-slate-900/60 lg:min-w-[220px] lg:text-right">
-                <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Total no mês</div>
-                <div class="mt-2 text-3xl font-black tracking-tight text-slate-900 dark:text-white"><%= formatBRLFromCents(rankingLeader.total_cents || 0) %></div>
+              <div class="rounded-xl border border-white/70 bg-white/80 px-5 py-4 text-left shadow-sm dark:border-slate-700 dark:bg-slate-900/60 lg:min-w-[220px] lg:text-right">
+                <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Total no mês</div>
+                <div class="mt-2 text-3xl font-bold tracking-tight text-slate-900 dark:text-white"><%= formatBRLFromCents(rankingLeader.total_cents || 0) %></div>
                 <div class="mt-2 text-xs font-semibold <%= Number(rankingLeader.delta_cents || 0) > 0 ? 'text-rose-600 dark:text-rose-300' : Number(rankingLeader.delta_cents || 0) < 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400' %>">
                   <% if (rankingLeader.delta_pct !== null && rankingLeader.delta_pct !== undefined) { %>
                     <%= Number(rankingLeader.delta_cents || 0) > 0 ? '▲' : Number(rankingLeader.delta_cents || 0) < 0 ? '▼' : '•' %>
@@ -572,7 +572,7 @@
               <% const merchantHref = merchant.search_term ? `/month/${year}/${month}?${new URLSearchParams({ f_desc: String(merchant.search_term || '').trim() }).toString()}` : null; %>
               <% const medal = medalMeta[merchant.position] || medalMeta[3]; %>
               <% const merchantSample = merchant.sample_descriptions && merchant.sample_descriptions.length ? merchant.sample_descriptions[0] : ''; %>
-              <% const cardClass = `group rounded-[24px] border p-4 transition duration-200 ${medal.border} ${medal.bg} ${merchantHref ? 'block hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-emerald-400' : 'block'}`; %>
+              <% const cardClass = `group rounded-xl border p-4 transition duration-200 ${medal.border} ${medal.bg} ${merchantHref ? 'block hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-emerald-400' : 'block'}`; %>
               <% if (merchantHref) { %>
               <a href="<%= merchantHref %>" class="<%= cardClass %>" aria-label="Abrir compras de <%= merchant.label %>">
               <% } else { %>
@@ -580,18 +580,18 @@
               <% } %>
                 <div class="flex items-start justify-between gap-3">
                   <div class="min-w-0 flex-1">
-                    <div class="op-analytics-chip inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-[0.2em] <%= medal.chip %>">
+                    <div class="op-analytics-chip inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] <%= medal.chip %>">
                       <span><%= medal.emoji %></span>
                       <span><%= medal.label %></span>
                     </div>
-                    <div class="mt-3 truncate text-lg font-black text-slate-900 dark:text-white"><%= merchant.label %></div>
+                    <div class="mt-3 truncate text-lg font-bold text-slate-900 dark:text-white"><%= merchant.label %></div>
                   </div>
-                  <span class="op-analytics-chip inline-flex h-9 min-w-[2.25rem] items-center justify-center rounded-full bg-slate-900 px-2 text-sm font-black text-white dark:bg-slate-100 dark:text-slate-900">#<%= merchant.position %></span>
+                  <span class="op-analytics-chip inline-flex h-9 min-w-[2.25rem] items-center justify-center rounded-full bg-slate-900 px-2 text-sm font-bold text-white dark:bg-slate-100 dark:text-slate-900">#<%= merchant.position %></span>
                 </div>
-                <div class="mt-4 text-2xl font-black tracking-tight text-slate-900 dark:text-white"><%= formatBRLFromCents(merchant.total_cents || 0) %></div>
+                <div class="mt-4 text-2xl font-bold tracking-tight text-slate-900 dark:text-white"><%= formatBRLFromCents(merchant.total_cents || 0) %></div>
                 <div class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400"><%= merchant.share_pct || 0 %>% do mês · <%= merchant.txn_count || 0 %> compra<%= Number(merchant.txn_count || 0) === 1 ? '' : 's' %></div>
                 <% if (Number(merchant.shared_total_cents || 0) > 0) { %>
-                  <div class="mt-2 inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-violet-700 dark:border-violet-800 dark:bg-violet-900/30 dark:text-violet-100">inclui <%= formatBRLFromCents(merchant.shared_total_cents || 0) %> compartilhado</div>
+                  <div class="mt-2 inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-100">inclui <%= formatBRLFromCents(merchant.shared_total_cents || 0) %> compartilhado</div>
                 <% } %>
                 <div class="mt-3 flex flex-wrap items-center gap-2 text-xs font-semibold">
                   <span class="op-analytics-chip inline-flex items-center rounded-full border border-white/80 bg-white/80 px-2.5 py-1 text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200">ticket médio <%= formatBRLFromCents(merchant.avg_ticket_cents || 0) %></span>
@@ -607,7 +607,7 @@
                 <% if (merchantSample) { %>
                   <p class="mt-3 text-xs leading-5 text-slate-500 dark:text-slate-400">Exemplo lido: <span class="font-semibold text-slate-700 dark:text-slate-200"><%= merchantSample %></span></p>
                 <% } %>
-                <div class="mt-3 text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700 opacity-0 transition group-hover:opacity-100 dark:text-emerald-300"><%= merchantHref ? 'Toque para abrir as compras desse nome' : 'Só para olhar' %></div>
+                <div class="mt-3 text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-700 opacity-0 transition group-hover:opacity-100 dark:text-emerald-300"><%= merchantHref ? 'Toque para abrir as compras desse nome' : 'Só para olhar' %></div>
               <% if (merchantHref) { %>
               </a>
               <% } else { %>
@@ -623,16 +623,16 @@
               <% const merchantHref = merchant.search_term ? `/month/${year}/${month}?${new URLSearchParams({ f_desc: String(merchant.search_term || '').trim() }).toString()}` : null; %>
               <% const merchantSample = merchant.sample_descriptions && merchant.sample_descriptions.length ? merchant.sample_descriptions[0] : ''; %>
               <% if (merchantHref) { %>
-              <a href="<%= merchantHref %>" class="group block rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-4 transition duration-200 hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-50/70 focus:outline-none focus:ring-2 focus:ring-emerald-400 dark:border-slate-700 dark:bg-slate-800/70 dark:hover:border-emerald-700 dark:hover:bg-emerald-900/10" aria-label="Abrir compras de <%= merchant.label %>">
+              <a href="<%= merchantHref %>" class="group block rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-4 transition duration-200 hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-50/70 focus:outline-none focus:ring-2 focus:ring-emerald-400 dark:border-slate-700 dark:bg-slate-800/70 dark:hover:border-emerald-700 dark:hover:bg-emerald-900/10" aria-label="Abrir compras de <%= merchant.label %>">
               <% } else { %>
-              <div class="group block rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-4 transition duration-200 dark:border-slate-700 dark:bg-slate-800/70">
+              <div class="group block rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-4 transition duration-200 dark:border-slate-700 dark:bg-slate-800/70">
               <% } %>
                 <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div class="min-w-0 flex-1">
                     <div class="flex flex-wrap items-center gap-2">
-                      <span class="op-analytics-chip inline-flex h-8 min-w-[2rem] items-center justify-center rounded-full bg-slate-900 px-2 text-xs font-black text-white dark:bg-slate-100 dark:text-slate-900">#<%= merchant.position %></span>
-                      <div class="truncate text-base font-black text-slate-900 dark:text-white"><%= merchant.label %></div>
-                      <span class="op-analytics-chip inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300"><%= merchant.share_pct || 0 %>% do mês</span>
+                      <span class="op-analytics-chip inline-flex h-8 min-w-[2rem] items-center justify-center rounded-full bg-slate-900 px-2 text-xs font-bold text-white dark:bg-slate-100 dark:text-slate-900">#<%= merchant.position %></span>
+                      <div class="truncate text-base font-bold text-slate-900 dark:text-white"><%= merchant.label %></div>
+                      <span class="op-analytics-chip inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300"><%= merchant.share_pct || 0 %>% do mês</span>
                     </div>
                     <div class="mt-2 flex flex-wrap items-center gap-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">
                       <span><%= merchant.txn_count || 0 %> compra<%= Number(merchant.txn_count || 0) === 1 ? '' : 's' %></span>
@@ -653,7 +653,7 @@
                       <% } %>
                       <% if (Number(merchant.shared_total_cents || 0) > 0) { %>
                         <span class="hidden sm:inline">·</span>
-                        <span class="font-bold text-violet-700 dark:text-violet-300">inclui compartilhada</span>
+                        <span class="font-bold text-cyan-700 dark:text-cyan-300">inclui compartilhada</span>
                       <% } %>
                     </div>
                     <% if (merchantSample) { %>
@@ -664,15 +664,15 @@
                     </div>
                   </div>
                   <div class="text-left lg:ml-4 lg:min-w-[160px] lg:text-right">
-                    <div class="text-lg font-black tracking-tight text-slate-900 dark:text-white"><%= formatBRLFromCents(merchant.total_cents || 0) %></div>
-                    <div class="mt-1 text-[11px] font-bold uppercase tracking-[0.18em] <%= Number(merchant.delta_cents || 0) > 0 ? 'text-rose-600 dark:text-rose-300' : Number(merchant.delta_cents || 0) < 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400' %>">
+                    <div class="text-lg font-bold tracking-tight text-slate-900 dark:text-white"><%= formatBRLFromCents(merchant.total_cents || 0) %></div>
+                    <div class="mt-1 text-[11px] font-bold uppercase tracking-[0.12em] <%= Number(merchant.delta_cents || 0) > 0 ? 'text-rose-600 dark:text-rose-300' : Number(merchant.delta_cents || 0) < 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400' %>">
                       <% if (merchant.delta_pct !== null && merchant.delta_pct !== undefined) { %>
                         <%= Number(merchant.delta_cents || 0) > 0 ? '▲' : Number(merchant.delta_cents || 0) < 0 ? '▼' : '•' %> <%= Number(merchant.delta_cents || 0) > 0 ? '+' : '' %><%= formatBRLFromCents(merchant.delta_cents || 0) %>
                       <% } else { %>
                         primeira aparição forte
                       <% } %>
                     </div>
-                    <div class="mt-1 text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700 opacity-0 transition group-hover:opacity-100 dark:text-emerald-300"><%= merchantHref ? 'Abrir compras desse nome' : 'Só para olhar' %></div>
+                    <div class="mt-1 text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-700 opacity-0 transition group-hover:opacity-100 dark:text-emerald-300"><%= merchantHref ? 'Abrir compras desse nome' : 'Só para olhar' %></div>
                   </div>
                 </div>
               <% if (merchantHref) { %>
@@ -684,16 +684,16 @@
           </div>
           <% } %>
         <% } else { %>
-          <div class="mt-4 flex min-h-[180px] items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Ainda não há compras suficientes para montar este ranking. Quando o período ganhar histórico, esta área será preenchida.</div>
+          <div class="mt-4 flex min-h-[180px] items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Ainda não há compras suficientes para montar este ranking. Quando o período ganhar histórico, esta área será preenchida.</div>
         <% } %>
         </div>
     </section>
 
-<section class="mb-8 op-surface-card rounded-[28px] border border-slate-200 bg-white/95 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/90 lg:p-6" data-summary-intel-root>
+<section class="mb-8 op-surface-card rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/90 lg:p-6" data-summary-intel-root>
       <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <div class="op-analytics-chip inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.24em] text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">Ajuda com nomes</div>
-          <h2 class="mt-3 text-2xl font-black tracking-tight text-slate-900 dark:text-white">Como os nomes são consolidados</h2>
+          <div class="op-analytics-chip inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">Ajuda com nomes</div>
+          <h2 class="mt-3 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Como os nomes são consolidados</h2>
           <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300">Quando você confirma um nome, o app consolida a leitura sem assumir agrupamentos sem validação.</p>
         </div>
         <div class="flex flex-wrap items-center gap-2 lg:justify-end">
@@ -704,15 +704,15 @@
       </div>
 
       <div class="mt-5 space-y-5" data-summary-intel-panel <%= merchantSectionDefaultOpen ? '' : 'hidden' %>>
-        <div class="rounded-[24px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300 lg:max-w-sm">
-          <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Como isso entra nos eixos</div>
+        <div class="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300 lg:max-w-sm">
+          <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Como isso entra nos eixos</div>
           <p class="mt-2 leading-6">Você confirma quando fizer sentido, o app aprende com cautela e permite pausar qualquer regra.</p>
         </div>
 
       <div class="mt-5 grid gap-3 lg:grid-cols-3">
-        <div class="rounded-[24px] border border-emerald-200 bg-emerald-50/90 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
-          <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-emerald-700 dark:text-emerald-300">Destaque do mês</div>
-          <div class="mt-2 text-xl font-black tracking-tight text-emerald-900 dark:text-emerald-100">
+        <div class="rounded-xl border border-emerald-200 bg-emerald-50/90 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
+          <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-300">Destaque do mês</div>
+          <div class="mt-2 text-xl font-bold tracking-tight text-emerald-900 dark:text-emerald-100">
             <% if (merchantTop) { %>
               Você gastou <%= formatBRLFromCents(merchantTop.total_cents || 0) %> em <%= merchantTop.label %>
             <% } else { %>
@@ -727,73 +727,73 @@
             <% } %>
           </p>
         </div>
-        <div class="rounded-[24px] border border-violet-200 bg-violet-50/90 p-4 dark:border-violet-900/60 dark:bg-violet-950/20">
-          <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-violet-700 dark:text-violet-300">Nomes já reconhecidos</div>
-          <div class="mt-2 text-xl font-black tracking-tight text-violet-900 dark:text-violet-100"><%= Number(graphInsights?.merchantCount || 0) %> nome<%= Number(graphInsights?.merchantCount || 0) === 1 ? '' : 's' %> no mapa</div>
-          <p class="mt-2 text-xs leading-5 text-violet-800/80 dark:text-violet-100/80">Dessas, <span class="font-bold"><%= Number(graphInsights?.recognizedMerchantCount || 0) %></span> vieram de agrupamentos confirmados por regra. <% if (Number(graphInsights?.learnedMerchantCount || 0) > 0) { %><span class="font-bold"><%= Number(graphInsights?.learnedMerchantCount || 0) %></span> já foram aprendidas com as suas confirmações.<% } else { %>O restante permaneceu em análise prudente, sem consolidação automática.<% } %></p>
+        <div class="rounded-xl border border-cyan-200 bg-cyan-50/90 p-4 dark:border-cyan-900/60 dark:bg-cyan-950/20">
+          <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-cyan-700 dark:text-cyan-300">Nomes já reconhecidos</div>
+          <div class="mt-2 text-xl font-bold tracking-tight text-cyan-900 dark:text-cyan-100"><%= Number(graphInsights?.merchantCount || 0) %> nome<%= Number(graphInsights?.merchantCount || 0) === 1 ? '' : 's' %> no mapa</div>
+          <p class="mt-2 text-xs leading-5 text-cyan-800/80 dark:text-cyan-100/80">Dessas, <span class="font-bold"><%= Number(graphInsights?.recognizedMerchantCount || 0) %></span> vieram de agrupamentos confirmados por regra. <% if (Number(graphInsights?.learnedMerchantCount || 0) > 0) { %><span class="font-bold"><%= Number(graphInsights?.learnedMerchantCount || 0) %></span> já foram aprendidas com as suas confirmações.<% } else { %>O restante permaneceu em análise prudente, sem consolidação automática.<% } %></p>
         </div>
-        <div class="rounded-[24px] border border-amber-200 bg-amber-50/90 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
-          <div class="text-[11px] font-bold uppercase tracking-[0.22em] text-amber-700 dark:text-amber-300">Como isso ajuda</div>
-          <div class="mt-2 text-xl font-black tracking-tight text-amber-900 dark:text-amber-100">Ranking que já abre a investigação</div>
+        <div class="rounded-xl border border-amber-200 bg-amber-50/90 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
+          <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-amber-700 dark:text-amber-300">Como isso ajuda</div>
+          <div class="mt-2 text-xl font-bold tracking-tight text-amber-900 dark:text-amber-100">Ranking que já abre a investigação</div>
           <p class="mt-2 text-xs leading-5 text-amber-800/80 dark:text-amber-100/80">Ao tocar em um estabelecimento, o mês abre com a descrição já filtrada para investigação direta.</p>
         </div>
       </div>
 
       <div class="mt-5 grid gap-3 xl:grid-cols-[1.3fr,0.9fr]">
-        <div class="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
+        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
           <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h3 class="text-lg font-black text-slate-900 dark:text-white">Memória que você ensinou pro app</h3>
+              <h3 class="text-lg font-bold text-slate-900 dark:text-white">Memória que você ensinou pro app</h3>
               <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Cada confirmação cria uma regra útil. Cada pausa evita consolidação indevida. O controle continua com você.</p>
             </div>
-            <span class="op-analytics-chip inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Aprende com você</span>
+            <span class="op-analytics-chip inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Aprende com você</span>
           </div>
 
           <div class="mt-4 grid gap-3 md:grid-cols-3">
             <div class="rounded-2xl border border-emerald-200 bg-emerald-50/80 px-4 py-3 dark:border-emerald-900/50 dark:bg-emerald-950/20">
-              <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Memórias ativas</div>
-              <div class="mt-2 text-2xl font-black text-emerald-900 dark:text-emerald-100"><%= Number(merchantLearning?.activeCount || 0) %></div>
+              <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-300">Memórias ativas</div>
+              <div class="mt-2 text-2xl font-bold text-emerald-900 dark:text-emerald-100"><%= Number(merchantLearning?.activeCount || 0) %></div>
               <p class="mt-1 text-xs leading-5 text-emerald-800/80 dark:text-emerald-100/80">Nomes aprovados que podem ser reaproveitados nas próximas compras.</p>
             </div>
-            <div class="rounded-2xl border border-violet-200 bg-violet-50/80 px-4 py-3 dark:border-violet-900/50 dark:bg-violet-950/20">
-              <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">Aplicadas no mês</div>
-              <div class="mt-2 text-2xl font-black text-violet-900 dark:text-violet-100"><%= Number(merchantLearning?.appliedRuleTxnCount || 0) %></div>
-              <p class="mt-1 text-xs leading-5 text-violet-800/80 dark:text-violet-100/80">Compras deste período que já reaproveitaram essa memória, somando <span class="font-bold"><%= formatBRLFromCents(merchantLearning?.appliedRuleTotalCents || 0) %></span>.</p>
+            <div class="rounded-2xl border border-cyan-200 bg-cyan-50/80 px-4 py-3 dark:border-cyan-900/50 dark:bg-cyan-950/20">
+              <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-cyan-700 dark:text-cyan-300">Aplicadas no mês</div>
+              <div class="mt-2 text-2xl font-bold text-cyan-900 dark:text-cyan-100"><%= Number(merchantLearning?.appliedRuleTxnCount || 0) %></div>
+              <p class="mt-1 text-xs leading-5 text-cyan-800/80 dark:text-cyan-100/80">Compras deste período que já reaproveitaram essa memória, somando <span class="font-bold"><%= formatBRLFromCents(merchantLearning?.appliedRuleTotalCents || 0) %></span>.</p>
             </div>
             <div class="rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 dark:border-amber-900/50 dark:bg-amber-950/20">
-              <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Sugestões na fila</div>
-              <div class="mt-2 text-2xl font-black text-amber-900 dark:text-amber-100"><%= Number(graphInsights?.merchantSuggestionCount || 0) %></div>
+              <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-amber-700 dark:text-amber-300">Sugestões na fila</div>
+              <div class="mt-2 text-2xl font-bold text-amber-900 dark:text-amber-100"><%= Number(graphInsights?.merchantSuggestionCount || 0) %></div>
               <p class="mt-1 text-xs leading-5 text-amber-800/80 dark:text-amber-100/80">Quando surgir repetição relevante, ela será enviada para validação.</p>
             </div>
           </div>
 
           <% if (merchantLearning?.mostAppliedRule) { %>
-            <div class="mt-4 rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-4 dark:border-slate-700 dark:bg-slate-800/70">
-              <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Memória mais acionada</div>
-              <div class="mt-2 text-lg font-black text-slate-900 dark:text-white"><%= merchantLearning.mostAppliedRule.label %></div>
+            <div class="mt-4 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-4 dark:border-slate-700 dark:bg-slate-800/70">
+              <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Memória mais acionada</div>
+              <div class="mt-2 text-lg font-bold text-slate-900 dark:text-white"><%= merchantLearning.mostAppliedRule.label %></div>
               <p class="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">Esse nome apareceu em <span class="font-bold"><%= Number(merchantLearning.mostAppliedRule.applied_txn_count || 0) %></span> compra(s) do período e concentrou <span class="font-bold"><%= formatBRLFromCents(merchantLearning.mostAppliedRule.applied_total_cents || 0) %></span>.</p>
             </div>
           <% } %>
         </div>
 
-        <div class="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
+        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
           <div class="flex items-start justify-between gap-3">
             <div>
-              <h3 class="text-lg font-black text-slate-900 dark:text-white">Regras já aprendidas</h3>
+              <h3 class="text-lg font-bold text-slate-900 dark:text-white">Regras já aprendidas</h3>
               <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Regras validadas com a sua ajuda.</p>
             </div>
-            <span class="op-analytics-chip inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Você no comando</span>
+            <span class="op-analytics-chip inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Você no comando</span>
           </div>
 
           <% if (merchantLearning?.activeRules && merchantLearning.activeRules.length > 0) { %>
             <div class="mt-4 space-y-3">
               <% merchantLearning.activeRules.forEach((rule) => { %>
-                <div class="rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-4 dark:border-slate-700 dark:bg-slate-800/70">
+                <div class="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-4 dark:border-slate-700 dark:bg-slate-800/70">
                   <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div class="min-w-0 flex-1">
                       <div class="flex flex-wrap items-center gap-2">
-                        <div class="truncate text-base font-black text-slate-900 dark:text-white"><%= rule.label %></div>
-                        <span class="op-analytics-chip inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">ativa</span>
+                        <div class="truncate text-base font-bold text-slate-900 dark:text-white"><%= rule.label %></div>
+                        <span class="op-analytics-chip inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">ativa</span>
                       </div>
                       <div class="mt-2 flex flex-wrap items-center gap-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">
                         <span>padrão: <span class="font-bold text-slate-800 dark:text-slate-100"><%= rule.normalizedPattern %></span></span>
@@ -818,17 +818,17 @@
               <% }) %>
             </div>
           <% } else { %>
-            <div class="mt-4 rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Ainda não há aprendizados ativos. Ao confirmar uma sugestão, ela passa a integrar esta lista.</div>
+            <div class="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Ainda não há aprendizados ativos. Ao confirmar uma sugestão, ela passa a integrar esta lista.</div>
           <% } %>
 
           <% if (merchantLearning?.pausedRules && merchantLearning.pausedRules.length > 0) { %>
-            <div class="mt-4 rounded-[22px] border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-800/60">
-              <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Aprendizados pausados</div>
+            <div class="mt-4 rounded-xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-800/60">
+              <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Aprendizados pausados</div>
               <div class="mt-3 space-y-3">
                 <% merchantLearning.pausedRules.forEach((rule) => { %>
                   <div class="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900/70">
                     <div>
-                      <div class="text-sm font-black text-slate-900 dark:text-white"><%= rule.label %></div>
+                      <div class="text-sm font-bold text-slate-900 dark:text-white"><%= rule.label %></div>
                       <p class="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">Padrão pausado: <span class="font-semibold text-slate-700 dark:text-slate-200"><%= rule.normalizedPattern %></span></p>
                     </div>
                     <form method="POST" action="/analytics/<%= year %>/<%= month %>/merchant-learning/resume" data-scroll-preserve-form data-scroll-restore-target="[data-summary-intel-root]">
@@ -846,26 +846,26 @@
         </div>
       </div>
 
-      <div class="mt-5 rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
+      <div class="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h3 class="text-lg font-black text-slate-900 dark:text-white">Sugestões para validar</h3>
+            <h3 class="text-lg font-bold text-slate-900 dark:text-white">Sugestões para validar</h3>
             <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Quando o app identifica padrões de nome, ele pede validação antes de consolidar os estabelecimentos.</p>
           </div>
-          <span class="op-analytics-chip inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/20 dark:text-emerald-300"><%= merchantSuggestions.length %> sugest<%= merchantSuggestions.length === 1 ? 'ão' : 'ões' %> na fila</span>
+          <span class="op-analytics-chip inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/20 dark:text-emerald-300"><%= merchantSuggestions.length %> sugest<%= merchantSuggestions.length === 1 ? 'ão' : 'ões' %> na fila</span>
         </div>
 
         <% if (merchantSuggestions.length > 0) { %>
           <div class="mt-4 grid gap-3 lg:grid-cols-2">
             <% merchantSuggestions.forEach((suggestion) => { %>
-              <div class="rounded-[24px] border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-800/60">
+              <div class="rounded-xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-800/60">
                 <div class="flex items-start justify-between gap-3">
                   <div>
-                    <div class="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Sugestão #<%= suggestion.position %></div>
-                    <div class="mt-2 text-lg font-black tracking-tight text-slate-900 dark:text-white"><%= suggestion.label %></div>
+                    <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Sugestão #<%= suggestion.position %></div>
+                    <div class="mt-2 text-lg font-bold tracking-tight text-slate-900 dark:text-white"><%= suggestion.label %></div>
                     <p class="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">Jeito que apareceu: <span class="font-bold text-slate-700 dark:text-slate-200"><%= suggestion.preview_label || suggestion.pattern %></span></p>
                   </div>
-                  <span class="op-analytics-chip inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-violet-700 dark:border-violet-900/60 dark:bg-violet-950/30 dark:text-violet-300"><%= suggestion.txn_count %> compra<%= Number(suggestion.txn_count || 0) === 1 ? '' : 's' %></span>
+                  <span class="op-analytics-chip inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-cyan-700 dark:border-cyan-900/60 dark:bg-cyan-950/30 dark:text-cyan-300"><%= suggestion.txn_count %> compra<%= Number(suggestion.txn_count || 0) === 1 ? '' : 's' %></span>
                 </div>
                 <div class="mt-3 rounded-2xl border border-dashed border-slate-300 bg-white/80 px-3 py-3 text-xs leading-5 text-slate-600 dark:border-slate-600 dark:bg-slate-900/50 dark:text-slate-300">
                   Exemplo lido: <span class="font-semibold text-slate-800 dark:text-slate-100"><%= suggestion.sample_description || 'Sem exemplo nessa rodada' %></span>
@@ -897,7 +897,7 @@
             <% }) %>
           </div>
         <% } else { %>
-          <div class="mt-4 rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Neste período não há novas sugestões para validar. Quando surgir um padrão relevante, ele aparecerá nesta área.</div>
+          <div class="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center text-sm font-semibold leading-6 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">Neste período não há novas sugestões para validar. Quando surgir um padrão relevante, ele aparecerá nesta área.</div>
         <% } %>
       </div>
     </section>

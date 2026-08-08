@@ -1,4 +1,4 @@
-    <section id="whatsapp-automation" class="op-settings-whatsapp-card scroll-mt-28 mb-8 rounded-[32px] border border-emerald-200 bg-white p-5 shadow-sm dark:border-emerald-900/50 dark:bg-slate-800 sm:p-6 xl:mx-auto xl:max-w-[80rem]">
+    <section id="whatsapp-automation" class="op-settings-whatsapp-card scroll-mt-28 mb-8 rounded-2xl border border-emerald-200 bg-white p-5 shadow-sm dark:border-emerald-900/50 dark:bg-slate-800 sm:p-6 xl:mx-auto xl:max-w-[80rem]">
       <%
         const waState = automationWhatsappState || {};
         const waEnabled = !!waState.enabled;
@@ -11,64 +11,64 @@
         const waStatusClasses = waEnabled
           ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200'
           : (waCanEnable
-            ? 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200'
+            ? 'border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200'
             : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200');
       %>
       <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
         <div class="min-w-0 flex-1">
           <div class="flex flex-wrap items-center gap-2">
-            <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] <%= waStatusClasses %>"><%= waStatusLabel %></span>
+            <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] <%= waStatusClasses %>"><%= waStatusLabel %></span>
             <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300"><%= waDisplayPhone %></span>
           </div>
-          <div class="mt-3 text-[11px] font-black uppercase tracking-[0.18em] text-emerald-600 dark:text-emerald-300">WhatsApp do AcerttaPay</div>
-          <h2 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Lance compras por mensagem</h2>
+          <div class="mt-3 text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-600 dark:text-emerald-300">WhatsApp do AcerttaPay</div>
+          <h2 class="mt-2 text-xl font-bold text-slate-900 dark:text-white">Lance compras por mensagem</h2>
           <p class="mt-2 max-w-3xl text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Quando ligado, seu número autorizado pode enviar compras pelo WhatsApp via N8N. O app continua conferindo cartão, fatura, mês fechado e divisão antes de salvar qualquer coisa.</p>
         </div>
         <div class="flex shrink-0 flex-col gap-3 sm:flex-row lg:flex-col">
           <% if (waEnabled) { %>
             <form method="post" action="/settings/automation-whatsapp/disable">
               <input type="hidden" name="return_to" value="/settings#whatsapp-automation">
-              <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl border border-rose-200 bg-rose-50/80 px-5 py-3 text-sm font-black text-rose-700 transition-all hover:bg-rose-100 dark:border-rose-900/70 dark:bg-rose-950/20 dark:text-rose-200 dark:hover:bg-rose-950/35">Desligar WhatsApp</button>
+              <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl border border-rose-200 bg-rose-50/80 px-5 py-3 text-sm font-bold text-rose-700 transition-all hover:bg-rose-100 dark:border-rose-900/70 dark:bg-rose-950/20 dark:text-rose-200 dark:hover:bg-rose-950/35">Desligar WhatsApp</button>
             </form>
           <% } else if (waCanEnable) { %>
             <form method="post" action="/settings/automation-whatsapp/enable">
               <input type="hidden" name="return_to" value="/settings#whatsapp-automation">
-              <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">Ativar WhatsApp</button>
+              <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700">Ativar WhatsApp</button>
             </form>
           <% } else { %>
-            <button type="button" disabled class="inline-flex w-full cursor-not-allowed items-center justify-center rounded-2xl border border-slate-200 bg-slate-100 px-5 py-3 text-sm font-black text-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500">Ativar WhatsApp</button>
+            <button type="button" disabled class="inline-flex w-full cursor-not-allowed items-center justify-center rounded-2xl border border-slate-200 bg-slate-100 px-5 py-3 text-sm font-bold text-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500">Ativar WhatsApp</button>
           <% } %>
         </div>
       </div>
 
       <div class="mt-5 grid gap-3 md:grid-cols-3">
-        <div class="rounded-[24px] border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-900/70">
-          <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Número autorizado</div>
-          <div class="mt-2 text-base font-black text-slate-900 dark:text-white"><%= waDisplayPhone %></div>
+        <div class="rounded-xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-900/70">
+          <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Número autorizado</div>
+          <div class="mt-2 text-base font-bold text-slate-900 dark:text-white"><%= waDisplayPhone %></div>
           <p class="mt-1 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400"><%= waHasPhone ? 'Vem do telefone salvo no seu perfil.' : 'Salve seu telefone no perfil para liberar a automação.' %></p>
         </div>
-        <div class="rounded-[24px] border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-900/70">
-          <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">API externa</div>
-          <div class="mt-2 text-base font-black text-slate-900 dark:text-white"><%= waApiReady ? 'Configurada' : 'Pendente' %></div>
+        <div class="rounded-xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-900/70">
+          <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">API externa</div>
+          <div class="mt-2 text-base font-bold text-slate-900 dark:text-white"><%= waApiReady ? 'Configurada' : 'Pendente' %></div>
           <p class="mt-1 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400"><%= waApiReady ? 'O N8N já pode conversar com a API protegida.' : 'Peça ao administrador para ativar a API e informar o token.' %></p>
         </div>
-        <div class="rounded-[24px] border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-900/70">
-          <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Segurança</div>
-          <div class="mt-2 text-base font-black text-slate-900 dark:text-white"><%= waEnabled ? 'Ligada' : 'Desligada' %></div>
+        <div class="rounded-xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-900/70">
+          <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Segurança</div>
+          <div class="mt-2 text-base font-bold text-slate-900 dark:text-white"><%= waEnabled ? 'Ligada' : 'Desligada' %></div>
           <p class="mt-1 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Cada número só pode ficar autorizado em uma conta. Nada de compra entrando na fatura errada.</p>
         </div>
       </div>
 
       <% if (waConflict) { %>
-        <div class="mt-4 rounded-[24px] border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm font-semibold leading-6 text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/25 dark:text-amber-100">
+        <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm font-semibold leading-6 text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/25 dark:text-amber-100">
           Esse telefone já está autorizado em outro usuário. Troque o número no perfil ou peça para o administrador revisar a autorização.
         </div>
       <% } else if (!waHasPhone) { %>
-        <div class="mt-4 rounded-[24px] border border-sky-200 bg-sky-50/80 px-4 py-3 text-sm font-semibold leading-6 text-sky-800 dark:border-sky-900/70 dark:bg-sky-950/25 dark:text-sky-100">
+        <div class="mt-4 rounded-xl border border-cyan-200 bg-cyan-50/80 px-4 py-3 text-sm font-semibold leading-6 text-cyan-800 dark:border-cyan-900/70 dark:bg-cyan-950/25 dark:text-cyan-100">
           Falta salvar um telefone no seu perfil antes de ativar. Sem número, o N8N fica sem crachá para reconhecer você.
         </div>
       <% } else if (waEnabled) { %>
-        <div class="mt-4 rounded-[24px] border border-emerald-200 bg-emerald-50/80 px-4 py-3 text-sm font-semibold leading-6 text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/25 dark:text-emerald-100">
+        <div class="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/80 px-4 py-3 text-sm font-semibold leading-6 text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/25 dark:text-emerald-100">
           Automação pronta: envie algo como “Nova compra hoje de R$199,90 em Casas Bahia” e o AcerttaPay valida o resto antes de salvar.
         </div>
       <% } %>

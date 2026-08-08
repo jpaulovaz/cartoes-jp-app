@@ -1,6 +1,6 @@
 <div class="op-surface-card op-admin-sidebar-card op-admin-v5-sidebar rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800/95 space-y-5 xl:flex xl:max-h-[calc(100vh-9rem)] xl:flex-col xl:overflow-hidden">
   <div>
-    <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Painel administrativo</div>
+    <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Painel administrativo</div>
     <h2 class="mt-2 text-lg font-semibold tracking-tight text-slate-900 dark:text-white">Navegação do painel</h2>
     <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
       Use a busca para localizar seções, campos e ações sem percorrer o painel inteiro.
@@ -8,7 +8,7 @@
   </div>
 
   <label class="block">
-    <span class="block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Buscar seção</span>
+    <span class="block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Buscar seção</span>
     <div class="relative mt-2">
       <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 dark:text-slate-500">
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35m1.6-5.15a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
@@ -28,7 +28,7 @@
   <div class="space-y-4 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:pr-1">
     <% navGroups.forEach((group) => { %>
       <section data-admin-nav-group class="space-y-2">
-        <div class="px-1 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400"><%= group.title %></div>
+        <div class="px-1 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400"><%= group.title %></div>
         <nav class="space-y-1.5">
           <% group.items.forEach((item) => {
                const selected = activeSectionKey === item.key || (activeSectionKey === 'access' && item.key === 'access');

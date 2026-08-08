@@ -68,11 +68,11 @@
     </div>
   </section>
 
-  <div class="op-surface-card op-fade-up op-whatsapp-toolbar-card rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800 mb-6">
+  <div class="op-surface-card op-fade-up op-whatsapp-toolbar-card rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800 mb-6">
     <form method="get" action="/whatsapp/<%= year %>/<%= month %>/<%= person.id %>" class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
       <div class="w-full md:max-w-sm">
         <label class="block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1.5">Ordenação dos itens</label>
-        <select name="order" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none transition-colors focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:bg-slate-950">
+        <select name="order" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none transition-colors focus:bg-white focus:ring-2 focus:ring-cyan-500 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:bg-slate-950">
           <option value="recent" <%= selectedItemOrder === 'recent' ? 'selected' : '' %>>Mais recentes primeiro</option>
           <option value="oldest" <%= selectedItemOrder === 'oldest' ? 'selected' : '' %>>Mais antigos primeiro</option>
         </select>
@@ -83,12 +83,12 @@
     </form>
   </div>
 
-  <div class="op-surface-card op-fade-up op-whatsapp-copy-card rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800 mb-6">
+  <div class="op-surface-card op-fade-up op-whatsapp-copy-card rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800 mb-6">
     <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
       <div class="min-w-0">
-        <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600/70 dark:text-sky-300/80"><%= pixAvailable ? 'Pix no WhatsApp' : 'Texto do WhatsApp' %></div>
+        <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-cyan-600/70 dark:text-cyan-300/80"><%= pixAvailable ? 'Pix no WhatsApp' : 'Texto do WhatsApp' %></div>
         <% if (pixAvailable) { %>
-          <h2 class="mt-2 text-lg font-black tracking-[-0.03em] text-slate-900 dark:text-slate-100">A imagem vai primeiro, e o Pix segue na mensagem logo depois.</h2>
+          <h2 class="mt-2 text-lg font-bold tracking-[-0.03em] text-slate-900 dark:text-slate-100">A imagem vai primeiro, e o Pix segue na mensagem logo depois.</h2>
           <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= sharePixContext.helperText %></p>
           <div class="mt-3 flex flex-wrap gap-2">
             <% if (sharePixContext.keyTypeLabel) { %><span class="badge"><%= sharePixContext.keyTypeLabel %></span><% } %>
@@ -96,13 +96,13 @@
             <% if (sharePixContext.ownerName) { %><span class="badge">Pix de <%= sharePixContext.ownerName %></span><% } %>
           </div>
         <% } else { %>
-          <h2 class="mt-2 text-lg font-black tracking-[-0.03em] text-slate-900 dark:text-slate-100"><%= shareContext && shareContext.state === 'settled' ? 'Aqui vai só o registro do resumo.' : 'A mensagem continua pronta, e o Pix entra assim que estiver disponível para envio.' %></h2>
+          <h2 class="mt-2 text-lg font-bold tracking-[-0.03em] text-slate-900 dark:text-slate-100"><%= shareContext && shareContext.state === 'settled' ? 'Aqui vai só o registro do resumo.' : 'A mensagem continua pronta, e o Pix entra assim que estiver disponível para envio.' %></h2>
           <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300"><%= sharePixContext && sharePixContext.reason ? sharePixContext.reason : 'A mensagem continua organizada e a imagem segue pronta para envio manual.' %></p>
         <% } %>
       </div>
       <div class="flex flex-wrap gap-3">
         <% if (pixAvailable) { %>
-          <button id="btnCopyPix" type="button" class="inline-flex items-center justify-center rounded-2xl border border-blue-200 bg-blue-50 px-5 py-3 text-sm font-bold text-blue-700 transition-all hover:-translate-y-0.5 hover:bg-blue-100 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-200 dark:hover:bg-blue-950/50">Copiar Pix</button>
+          <button id="btnCopyPix" type="button" class="inline-flex items-center justify-center rounded-2xl border border-cyan-200 bg-cyan-50 px-5 py-3 text-sm font-bold text-cyan-700 transition-all hover:-translate-y-0.5 hover:bg-cyan-100 dark:border-cyan-900/50 dark:bg-cyan-950/30 dark:text-cyan-200 dark:hover:bg-cyan-950/50">Copiar Pix</button>
         <% } %>
         <button id="btnCopyWhatsappText" type="button" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-5 py-3 text-sm font-bold text-slate-700 transition-all hover:-translate-y-0.5 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"><%= copyTextButtonLabel %></button>
       </div>

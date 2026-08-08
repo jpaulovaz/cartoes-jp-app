@@ -184,11 +184,11 @@
     <% } %>
 
     <% if (privateReminderRadar.hasActive || privateReminderRadar.hasReadyToArchive) { %>
-      <div class="mb-8 rounded-3xl border border-cyan-200 bg-cyan-50/80 px-5 py-4 shadow-sm dark:border-cyan-800 dark:bg-cyan-900/20">
+      <div class="mb-8 rounded-2xl border border-cyan-200 bg-cyan-50/80 px-5 py-4 shadow-sm dark:border-cyan-800 dark:bg-cyan-900/20">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div class="min-w-0">
-            <div class="text-[11px] font-black uppercase tracking-[0.18em] text-cyan-700 dark:text-cyan-200">Radar só seu</div>
-            <h3 class="mt-1 text-lg font-extrabold text-slate-900 dark:text-white">Há valores fora do cartão pedindo acompanhamento</h3>
+            <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-cyan-700 dark:text-cyan-200">Radar só seu</div>
+            <h3 class="mt-1 text-lg font-bold text-slate-900 dark:text-white">Há valores fora do cartão pedindo acompanhamento</h3>
             <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">
               <% if (privateReminderRadar.hasActive) { %>
                 <span><strong><%= privateReminderRadar.activeCount %></strong> lembrete<%= privateReminderRadar.activeCount === 1 ? '' : 's' %> privado<%= privateReminderRadar.activeCount === 1 ? '' : 's' %> segue<%= privateReminderRadar.activeCount === 1 ? '' : 'm' %> em aberto, somando <strong><%= formatBRLFromCents(privateReminderRadar.activeCents) %></strong>.</span>
@@ -232,7 +232,7 @@
                 <span class="font-bold text-amber-800">
                   <%= u.card_name %>
                 </span>
-                <span class="font-black text-amber-900">
+                <span class="font-bold text-amber-900">
                   <%= formatBRLFromCents(u.total_cents) %>
                 </span>
               </div>
@@ -245,14 +245,14 @@
         <div class="op-summary-primary-grid grid grid-cols-1 xl:grid-cols-2 gap-6 lg:gap-8 mb-8">
 
           <div>
-            <h2 class="text-xl font-extrabold text-slate-800 dark:text-white mb-4 flex items-center">
+            <h2 class="text-xl font-bold text-slate-800 dark:text-white mb-4 flex items-center">
               <svg class="w-6 h-6 mr-2 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
               </svg>
               Cartões do período
             </h2>
-            <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div class="op-surface-card bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
               <div data-summary-cards-panel>
                 <% if (visibleCardsPanel.length > 0 || sharedSummaryCardRows.length > 0) { %>
                 <div class="overflow-x-auto op-summary-scroll-shell">
@@ -300,13 +300,13 @@
                               class="op-summary-money-input text-right border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-1 bg-slate-50 dark:bg-slate-900 font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none" />
                           </td>
                           <td data-summary-card-remaining data-card-id="<%= cp.card_id %>"
-                            class="px-3 py-3 align-middle text-right font-black whitespace-nowrap op-summary-amount-cell <%= falta > 0 ? 'text-red-500' : 'text-emerald-500' %>">
+                            class="px-3 py-3 align-middle text-right font-bold whitespace-nowrap op-summary-amount-cell <%= falta > 0 ? 'text-red-500' : 'text-emerald-500' %>">
                             <%= formatBRLFromCents(falta) %>
                           </td>
                         </tr>
                         <% }) %>
                       <% sharedSummaryCardRows.forEach((row, rowIndex) => { %>
-                        <tr class="hover:bg-violet-50/60 dark:hover:bg-violet-900/20 transition-colors" data-summary-card-shared-row data-total-cents="<%= row.total_cents || 0 %>" data-paid-cents="<%= row.paid_cents || 0 %>" data-remaining-cents="<%= row.remaining_cents || 0 %>">
+                        <tr class="hover:bg-cyan-50/60 dark:hover:bg-cyan-900/20 transition-colors" data-summary-card-shared-row data-total-cents="<%= row.total_cents || 0 %>" data-paid-cents="<%= row.paid_cents || 0 %>" data-remaining-cents="<%= row.remaining_cents || 0 %>">
                           <td colspan="5" class="p-0">
                             <details class="group" <%= rowIndex === 0 ? '' : '' %>>
                               <summary class="op-summary-card-shared-summary grid cursor-pointer list-none py-3 sm:items-center">
@@ -314,30 +314,30 @@
                                   <span class="op-summary-shared-card-id">
                                     <span class="op-summary-shared-card-name"><%= row.label %></span>
                                     <span class="op-summary-shared-badge-stack inline-flex w-fit flex-col gap-1">
-                                      <span class="inline-flex w-fit items-center rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-black text-violet-700 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-200">Compartilhada</span>
+                                      <span class="inline-flex w-fit items-center rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[11px] font-bold text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-200">Compartilhada</span>
                                       <%# Compat verify: Ver acerto %>
-                                      <a href="<%= row.actionsUrl %>" class="text-[11px] font-black text-violet-700 hover:underline dark:text-violet-200">Abrir acertos</a>
+                                      <a href="<%= row.actionsUrl %>" class="text-[11px] font-bold text-cyan-700 hover:underline dark:text-cyan-200">Abrir acertos</a>
                                     </span>
                                   </span>
                                 </div>
                                 <div class="op-summary-card-shared-due self-center text-left text-xs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500 sm:text-center"><%= summaryCountLabel(row.cards.length, 'cartão', 'cartões') %></div>
                                 <div class="op-summary-card-shared-total self-center text-left font-bold text-slate-700 dark:text-slate-200 sm:text-right whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(row.total_cents) %></div>
                                 <div class="op-summary-card-shared-paid self-center text-left sm:text-right">
-                                  <div class="font-black text-emerald-700 whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(row.paid_cents) %></div>
+                                  <div class="font-bold text-emerald-700 whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(row.paid_cents) %></div>
                                   <% if (row.pending_cents > 0) { %>
                                     <div class="mt-1 text-[11px] font-bold text-amber-600 dark:text-amber-300">Em conferência: <%= formatBRLFromCents(row.pending_cents) %></div>
                                   <% } else { %>
                                     <div class="mt-1 text-[11px] font-semibold text-slate-400 dark:text-slate-500">Pago confirmado</div>
                                   <% } %>
                                 </div>
-                                <div class="op-summary-card-shared-remaining self-center text-left font-black whitespace-nowrap op-summary-amount-cell sm:text-right <%= row.remaining_cents > 0 ? 'text-red-500' : 'text-emerald-500' %>"><%= formatBRLFromCents(row.remaining_cents) %></div>
+                                <div class="op-summary-card-shared-remaining self-center text-left font-bold whitespace-nowrap op-summary-amount-cell sm:text-right <%= row.remaining_cents > 0 ? 'text-red-500' : 'text-emerald-500' %>"><%= formatBRLFromCents(row.remaining_cents) %></div>
                               </summary>
-                              <div class="border-t border-violet-100 bg-violet-50/40 px-3 py-3 dark:border-violet-900/50 dark:bg-violet-900/10">
+                              <div class="border-t border-cyan-100 bg-cyan-50/40 px-3 py-3 dark:border-cyan-900/50 dark:bg-cyan-900/10">
                                 <div class="grid gap-2">
                                   <% row.cards.forEach((cardRow) => { %>
-                                    <div class="grid gap-2 rounded-2xl border border-violet-100 bg-white px-3 py-3 text-sm dark:border-violet-900/50 dark:bg-slate-900/60 sm:grid-cols-[minmax(0,1.8fr)_minmax(8.5rem,1fr)_minmax(7rem,1fr)_minmax(7rem,1fr)] sm:items-center">
+                                    <div class="grid gap-2 rounded-2xl border border-cyan-100 bg-white px-3 py-3 text-sm dark:border-cyan-900/50 dark:bg-slate-900/60 sm:grid-cols-[minmax(0,1.8fr)_minmax(8.5rem,1fr)_minmax(7rem,1fr)_minmax(7rem,1fr)] sm:items-center">
                                       <div class="min-w-0">
-                                        <div class="font-black text-slate-800 dark:text-white"><%= cardRow.cardLabel %></div>
+                                        <div class="font-bold text-slate-800 dark:text-white"><%= cardRow.cardLabel %></div>
                                         <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400"><%= summaryCountLabel(cardRow.count, 'compra', 'compras') %></div>
                                       </div>
                                       <div class="text-xs font-bold text-slate-500 dark:text-slate-400 sm:text-center">
@@ -346,11 +346,11 @@
                                       </div>
                                       <div class="text-left sm:text-right">
                                         <span class="block text-[10px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Fatura</span>
-                                        <span class="font-black whitespace-nowrap op-summary-amount-cell text-slate-800 dark:text-slate-100"><%= formatBRLFromCents(cardRow.total_cents) %></span>
+                                        <span class="font-bold whitespace-nowrap op-summary-amount-cell text-slate-800 dark:text-slate-100"><%= formatBRLFromCents(cardRow.total_cents) %></span>
                                       </div>
                                       <div class="text-left sm:text-right">
                                         <span class="block text-[10px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Ainda falta</span>
-                                        <span class="font-black whitespace-nowrap op-summary-amount-cell <%= cardRow.remaining_cents > 0 ? 'text-red-500' : 'text-emerald-500' %>"><%= formatBRLFromCents(cardRow.remaining_cents) %></span>
+                                        <span class="font-bold whitespace-nowrap op-summary-amount-cell <%= cardRow.remaining_cents > 0 ? 'text-red-500' : 'text-emerald-500' %>"><%= formatBRLFromCents(cardRow.remaining_cents) %></span>
                                       </div>
                                     </div>
                                   <% }) %>
@@ -363,11 +363,11 @@
                     </tbody>
                     <tfoot class="bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
                       <tr>
-                        <td class="px-3 py-3 font-black text-slate-800 dark:text-white">Total</td>
+                        <td class="px-3 py-3 font-bold text-slate-800 dark:text-white">Total</td>
                         <td class="px-2 py-3 text-center text-xs font-bold uppercase text-slate-500 dark:text-slate-400">Ordenado por vencimento</td>
-                        <td class="px-3 py-3 text-right font-black text-slate-900 dark:text-white whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(cardsPanelTotalsWithShared.total_cents) %></td>
-                        <td data-summary-cards-total-paid class="px-3 py-3 text-right font-black text-emerald-700 whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(cardsPanelTotalsWithShared.paid_cents) %></td>
-                        <td data-summary-cards-total-remaining class="px-3 py-3 text-right font-black whitespace-nowrap op-summary-amount-cell <%= cardsPanelTotalsWithShared.remaining_cents > 0 ? 'text-red-500' : 'text-emerald-500' %>"><%= formatBRLFromCents(cardsPanelTotalsWithShared.remaining_cents) %></td>
+                        <td class="px-3 py-3 text-right font-bold text-slate-900 dark:text-white whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(cardsPanelTotalsWithShared.total_cents) %></td>
+                        <td data-summary-cards-total-paid class="px-3 py-3 text-right font-bold text-emerald-700 whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(cardsPanelTotalsWithShared.paid_cents) %></td>
+                        <td data-summary-cards-total-remaining class="px-3 py-3 text-right font-bold whitespace-nowrap op-summary-amount-cell <%= cardsPanelTotalsWithShared.remaining_cents > 0 ? 'text-red-500' : 'text-emerald-500' %>"><%= formatBRLFromCents(cardsPanelTotalsWithShared.remaining_cents) %></td>
                       </tr>
                     </tfoot>
                   </table>
@@ -380,37 +380,37 @@
               </div>
             </div>
 
-            <div class="mt-4 op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden" data-summary-cash-section>
+            <div class="mt-4 op-surface-card bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden" data-summary-cash-section>
               <div class="border-b border-slate-200 bg-slate-50/80 px-5 py-4 dark:border-slate-700 dark:bg-slate-900/70">
-                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-200">Caixa das faturas</div>
-                <h3 class="mt-1 text-lg font-extrabold text-slate-900 dark:text-white">Caixa disponível para faturas</h3>
+                <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-200">Caixa das faturas</div>
+                <h3 class="mt-1 text-lg font-bold text-slate-900 dark:text-white">Caixa disponível para faturas</h3>
                 <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Entradas confirmadas menos o que já saiu para quitar faturas.</p>
               </div>
               <div class="p-5">
                 <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 op-summary-cash-grid">
                   <article class="rounded-2xl border border-slate-200 bg-white px-4 py-4 dark:border-slate-700 dark:bg-slate-900/70 op-summary-cash-card">
-                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Faturas próprias</div>
+                    <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Faturas próprias</div>
                     <div data-summary-cash-total-bills class="op-summary-kpi-value op-summary-cash-value mt-2 text-slate-900 dark:text-white"><%= formatBRLFromCents(cashBoxCardTotals.total_cents) %></div>
                     <p class="op-summary-kpi-note mt-2 text-slate-500 dark:text-slate-400">Só seus cartões entram nessa caixinha.</p>
                   </article>
                   <article class="rounded-2xl border border-cyan-200 bg-cyan-50/70 px-4 py-4 dark:border-cyan-800 dark:bg-cyan-950/20 op-summary-cash-card">
-                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-cyan-700 dark:text-cyan-200">Já reunido</div>
+                    <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-cyan-700 dark:text-cyan-200">Já reunido</div>
                     <div data-summary-cash-inflow class="op-summary-kpi-value op-summary-cash-value mt-2 text-cyan-700 dark:text-cyan-200"><%= formatBRLFromCents(personPanelTotals.paid_cents) %></div>
                     <p class="op-summary-kpi-note mt-2 text-cyan-900/80 dark:text-cyan-100/80">Já entrou.</p>
                   </article>
                   <article class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-700 dark:bg-slate-900/80 op-summary-cash-card">
-                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Já saiu nos cartões</div>
+                    <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Já saiu nos cartões</div>
                     <div data-summary-cash-outflow class="op-summary-kpi-value op-summary-cash-value mt-2 text-slate-900 dark:text-white"><%= formatBRLFromCents(cashBoxCardTotals.paid_cents) %></div>
                     <p class="op-summary-kpi-note mt-2 text-slate-500 dark:text-slate-400">Pago nas suas faturas.</p>
                   </article>
                   <article class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 dark:border-emerald-800 dark:bg-emerald-950/20 op-summary-cash-card">
-                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-200">Saldo em caixa</div>
+                    <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-200">Saldo em caixa</div>
                     <div data-summary-cash-balance-value class="op-summary-kpi-value op-summary-cash-value mt-2 <%= cashReserveToneClass %>"><%= formatBRLFromCents(cashReserveCents) %></div>
                     <p data-summary-cash-balance-caption class="op-summary-kpi-note mt-2 text-slate-600 dark:text-slate-300"><%= cashReserveHint %></p>
                   </article>
                 </div>
                 <% if (cashSharedOutsideBoxTotalCents > 0) { %>
-                  <div class="mt-4 rounded-2xl border border-violet-100 bg-violet-50/70 px-4 py-3 text-sm font-semibold leading-6 text-violet-900 dark:border-violet-900/50 dark:bg-violet-950/20 dark:text-violet-100">
+                  <div class="mt-4 rounded-2xl border border-cyan-100 bg-cyan-50/70 px-4 py-3 text-sm font-semibold leading-6 text-cyan-900 dark:border-cyan-900/50 dark:bg-cyan-950/20 dark:text-cyan-100">
                     Compras compartilhadas recebidas aparecem no cartão, mas não entram nessa caixinha. Assim o saldo mostra só o dinheiro reunido para pagar suas faturas.
                   </div>
                 <% } %>
@@ -419,18 +419,18 @@
           </div>
 
           <div>
-            <h2 class="text-xl font-extrabold text-slate-800 dark:text-white mb-4 flex items-center">
-              <svg class="w-6 h-6 mr-2 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <h2 class="text-xl font-bold text-slate-800 dark:text-white mb-4 flex items-center">
+              <svg class="w-6 h-6 mr-2 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z">
                 </path>
               </svg>
               Como está cada parceria
             </h2>
-            <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div class="op-surface-card bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
               <% if (hasAutoPersonPayments) { %>
-                <div class="border-b border-indigo-100 bg-indigo-50/80 px-5 py-4 text-sm font-medium leading-6 text-indigo-900 dark:border-indigo-900/40 dark:bg-indigo-950/20 dark:text-indigo-100">
-                  💡 O Pix confirmado do cartão entra sozinho nessa conta. O campo editável continua sendo só o ajuste manual do mês.
+                <div class="border-b border-cyan-100 bg-cyan-50/80 px-5 py-4 text-sm font-medium leading-6 text-cyan-900 dark:border-cyan-900/40 dark:bg-cyan-950/20 dark:text-cyan-100">
+                  O Pix confirmado do cartão entra automaticamente nesse cálculo; o campo editável é apenas o ajuste manual do mês.
                 </div>
               <% } %>
               <div data-summary-people-panel>
@@ -466,7 +466,7 @@
                             <%= formatBRLFromCents(pp.total_cents) %>
                           </td>
                           <td class="px-4 py-3 text-right align-top">
-                            <div data-summary-person-combined data-person-id="<%= pp.person_id %>" class="font-black text-indigo-700 whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(pp.paid_cents || 0) %></div>
+                            <div data-summary-person-combined data-person-id="<%= pp.person_id %>" class="font-bold text-cyan-700 whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(pp.paid_cents || 0) %></div>
                             <div class="mt-1 flex flex-wrap justify-end gap-2 text-[11px] font-bold text-slate-500 dark:text-slate-400">
                               <% if (Number(pp.auto_paid_cents || 0) > 0) { %>
                                 <span class="inline-flex items-center whitespace-nowrap rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">Pix <%= formatBRLFromCents(pp.auto_paid_cents || 0) %></span>
@@ -482,11 +482,11 @@
                             <input name="paid" inputmode="numeric" type="text"
                               value="<%= formatBRLFromCents(pp.manual_paid_cents || 0) %>" <%= isClosed ? 'disabled' : '' %>
                               data-money-mask data-summary-person-paid data-person-id="<%= pp.person_id %>"
-                              class="op-summary-money-input text-right border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-1 bg-slate-50 dark:bg-slate-900 font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none" />
+                              class="op-summary-money-input text-right border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-1 bg-slate-50 dark:bg-slate-900 font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-cyan-500 outline-none" />
                             <p class="mt-2 text-[11px] font-medium leading-5 text-slate-500 dark:text-slate-400">Ajuste manual</p>
                           </td>
                           <td data-summary-person-remaining data-person-id="<%= pp.person_id %>"
-                            class="px-4 py-3 text-right font-black whitespace-nowrap op-summary-amount-cell <%= falta > 0 ? 'text-red-500' : 'text-emerald-500' %>">
+                            class="px-4 py-3 text-right font-bold whitespace-nowrap op-summary-amount-cell <%= falta > 0 ? 'text-red-500' : 'text-emerald-500' %>">
                             <%= formatBRLFromCents(falta) %>
                           </td>
                         </tr>
@@ -494,11 +494,11 @@
                     </tbody>
                     <tfoot class="bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
                       <tr>
-                        <td class="px-4 py-3 font-black text-slate-800 dark:text-white">Total</td>
-                        <td class="px-4 py-3 text-right font-black text-slate-900 dark:text-white whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(personPanelTotals.total_cents) %></td>
-                        <td data-summary-people-total-paid class="px-4 py-3 text-right font-black text-indigo-700 whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(personPanelTotals.paid_cents) %></td>
-                        <td data-summary-people-total-manual class="px-4 py-3 text-right font-black text-slate-700 dark:text-slate-200 whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(personPanelTotals.manual_paid_cents) %></td>
-                        <td data-summary-people-total-remaining class="px-4 py-3 text-right font-black whitespace-nowrap op-summary-amount-cell <%= personPanelTotals.remaining_cents > 0 ? 'text-red-500' : 'text-emerald-500' %>"><%= formatBRLFromCents(personPanelTotals.remaining_cents) %></td>
+                        <td class="px-4 py-3 font-bold text-slate-800 dark:text-white">Total</td>
+                        <td class="px-4 py-3 text-right font-bold text-slate-900 dark:text-white whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(personPanelTotals.total_cents) %></td>
+                        <td data-summary-people-total-paid class="px-4 py-3 text-right font-bold text-cyan-700 whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(personPanelTotals.paid_cents) %></td>
+                        <td data-summary-people-total-manual class="px-4 py-3 text-right font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap op-summary-amount-cell"><%= formatBRLFromCents(personPanelTotals.manual_paid_cents) %></td>
+                        <td data-summary-people-total-remaining class="px-4 py-3 text-right font-bold whitespace-nowrap op-summary-amount-cell <%= personPanelTotals.remaining_cents > 0 ? 'text-red-500' : 'text-emerald-500' %>"><%= formatBRLFromCents(personPanelTotals.remaining_cents) %></td>
                       </tr>
                       <tr>
                         <td colspan="5" class="px-4 pb-4 text-right text-[11px] font-semibold leading-5 text-slate-500 dark:text-slate-400">
@@ -523,28 +523,28 @@
           </div>
         </div>
 
-        <h2 class="text-xl font-extrabold text-slate-800 dark:text-white mb-4 flex items-center">
-          <svg class="w-6 h-6 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <h2 class="text-xl font-bold text-slate-800 dark:text-white mb-4 flex items-center">
+          <svg class="w-6 h-6 mr-2 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z">
             </path>
           </svg>
           Distribuição por pessoa e cartão
         </h2>
-        <div class="op-surface-card bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden mb-8">
+        <div class="op-surface-card bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden mb-8">
           <% if (visibleDetailPeople.length > 0 && visibleDetailCards.length > 0) { %>
           <div class="overflow-x-auto op-summary-scroll-shell">
             <table class="w-full text-sm text-left">
               <thead class="bg-slate-900 text-white font-bold text-xs uppercase tracking-wider">
                 <tr>
-                  <th class="px-5 py-4 rounded-tl-3xl">Pessoa</th>
+                  <th class="px-5 py-4 rounded-tl-2xl">Pessoa</th>
                   <% visibleDetailCards.forEach(c=> { %>
                     <th class="px-5 py-4 text-right">
                       <%= c.name %>
                     </th>
                     <% }) %>
                       <th class="px-5 py-4 text-right border-l border-slate-700 dark:border-slate-600">Total Geral</th>
-                      <th class="px-5 py-4 text-center rounded-tr-3xl">Próximo passo</th>
+                      <th class="px-5 py-4 text-center rounded-tr-2xl">Próximo passo</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
@@ -554,8 +554,8 @@
                   perRow.forEach(r => byCard[r.card_id] = r.total_cents);
                   const total = Object.values(byCard).reduce((a,b)=>a+b,0);
                   %>
-                  <tr class="hover:bg-blue-50/50 dark:hover:bg-slate-700/40 transition-colors group">
-                    <td class="px-5 py-4 font-extrabold text-slate-800 dark:text-white text-base whitespace-nowrap">
+                  <tr class="hover:bg-cyan-50/50 dark:hover:bg-slate-700/40 transition-colors group">
+                    <td class="px-5 py-4 font-bold text-slate-800 dark:text-white text-base whitespace-nowrap">
                       <%= p.name %>
                     </td>
                     <% visibleDetailCards.forEach(c=> { %>
@@ -564,7 +564,7 @@
                       </td>
                       <% }) %>
                         <td
-                          class="px-5 py-4 text-right font-black text-slate-900 dark:text-white border-l border-slate-100 dark:border-slate-700 text-base whitespace-nowrap op-summary-amount-cell">
+                          class="px-5 py-4 text-right font-bold text-slate-900 dark:text-white border-l border-slate-100 dark:border-slate-700 text-base whitespace-nowrap op-summary-amount-cell">
                           <%= formatBRLFromCents(total) %>
                         </td>
                         <td class="px-5 py-4 text-center">
@@ -578,7 +578,7 @@
                               Enviar no WhatsApp
                             </a>
                           <% } else { %>
-                            <a class="inline-flex items-center px-4 py-2 text-xs font-bold rounded-xl text-sky-700 bg-sky-100 hover:bg-sky-200 transition-colors shadow-sm"
+                            <a class="inline-flex items-center px-4 py-2 text-xs font-bold rounded-xl text-cyan-700 bg-cyan-100 hover:bg-cyan-200 transition-colors shadow-sm"
                               href="/share/<%= year %>/<%= month %>/<%= p.id %>">
                               <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C9.886 12.64 11.278 12.25 12.75 12.25c1.472 0 2.864.39 4.066 1.092M8.684 13.342 5.5 15.25m3.184-1.908a3 3 0 10-1.368-2.53m9.5 2.53L19.5 15.25m-2.684-1.908a3 3 0 11 1.368-2.53M12 6v7" />

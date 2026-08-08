@@ -1,26 +1,26 @@
     <section id="my-profile" class="op-people-self-section op-network-profile-shell scroll-mt-28 mb-8 grid gap-6 xl:grid-cols-[minmax(0,1.08fr)_minmax(340px,0.92fr)] xl:items-stretch">
-      <article class="op-people-profile-card op-network-profile-card h-full overflow-hidden rounded-[32px] border border-amber-200 bg-white shadow-sm dark:border-amber-900/50 dark:bg-slate-800">
-        <div class="op-network-profile-surface relative flex h-full flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(251,191,36,0.24),transparent_45%),radial-gradient(circle_at_right,rgba(56,189,248,0.18),transparent_35%)] px-5 py-5 sm:px-6 sm:py-6">
+      <article class="op-people-profile-card op-network-profile-card h-full overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-sm dark:border-amber-900/50 dark:bg-slate-800">
+        <div class="op-network-profile-surface relative flex h-full flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(251,191,36,0.24),transparent_45%),radial-gradient(circle_at_right,rgba(34, 211, 238,0.18),transparent_35%)] px-5 py-5 sm:px-6 sm:py-6">
           <div class="pointer-events-none absolute inset-0 opacity-70 dark:opacity-40">
             <div class="absolute -left-10 top-0 h-28 w-28 rounded-full bg-amber-200/60 blur-3xl dark:bg-amber-500/20"></div>
-            <div class="absolute right-0 top-6 h-24 w-24 rounded-full bg-sky-200/60 blur-3xl dark:bg-sky-500/20"></div>
+            <div class="absolute right-0 top-6 h-24 w-24 rounded-full bg-cyan-200/60 blur-3xl dark:bg-cyan-500/20"></div>
           </div>
           <div class="relative flex h-full flex-col gap-5">
             <div class="flex min-w-0 gap-4">
               <div class="relative h-20 w-20 shrink-0">
                 <% if (getAvatarUrl(selfProfile)) { %>
-                  <img src="<%= getAvatarUrl(selfProfile) %>" alt="<%= selfProfile.name %>" loading="lazy" referrerpolicy="no-referrer" class="h-20 w-20 rounded-full object-cover ring-4 ring-white shadow-xl shadow-amber-500/10 dark:ring-slate-800">
+                  <img src="<%= getAvatarUrl(selfProfile) %>" alt="<%= selfProfile.name %>" loading="lazy" referrerpolicy="no-referrer" class="h-20 w-20 rounded-full object-cover ring-4 ring-white shadow-md shadow-amber-500/10 dark:ring-slate-800">
                 <% } else { %>
-                  <div class="flex h-20 w-20 items-center justify-center rounded-full bg-white text-2xl font-black text-amber-700 shadow-xl shadow-amber-500/10 dark:bg-slate-900 dark:text-amber-200"><%= getAvatarInitials(selfProfile) %></div>
+                  <div class="flex h-20 w-20 items-center justify-center rounded-full bg-white text-2xl font-bold text-amber-700 shadow-md shadow-amber-500/10 dark:bg-slate-900 dark:text-amber-200"><%= getAvatarInitials(selfProfile) %></div>
                 <% } %>
-                <span class="op-network-profile-badge absolute -bottom-1 -right-1 inline-flex h-9 min-w-[2.4rem] items-center justify-center rounded-full border border-amber-200 bg-white px-2 text-[10px] font-black uppercase tracking-[0.12em] shadow-sm dark:border-amber-900 dark:bg-slate-900" title="Seu perfil">Você</span>
+                <span class="op-network-profile-badge absolute -bottom-1 -right-1 inline-flex h-9 min-w-[2.4rem] items-center justify-center rounded-full border border-amber-200 bg-white px-2 text-[10px] font-bold uppercase tracking-[0.12em] shadow-sm dark:border-amber-900 dark:bg-slate-900" title="Seu perfil">Você</span>
               </div>
 
               <div class="min-w-0 flex-1">
-                <div class="text-[11px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Seu perfil</div>
-                <h2 class="mt-2 truncate text-2xl font-black tracking-tight text-slate-900 dark:text-white"><%= selfProfile.name %></h2>
+                <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-amber-700 dark:text-amber-300">Seu perfil</div>
+                <h2 class="mt-2 truncate text-2xl font-bold tracking-tight text-slate-900 dark:text-white"><%= selfProfile.name %></h2>
                 <div class="mt-3 flex items-start gap-3">
-                  <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-white/95 text-sky-600 shadow-sm ring-1 ring-white/80 dark:bg-slate-900 dark:text-sky-300 dark:ring-slate-700" aria-hidden="true">
+                  <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-white/95 text-cyan-600 shadow-sm ring-1 ring-white/80 dark:bg-slate-900 dark:text-cyan-300 dark:ring-slate-700" aria-hidden="true">
                     <% if (selfSignatureVisible) { %>
                       <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h6m5 8H6a2 2 0 01-2-2V6a2 2 0 012-2h7.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V18a2 2 0 01-2 2z"></path></svg>
                     <% } else { %>
@@ -29,8 +29,8 @@
                   </span>
                   <div class="min-w-0 flex-1">
                     <div class="flex flex-wrap items-center gap-2">
-                      <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600/80 dark:text-sky-300/80">Assinatura do perfil</div>
-                      <span id="profileSignaturePreviewVibe" class="<%= selfSignatureMeta ? '' : 'hidden ' %>inline-flex items-center rounded-full border border-white/80 bg-white/90 px-3 py-1 text-[11px] font-bold text-sky-700 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-sky-200"><%= selfSignatureMeta ? selfSignatureMeta.label : '' %></span>
+                      <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-cyan-600/80 dark:text-cyan-300/80">Assinatura do perfil</div>
+                      <span id="profileSignaturePreviewVibe" class="<%= selfSignatureMeta ? '' : 'hidden ' %>inline-flex items-center rounded-full border border-white/80 bg-white/90 px-3 py-1 text-[11px] font-bold text-cyan-700 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-cyan-200"><%= selfSignatureMeta ? selfSignatureMeta.label : '' %></span>
                     </div>
                     <p id="profileSignaturePreviewText" class="mt-1 text-[13px] font-medium leading-5 text-slate-600 dark:text-slate-300"><%= selfSignatureText ? selfSignatureText : 'Sua assinatura aparece aqui para quem já está na sua rede.' %></p>
                   </div>
@@ -56,51 +56,51 @@
             </div>
 
             <div class="op-network-metric-grid grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-              <div class="rounded-[22px] border border-white/70 bg-white/90 px-3.5 py-3 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
-                <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Minha rede</div>
-                <div class="mt-2 text-xl font-black text-slate-900 dark:text-white"><%= activeFriendCount %></div>
+              <div class="rounded-xl border border-white/70 bg-white/90 px-3.5 py-3 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Minha rede</div>
+                <div class="mt-2 text-xl font-bold text-slate-900 dark:text-white"><%= activeFriendCount %></div>
               </div>
-              <div class="rounded-[22px] border border-white/70 bg-white/90 px-3.5 py-3 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
-                <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Contatos totais</div>
-                <div class="mt-2 text-xl font-black text-slate-900 dark:text-white"><%= contactList.length %></div>
+              <div class="rounded-xl border border-white/70 bg-white/90 px-3.5 py-3 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Contatos totais</div>
+                <div class="mt-2 text-xl font-bold text-slate-900 dark:text-white"><%= contactList.length %></div>
               </div>
-              <div class="rounded-[22px] border border-white/70 bg-white/90 px-3.5 py-3 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
-                <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Convites</div>
-                <div class="mt-2 text-xl font-black text-slate-900 dark:text-white"><%= pendingContactCount %></div>
+              <div class="rounded-xl border border-white/70 bg-white/90 px-3.5 py-3 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Convites</div>
+                <div class="mt-2 text-xl font-bold text-slate-900 dark:text-white"><%= pendingContactCount %></div>
               </div>
-              <div class="rounded-[22px] border border-white/70 bg-white/90 px-3.5 py-3 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
-                <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Aguardando retorno</div>
-                <div class="mt-2 text-xl font-black text-slate-900 dark:text-white"><%= pendingRequests.length %></div>
+              <div class="rounded-xl border border-white/70 bg-white/90 px-3.5 py-3 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Aguardando retorno</div>
+                <div class="mt-2 text-xl font-bold text-slate-900 dark:text-white"><%= pendingRequests.length %></div>
               </div>
-              <div class="rounded-[22px] border border-white/70 bg-white/90 px-3.5 py-3 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
-                <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Já no app</div>
-                <div class="mt-2 text-xl font-black text-slate-900 dark:text-white"><%= discoverableCount %></div>
+              <div class="rounded-xl border border-white/70 bg-white/90 px-3.5 py-3 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Já no app</div>
+                <div class="mt-2 text-xl font-bold text-slate-900 dark:text-white"><%= discoverableCount %></div>
               </div>
-              <div class="rounded-[22px] border border-white/70 bg-white/90 px-3.5 py-3 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
-                <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Só na lista</div>
-                <div class="mt-2 text-xl font-black text-slate-900 dark:text-white"><%= localOnlyCount %></div>
+              <div class="rounded-xl border border-white/70 bg-white/90 px-3.5 py-3 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Só na lista</div>
+                <div class="mt-2 text-xl font-bold text-slate-900 dark:text-white"><%= localOnlyCount %></div>
               </div>
-              <div class="rounded-[22px] border border-white/70 bg-white/90 px-3.5 py-3 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
-                <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Pix na rede</div>
-                <div class="mt-2 text-xl font-black text-slate-900 dark:text-white"><%= readyPixNetworkCount %></div>
+              <div class="rounded-xl border border-white/70 bg-white/90 px-3.5 py-3 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Pix na rede</div>
+                <div class="mt-2 text-xl font-bold text-slate-900 dark:text-white"><%= readyPixNetworkCount %></div>
               </div>
-              <div class="rounded-[22px] border border-white/70 bg-white/90 px-3.5 py-3 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
-                <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Seu Pix</div>
-                <div class="mt-2 text-xl font-black text-slate-900 dark:text-white"><%= selfProfile.pix_enabled && selfProfile.pix_valid ? 'Ok' : 'Ajustar' %></div>
+              <div class="rounded-xl border border-white/70 bg-white/90 px-3.5 py-3 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Seu Pix</div>
+                <div class="mt-2 text-xl font-bold text-slate-900 dark:text-white"><%= selfProfile.pix_enabled && selfProfile.pix_valid ? 'Ok' : 'Ajustar' %></div>
               </div>
             </div>
           </div>
         </div>
       </article>
 
-      <article id="profile-signature" class="op-people-settings-card flex h-full flex-col rounded-[32px] border border-sky-200 bg-white p-5 shadow-sm dark:border-sky-900/50 dark:bg-slate-800 sm:p-6">
+      <article id="profile-signature" class="op-people-settings-card flex h-full flex-col rounded-2xl border border-cyan-200 bg-white p-5 shadow-sm dark:border-cyan-900/50 dark:bg-slate-800 sm:p-6">
         <div>
-          <div class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">Sua assinatura no app</div>
-          <h2 class="mt-2 text-xl font-black text-slate-900 dark:text-white">Assinatura do seu perfil</h2>
+          <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-cyan-600 dark:text-cyan-300">Sua assinatura no app</div>
+          <h2 class="mt-2 text-xl font-bold text-slate-900 dark:text-white">Assinatura do seu perfil</h2>
           <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Esse texto aparece abaixo do seu nome para quem já faz parte da sua rede.</p>
         </div>
 
-        <form method="post" action="/people" id="profileSignatureForm" class="mt-5 flex flex-1 flex-col gap-4 border-t border-sky-100 pt-5 dark:border-sky-900/40">
+        <form method="post" action="/people" id="profileSignatureForm" class="mt-5 flex flex-1 flex-col gap-4 border-t border-cyan-100 pt-5 dark:border-cyan-900/40">
           <input type="hidden" name="id" value="<%= selfProfile.id %>">
           <input type="hidden" name="profile_section" value="signature">
           <input type="hidden" name="return_to" value="/people#my-profile">
@@ -109,25 +109,25 @@
           <div class="grid gap-4">
             <label class="block">
               <div class="mb-2 flex items-center justify-between gap-3">
-                <span class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Recado rápido</span>
+                <span class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Recado rápido</span>
                 <span id="profileSignatureCount" class="text-[11px] font-bold text-slate-400 dark:text-slate-500"><%= selfSignatureText.length %>/<%= signatureMaxLength %></span>
               </div>
-              <input type="text" name="profile_signature_text" id="profileSignatureText" value="<%- selfSignatureText %>" maxlength="<%= signatureMaxLength %>" autocomplete="off" class="w-full rounded-2xl border border-sky-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100 dark:border-sky-900/70 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-sky-500 dark:focus:ring-sky-500/20" placeholder="Ex.: Pix pronto para receber">
+              <input type="text" name="profile_signature_text" id="profileSignatureText" value="<%- selfSignatureText %>" maxlength="<%= signatureMaxLength %>" autocomplete="off" class="w-full rounded-2xl border border-cyan-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition-colors focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100 dark:border-cyan-900/70 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-cyan-500 dark:focus:ring-cyan-500/20" placeholder="Ex.: Pix pronto para receber">
               <p class="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Até <%= signatureMaxLength %> caracteres, em uma linha. Só quem já faz parte da sua rede vê esse texto.</p>
             </label>
           </div>
 
           <div>
-            <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Seu status por aqui</div>
+            <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Seu status por aqui</div>
             <div class="mt-3 flex flex-wrap gap-2">
               <% signatureVibeOptions.forEach((option) => { const selected = option.code === selfSignatureVibe; %>
-                <button type="button" data-signature-vibe-option data-vibe-code="<%= option.code %>" class="inline-flex items-center rounded-full border px-3 py-2 text-xs font-bold transition-all <%= selected ? 'border-sky-600 bg-sky-600 text-white shadow-lg shadow-sky-500/15 dark:border-sky-400 dark:bg-sky-400 dark:text-slate-950' : 'border-slate-200 bg-white text-slate-600 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-sky-800 dark:hover:bg-sky-900/20 dark:hover:text-sky-200' %>"><%= option.label %></button>
+                <button type="button" data-signature-vibe-option data-vibe-code="<%= option.code %>" class="inline-flex items-center rounded-full border px-3 py-2 text-xs font-bold transition-all <%= selected ? 'border-cyan-600 bg-cyan-600 text-white shadow-lg shadow-cyan-500/15 dark:border-cyan-400 dark:bg-cyan-400 dark:text-slate-950' : 'border-slate-200 bg-white text-slate-600 hover:border-cyan-200 hover:bg-cyan-50 hover:text-cyan-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-cyan-800 dark:hover:bg-cyan-900/20 dark:hover:text-cyan-200' %>"><%= option.label %></button>
               <% }) %>
             </div>
           </div>
 
           <div class="mt-auto flex justify-end pt-2">
-            <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-sky-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition-all hover:-translate-y-0.5 hover:bg-sky-700 sm:w-auto">Salvar assinatura</button>
+            <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-cyan-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-cyan-500/20 transition-all hover:-translate-y-0.5 hover:bg-cyan-700 sm:w-auto">Salvar assinatura</button>
           </div>
         </form>
       </article>

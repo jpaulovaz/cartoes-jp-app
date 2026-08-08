@@ -98,15 +98,15 @@
   <% } %>
 
   <% if (reviewReady) { %>
-    <section class="op-import-review-banner rounded-[30px] border border-violet-200 bg-violet-50/90 p-5 shadow-sm dark:border-violet-900/60 dark:bg-violet-950/25">
+    <section class="op-import-review-banner rounded-2xl border border-cyan-200 bg-cyan-50/90 p-5 shadow-sm dark:border-cyan-900/60 dark:bg-cyan-950/25">
       <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <div class="text-xs font-black uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">Prévia pronta</div>
-          <h2 class="mt-2 text-lg font-black text-slate-900 dark:text-slate-100"><%= preview.cardName %> · <%= preview.periodLabel %></h2>
+          <div class="text-xs font-bold uppercase tracking-[0.12em] text-cyan-700 dark:text-cyan-300">Prévia pronta</div>
+          <h2 class="mt-2 text-lg font-bold text-slate-900 dark:text-slate-100"><%= preview.cardName %> · <%= preview.periodLabel %></h2>
           <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">Arquivo <span class="font-bold"><%= preview.originalFilename %></span> analisado. Revise os lançamentos e confirme apenas o que deve entrar no app.</p>
         </div>
         <div class="flex flex-col gap-3 sm:flex-row">
-          <button type="button" data-open-import-review class="inline-flex items-center justify-center rounded-2xl bg-violet-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-violet-500/20 transition-all hover:-translate-y-0.5 hover:bg-violet-700">
+          <button type="button" data-open-import-review class="inline-flex items-center justify-center rounded-2xl bg-cyan-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-cyan-500/20 transition-all hover:-translate-y-0.5 hover:bg-cyan-700">
             Abrir revisão
           </button>
           <form id="import-review-cancel-form" method="post" action="/import/preview/cancel">
@@ -121,20 +121,20 @@
   <% } %>
 
   <div class="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
-    <section class="op-surface-card op-import-upload-card rounded-[32px] border border-slate-200 bg-white p-6 shadow-soft dark:border-slate-700 dark:bg-slate-800">
+    <section class="op-surface-card op-import-upload-card rounded-2xl border border-slate-200 bg-white p-6 shadow-soft dark:border-slate-700 dark:bg-slate-800">
       <div class="mb-5">
-        <h2 class="text-lg font-black text-slate-900 dark:text-slate-100">Nova importação</h2>
+        <h2 class="text-lg font-bold text-slate-900 dark:text-slate-100">Nova importação</h2>
         <p class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400">Escolha o cartão, informe a competência e siga pelo formato que fizer mais sentido hoje.</p>
       </div>
 
       <div class="grid gap-4 lg:grid-cols-2">
-        <section class="rounded-[28px] border border-slate-200 bg-slate-50/70 p-5 dark:border-slate-700 dark:bg-slate-900/40">
+        <section class="rounded-2xl border border-slate-200 bg-slate-50/70 p-5 dark:border-slate-700 dark:bg-slate-900/40">
           <div class="flex items-center justify-between gap-3">
             <div>
-              <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Importar CSV</div>
-              <h3 class="mt-1 text-base font-black text-slate-900 dark:text-slate-100">Arquivo da operadora</h3>
+              <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Importar CSV</div>
+              <h3 class="mt-1 text-base font-bold text-slate-900 dark:text-slate-100">Arquivo da operadora</h3>
             </div>
-            <a href="/examples/card_csv_example.csv" download="card_csv_example.csv" class="inline-flex items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-950/50">
+            <a href="/examples/card_csv_example.csv" download="card_csv_example.csv" class="inline-flex items-center justify-center rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs font-bold text-cyan-700 transition hover:bg-cyan-100 dark:border-cyan-800 dark:bg-cyan-950/30 dark:text-cyan-300 dark:hover:bg-cyan-950/50">
               Baixar exemplo
             </a>
           </div>
@@ -142,7 +142,7 @@
           <form method="post" action="/import" enctype="multipart/form-data" class="mt-4 space-y-5">
             <div>
               <label class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Cartão</label>
-              <select name="card_id" required class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
+              <select name="card_id" required class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-cyan-400 focus:bg-white focus:ring-2 focus:ring-cyan-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
                 <option value="">Selecione um cartão</option>
                 <% cards.forEach((card) => { %>
                   <option value="<%= card.id %>" <%= Number(card.id) === selectedCardId ? 'selected' : '' %>><%= card.name %></option>
@@ -153,7 +153,7 @@
             <div class="grid gap-4 sm:grid-cols-2">
               <div>
                 <label class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Mês</label>
-                <select name="month" required class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
+                <select name="month" required class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-cyan-400 focus:bg-white focus:ring-2 focus:ring-cyan-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
                   <% monthNames.forEach((label, index) => { %>
                     <option value="<%= index + 1 %>" <%= (index + 1) === selectedMonth ? 'selected' : '' %>><%= label %></option>
                   <% }) %>
@@ -161,7 +161,7 @@
               </div>
               <div>
                 <label class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Ano</label>
-                <select name="year" required class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
+                <select name="year" required class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-cyan-400 focus:bg-white focus:ring-2 focus:ring-cyan-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
                   <% years.forEach((year) => { %>
                     <option value="<%= year %>" <%= year === selectedYear ? 'selected' : '' %>><%= year %></option>
                   <% }) %>
@@ -170,12 +170,12 @@
             </div>
 
             <div>
-              <label class="flex cursor-pointer flex-col gap-3 rounded-[24px] border border-dashed border-slate-300 bg-white px-5 py-5 transition hover:border-blue-300 hover:bg-blue-50/60 dark:border-slate-700 dark:bg-slate-950 dark:hover:border-blue-500 dark:hover:bg-blue-950/20">
+              <label class="flex cursor-pointer flex-col gap-3 rounded-xl border border-dashed border-slate-300 bg-white px-5 py-5 transition hover:border-cyan-300 hover:bg-cyan-50/60 dark:border-slate-700 dark:bg-slate-950 dark:hover:border-cyan-500 dark:hover:bg-cyan-950/20">
                 <span class="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-50 text-slate-500 shadow-sm dark:bg-slate-800 dark:text-slate-300">
                   <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
                 </span>
                 <span>
-                  <span class="block text-sm font-black text-slate-900 dark:text-slate-100">Escolher CSV</span>
+                  <span class="block text-sm font-bold text-slate-900 dark:text-slate-100">Escolher CSV</span>
                   <span data-import-file-label class="mt-1 block text-sm font-medium text-slate-500 dark:text-slate-400">Use o arquivo exportado da operadora do cartão. Formatos aceitos: .csv</span>
                 </span>
                 <input type="file" name="csvfile" accept=".csv,text/csv" required class="sr-only" data-import-file-input>
@@ -186,26 +186,26 @@
           </form>
         </section>
 
-        <section class="rounded-[28px] border border-slate-200 bg-slate-50/70 p-5 dark:border-slate-700 dark:bg-slate-900/40">
+        <section class="rounded-2xl border border-slate-200 bg-slate-50/70 p-5 dark:border-slate-700 dark:bg-slate-900/40">
           <div class="flex items-center justify-between gap-3">
             <div>
-              <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Importar PDF</div>
-              <h3 class="mt-1 text-base font-black text-slate-900 dark:text-slate-100">Fatura com IA</h3>
+              <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Importar PDF</div>
+              <h3 class="mt-1 text-base font-bold text-slate-900 dark:text-slate-100">Fatura com IA</h3>
             </div>
             <% if (pdfFeature.providersReady) { %>
-              <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200"><%= pdfFeature.providerLabels.join(' + ') %></span>
+              <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200"><%= pdfFeature.providerLabels.join(' + ') %></span>
             <% } else { %>
-              <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">Configure a IA no Admin</span>
+              <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">Configure a IA no Admin</span>
             <% } %>
           </div>
 
           <% if (!pdfFeature.enabled) { %>
-            <div class="mt-4 rounded-[24px] border border-amber-200 bg-amber-50/80 px-4 py-4 text-sm font-medium text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">A importação por PDF está desligada no Admin no momento.</div>
+            <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-4 text-sm font-medium text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">A importação por PDF está desligada no Admin no momento.</div>
           <% } else { %>
           <form method="post" action="/import/pdf" enctype="multipart/form-data" class="mt-4 space-y-5">
             <div>
               <label class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Cartão</label>
-              <select name="card_id" required class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
+              <select name="card_id" required class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-cyan-400 focus:bg-white focus:ring-2 focus:ring-cyan-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
                 <option value="">Selecione um cartão</option>
                 <% cards.forEach((card) => { %>
                   <option value="<%= card.id %>" <%= Number(card.id) === selectedCardId ? 'selected' : '' %>><%= card.name %></option>
@@ -216,7 +216,7 @@
             <div class="grid gap-4 sm:grid-cols-2">
               <div>
                 <label class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Mês</label>
-                <select name="month" required class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
+                <select name="month" required class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-cyan-400 focus:bg-white focus:ring-2 focus:ring-cyan-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
                   <% monthNames.forEach((label, index) => { %>
                     <option value="<%= index + 1 %>" <%= (index + 1) === selectedMonth ? 'selected' : '' %>><%= label %></option>
                   <% }) %>
@@ -224,7 +224,7 @@
               </div>
               <div>
                 <label class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Ano</label>
-                <select name="year" required class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
+                <select name="year" required class="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-cyan-400 focus:bg-white focus:ring-2 focus:ring-cyan-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
                   <% years.forEach((year) => { %>
                     <option value="<%= year %>" <%= year === selectedYear ? 'selected' : '' %>><%= year %></option>
                   <% }) %>
@@ -233,19 +233,19 @@
             </div>
 
             <div>
-              <label class="flex cursor-pointer flex-col gap-3 rounded-[24px] border border-dashed border-slate-300 bg-white px-5 py-5 transition hover:border-violet-300 hover:bg-violet-50/60 dark:border-slate-700 dark:bg-slate-950 dark:hover:border-violet-500 dark:hover:bg-violet-950/20">
+              <label class="flex cursor-pointer flex-col gap-3 rounded-xl border border-dashed border-slate-300 bg-white px-5 py-5 transition hover:border-cyan-300 hover:bg-cyan-50/60 dark:border-slate-700 dark:bg-slate-950 dark:hover:border-cyan-500 dark:hover:bg-cyan-950/20">
                 <span class="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-50 text-slate-500 shadow-sm dark:bg-slate-800 dark:text-slate-300">
                   <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
                 </span>
                 <span>
-                  <span class="block text-sm font-black text-slate-900 dark:text-slate-100">Escolher PDF(s)</span>
+                  <span class="block text-sm font-bold text-slate-900 dark:text-slate-100">Escolher PDF(s)</span>
                   <span data-import-pdf-file-label class="mt-1 block text-sm font-medium text-slate-500 dark:text-slate-400">Use uma ou mais faturas em PDF. O processamento entra em fila e cada job libera seu CSV no fim.</span>
                 </span>
                 <input type="file" name="pdffiles" accept="application/pdf,.pdf" multiple required class="sr-only" data-import-pdf-file-input>
               </label>
             </div>
 
-            <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-violet-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-violet-500/20 transition-all hover:-translate-y-0.5 hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50" <%= pdfFeature.providersReady ? '' : 'disabled' %>>Enviar PDF para processamento</button>
+            <button type="submit" class="inline-flex w-full items-center justify-center rounded-2xl bg-cyan-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-cyan-500/20 transition-all hover:-translate-y-0.5 hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-50" <%= pdfFeature.providersReady ? '' : 'disabled' %>>Enviar PDF para processamento</button>
           </form>
           <% } %>
         </section>
@@ -253,12 +253,12 @@
     </section>
 
     <aside class="space-y-4">
-      <section class="op-surface-card op-import-side-card rounded-[32px] border border-slate-200 bg-white p-6 shadow-soft dark:border-slate-700 dark:bg-slate-800">
-        <h2 class="text-sm font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Fluxo de revisão</h2>
+      <section class="op-surface-card op-import-side-card rounded-2xl border border-slate-200 bg-white p-6 shadow-soft dark:border-slate-700 dark:bg-slate-800">
+        <h2 class="text-sm font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Fluxo de revisão</h2>
         <ul class="mt-4 space-y-3 text-sm font-medium text-slate-600 dark:text-slate-300">
-          <li class="flex gap-3"><span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-black text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">1</span><span>CSV e PDF passam pela mesma revisão antes de entrar no app.</span></li>
-          <li class="flex gap-3"><span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-black text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">2</span><span>No PDF, cada job libera revisão e download assim que termina.</span></li>
-          <li class="flex gap-3"><span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-black text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">3</span><span>Se houver coincidência por data e valor, ela aparece como aviso e você decide.</span></li>
+          <li class="flex gap-3"><span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-cyan-100 text-xs font-bold text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-200">1</span><span>CSV e PDF passam pela mesma revisão antes de entrar no app.</span></li>
+          <li class="flex gap-3"><span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-cyan-100 text-xs font-bold text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-200">2</span><span>No PDF, cada job libera revisão e download assim que termina.</span></li>
+          <li class="flex gap-3"><span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-cyan-100 text-xs font-bold text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-200">3</span><span>Se houver coincidência por data e valor, ela aparece como aviso e você decide.</span></li>
         </ul>
       </section>
 
@@ -278,15 +278,15 @@
   </style>
   <div data-import-review-modal data-initial-open="1" class="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/80 p-0 sm:items-center sm:p-5">
     <div class="absolute inset-0 backdrop-blur-[2px]" data-import-review-backdrop></div>
-    <section class="op-import-review-modal op-import-review-modal--adaptive relative z-10 flex h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-2xl dark:bg-slate-900 sm:h-auto sm:max-h-[94vh] sm:max-w-[96vw] 2xl:max-w-[1480px] sm:rounded-[30px] sm:border sm:border-slate-200 sm:ring-1 sm:ring-slate-200 dark:sm:border-slate-700 dark:sm:ring-slate-700" role="dialog" aria-modal="true" aria-labelledby="import-review-title">
+    <section class="op-import-review-modal op-import-review-modal--adaptive relative z-10 flex h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-lg dark:bg-slate-900 sm:h-auto sm:max-h-[94vh] sm:max-w-[96vw] 2xl:max-w-[1480px] sm:rounded-2xl sm:border sm:border-slate-200 sm:ring-1 sm:ring-slate-200 dark:sm:border-slate-700 dark:sm:ring-slate-700" role="dialog" aria-modal="true" aria-labelledby="import-review-title">
       <form id="import-review-form" method="post" action="/import/confirm" class="flex min-h-0 flex-1 flex-col">
         <input type="hidden" name="preview_id" value="<%= preview.id %>">
 
         <div class="op-import-review-header border-b border-slate-200 bg-white/95 px-4 py-4 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 sm:px-6 lg:px-7">
           <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div class="min-w-0">
-              <div class="text-[11px] font-black uppercase tracking-[0.22em] text-violet-600 dark:text-violet-300">Revisao antes de importar</div>
-              <h2 id="import-review-title" class="mt-2 text-[clamp(1.6rem,1.2rem+0.9vw,2.2rem)] font-black tracking-tight text-slate-900 dark:text-slate-100"><%= preview.cardName %> · <%= preview.periodLabel %></h2>
+              <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-cyan-600 dark:text-cyan-300">Revisao antes de importar</div>
+              <h2 id="import-review-title" class="mt-2 text-[clamp(1.6rem,1.2rem+0.9vw,2.2rem)] font-bold tracking-tight text-slate-900 dark:text-slate-100"><%= preview.cardName %> · <%= preview.periodLabel %></h2>
               <p class="mt-2 max-w-4xl text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">Arquivo <span class="font-bold text-slate-800 dark:text-slate-100"><%= preview.originalFilename %></span> com <span class="font-bold"><%= previewSummary.parsedCount || 0 %></span> compra(s), somando <span class="font-bold"><%= previewSummary.parsedTotalLabel || formatBRLFromCents(0) %></span>.</p>
             </div>
             <div class="flex shrink-0 flex-wrap gap-2.5">
@@ -300,25 +300,25 @@
           </div>
 
           <div class="op-import-review-kpis mt-4 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
-            <div class="rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-3.5 dark:border-slate-700 dark:bg-slate-950/70">
-              <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">No arquivo</div>
-              <div class="mt-2 text-[1.65rem] font-black leading-none text-slate-900 dark:text-slate-100"><%= previewSummary.parsedTotalLabel || formatBRLFromCents(0) %></div>
+            <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3.5 dark:border-slate-700 dark:bg-slate-950/70">
+              <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">No arquivo</div>
+              <div class="mt-2 text-[1.65rem] font-bold leading-none text-slate-900 dark:text-slate-100"><%= previewSummary.parsedTotalLabel || formatBRLFromCents(0) %></div>
               <div class="mt-1.5 text-[13px] font-semibold text-slate-500 dark:text-slate-400"><%= previewSummary.parsedCount || 0 %> linha(s) lida(s)</div>
             </div>
-            <div class="rounded-[20px] border border-slate-200 bg-white px-4 py-3.5 dark:border-slate-700 dark:bg-slate-900/70">
-              <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Já estava no cartão</div>
-              <div class="mt-2 text-[1.65rem] font-black leading-none text-slate-900 dark:text-slate-100"><%= previewSummary.existingTotalLabel || formatBRLFromCents(0) %></div>
+            <div class="rounded-xl border border-slate-200 bg-white px-4 py-3.5 dark:border-slate-700 dark:bg-slate-900/70">
+              <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Já estava no cartão</div>
+              <div class="mt-2 text-[1.65rem] font-bold leading-none text-slate-900 dark:text-slate-100"><%= previewSummary.existingTotalLabel || formatBRLFromCents(0) %></div>
               <div class="mt-1.5 text-[13px] font-semibold text-slate-500 dark:text-slate-400"><%= previewSummary.existingCount || 0 %> compra(s) no mês</div>
             </div>
-            <div class="rounded-[20px] border border-emerald-200 bg-emerald-50 px-4 py-3.5 dark:border-emerald-900/60 dark:bg-emerald-950/20">
-              <div class="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Vai entrar agora</div>
-              <div class="mt-2 text-[1.65rem] font-black leading-none text-emerald-900 dark:text-emerald-100" data-final-total><%= previewSummary.defaultFinalTotalLabel || formatBRLFromCents(0) %></div>
+            <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3.5 dark:border-emerald-900/60 dark:bg-emerald-950/20">
+              <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-300">Vai entrar agora</div>
+              <div class="mt-2 text-[1.65rem] font-bold leading-none text-emerald-900 dark:text-emerald-100" data-final-total><%= previewSummary.defaultFinalTotalLabel || formatBRLFromCents(0) %></div>
               <div class="mt-1.5 text-[13px] font-semibold text-emerald-700/80 dark:text-emerald-200/80"><span data-final-count><%= previewSummary.defaultNewImportCount || previewSummary.defaultFinalCount || 0 %></span> nova(s) · <span data-overwrite-count><%= previewSummary.defaultOverwriteCount || 0 %></span> sobrescrita(s) · <span data-final-affected-count><%= previewSummary.defaultFinalAffectedCount || previewSummary.defaultFinalCount || 0 %></span> transação(ões) afetada(s)</div>
             </div>
-            <div class="rounded-[20px] border border-violet-200 bg-violet-50 px-4 py-3.5 dark:border-violet-900/60 dark:bg-violet-950/20">
-              <div class="text-[10px] font-black uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">O cartão fica em</div>
-              <div class="mt-2 text-[1.65rem] font-black leading-none text-violet-900 dark:text-violet-100" data-projected-total><%= previewSummary.projectedCardTotalLabel || formatBRLFromCents(0) %></div>
-              <div class="mt-1.5 text-[13px] font-semibold text-violet-700/80 dark:text-violet-200/80"><span data-projected-count><%= previewSummary.projectedCardCount || 0 %></span> compra(s) no mês depois da importação</div>
+            <div class="rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3.5 dark:border-cyan-900/60 dark:bg-cyan-950/20">
+              <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-cyan-700 dark:text-cyan-300">O cartão fica em</div>
+              <div class="mt-2 text-[1.65rem] font-bold leading-none text-cyan-900 dark:text-cyan-100" data-projected-total><%= previewSummary.projectedCardTotalLabel || formatBRLFromCents(0) %></div>
+              <div class="mt-1.5 text-[13px] font-semibold text-cyan-700/80 dark:text-cyan-200/80"><span data-projected-count><%= previewSummary.projectedCardCount || 0 %></span> compra(s) no mês depois da importação</div>
             </div>
           </div>
         </div>
@@ -326,24 +326,24 @@
         <div class="op-import-review-tabs border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 sm:px-6 lg:px-7">
           <div class="flex gap-2 overflow-x-auto pb-1">
             <button type="button" data-review-tab-trigger="app" class="min-w-[220px] rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:hover:bg-slate-800">
-              <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">1. Suspeitas no app</div>
+              <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">1. Suspeitas no app</div>
               <div class="mt-1 flex items-end justify-between gap-3">
-                <div class="text-sm font-black text-slate-900 dark:text-slate-100"><%= previewSummary.appDuplicateCount || 0 %> item(ns)</div>
+                <div class="text-sm font-bold text-slate-900 dark:text-slate-100"><%= previewSummary.appDuplicateCount || 0 %> item(ns)</div>
                 <div class="text-xs font-semibold text-slate-500 dark:text-slate-400"><%= previewSummary.appDuplicateTotalLabel || formatBRLFromCents(0) %></div>
               </div>
             </button>
             <button type="button" data-review-tab-trigger="csv" class="min-w-[220px] rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:hover:bg-slate-800">
-              <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">2. Repetidas no CSV</div>
+              <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">2. Repetidas no CSV</div>
               <div class="mt-1 flex items-end justify-between gap-3">
-                <div class="text-sm font-black text-slate-900 dark:text-slate-100"><%= previewSummary.csvDuplicateGroupCount || 0 %> grupo(s)</div>
+                <div class="text-sm font-bold text-slate-900 dark:text-slate-100"><%= previewSummary.csvDuplicateGroupCount || 0 %> grupo(s)</div>
                 <div class="text-xs font-semibold text-slate-500 dark:text-slate-400"><%= previewSummary.csvDuplicateTotalLabel || formatBRLFromCents(0) %></div>
               </div>
             </button>
             <button type="button" data-review-tab-trigger="final" class="min-w-[220px] rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:hover:bg-slate-800">
-              <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">3. O que vai entrar</div>
+              <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">3. O que vai entrar</div>
               <div class="mt-1 flex items-end justify-between gap-3">
                 <div>
-                  <div class="text-sm font-black text-slate-900 dark:text-slate-100"><span data-final-count><%= previewSummary.defaultNewImportCount || previewSummary.defaultFinalCount || 0 %></span> nova(s)</div>
+                  <div class="text-sm font-bold text-slate-900 dark:text-slate-100"><span data-final-count><%= previewSummary.defaultNewImportCount || previewSummary.defaultFinalCount || 0 %></span> nova(s)</div>
                   <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400"><span data-overwrite-count><%= previewSummary.defaultOverwriteCount || 0 %></span> sobrescrita(s) · <span data-final-affected-count><%= previewSummary.defaultFinalAffectedCount || previewSummary.defaultFinalCount || 0 %></span> transação(ões)</div>
                 </div>
                 <div class="text-xs font-semibold text-slate-500 dark:text-slate-400" data-final-total-secondary><%= previewSummary.defaultFinalTotalLabel || formatBRLFromCents(0) %></div>
@@ -355,7 +355,7 @@
         <div class="op-import-review-body min-h-0 flex-1 overflow-y-auto bg-slate-50/85 px-4 py-4 dark:bg-slate-950/45 sm:px-6 lg:px-7" data-review-tab-container data-default-tab="<%= defaultReviewTab %>" data-file-total-cents="<%= previewSummary.parsedTotalCents || 0 %>" data-existing-total-cents="<%= previewSummary.existingTotalCents || 0 %>" data-existing-count="<%= previewSummary.existingCount || 0 %>">
           <section data-review-tab-panel="app" class="space-y-3.5">
             <% if (!previewAppCandidates.length) { %>
-              <div class="rounded-[24px] border border-dashed border-slate-300 bg-white px-5 py-8 text-center text-sm font-medium text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-400">
+              <div class="rounded-xl border border-dashed border-slate-300 bg-white px-5 py-8 text-center text-sm font-medium text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-400">
                 Nenhuma compra do arquivo bateu com mesmo dia e valor no mes escolhido. Aqui o app ficou tranquilinho.
               </div>
             <% } %>
@@ -366,20 +366,20 @@
               const defaultOverwriteMatch = overwriteMatches.find((match) => Number(match.id || 0) === Number(candidate.defaultOverwriteTargetId || 0)) || overwriteMatches[0] || null;
               if (!item) return;
             %>
-              <article data-review-candidate-card="<%= candidate.id %>" class="rounded-[24px] border border-amber-200 bg-amber-50/60 p-3.5 shadow-sm dark:border-amber-900/50 dark:bg-amber-950/15 sm:p-4">
+              <article data-review-candidate-card="<%= candidate.id %>" class="rounded-xl border border-amber-200 bg-amber-50/60 p-3.5 shadow-sm dark:border-amber-900/50 dark:bg-amber-950/15 sm:p-4">
                 <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div class="min-w-0">
                     <div class="flex flex-wrap items-center gap-2">
-                      <span class="inline-flex items-center rounded-full border border-amber-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-amber-700 dark:border-amber-900/60 dark:bg-slate-900/70 dark:text-amber-200">Suspeita <%= candidateIndex + 1 %></span>
+                      <span class="inline-flex items-center rounded-full border border-amber-200 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-amber-700 dark:border-amber-900/60 dark:bg-slate-900/70 dark:text-amber-200">Suspeita <%= candidateIndex + 1 %></span>
                       <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"><%= candidate.existingMatchCount %> coincidencia(s)</span>
                       <% if (candidate.exactMatchCount > 0) { %>
-                        <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-amber-700 dark:border-amber-900/60 dark:bg-amber-900/30 dark:text-amber-200"><%= candidate.exactMatchCount %> praticamente igual(is)</span>
+                        <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-700 dark:border-amber-900/60 dark:bg-amber-900/30 dark:text-amber-200"><%= candidate.exactMatchCount %> praticamente igual(is)</span>
                       <% } %>
                       <% if (candidate.overwriteEligibleCount > 0) { %>
-                        <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-900/30 dark:text-emerald-200"><%= candidate.overwriteEligibleCount %> manual(is) elegivel(is)</span>
+                        <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-900/30 dark:text-emerald-200"><%= candidate.overwriteEligibleCount %> manual(is) elegivel(is)</span>
                       <% } %>
                     </div>
-                    <h3 class="mt-2 text-sm font-black leading-6 text-slate-900 dark:text-slate-100"><%= item.description %></h3>
+                    <h3 class="mt-2 text-sm font-bold leading-6 text-slate-900 dark:text-slate-100"><%= item.description %></h3>
                     <p class="mt-1 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">
                       <% if (candidate.exactMatchCount > 0) { %>
                         O app encontrou item(ns) muito parecido(s). Escolha uma unica acao para esta linha.
@@ -389,20 +389,20 @@
                     </p>
                   </div>
                   <div class="shrink-0 rounded-2xl border border-amber-200 bg-white px-3 py-2 text-right shadow-sm dark:border-amber-900/60 dark:bg-slate-900/70">
-                    <div class="text-[10px] font-black uppercase tracking-[0.16em] text-amber-700 dark:text-amber-300">Valor do item</div>
-                    <div class="mt-1 text-lg font-black text-slate-900 dark:text-slate-100"><%= item.amountLabel %></div>
+                    <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-amber-700 dark:text-amber-300">Valor do item</div>
+                    <div class="mt-1 text-lg font-bold text-slate-900 dark:text-slate-100"><%= item.amountLabel %></div>
                   </div>
                 </div>
 
                 <div class="mt-3 grid gap-3 xl:grid-cols-[0.84fr_1.16fr]">
-                  <section class="rounded-[20px] border border-slate-200 bg-white/90 p-3.5 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                  <section class="rounded-xl border border-slate-200 bg-white/90 p-3.5 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
                     <div class="flex items-center justify-between gap-3">
-                      <div class="text-[10px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Veio do arquivo</div>
+                      <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-amber-700 dark:text-amber-300">Veio do arquivo</div>
                       <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">Arquivo</span>
                     </div>
                     <div class="mt-3 overflow-x-auto">
                       <div class="min-w-[700px] space-y-2">
-                        <div class="grid grid-cols-[1.9fr_92px_96px_132px_104px] gap-3 px-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                        <div class="grid grid-cols-[1.9fr_92px_96px_132px_104px] gap-3 px-3 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
                           <div>Lancamento</div>
                           <div>Data</div>
                           <div>Final</div>
@@ -411,29 +411,29 @@
                         </div>
                         <div class="grid grid-cols-[1.9fr_92px_96px_132px_104px] items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 px-3 py-3 text-sm dark:border-amber-900/60 dark:bg-amber-950/20">
                           <div class="min-w-0">
-                            <div class="text-[13px] font-black leading-5 text-slate-900 dark:text-slate-100"><%= item.description %></div>
+                            <div class="text-[13px] font-bold leading-5 text-slate-900 dark:text-slate-100"><%= item.description %></div>
                             <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">Linha trazida pelo arquivo</div>
                             <% if (item.installment) { %>
-                              <div class="mt-1 text-[11px] font-semibold text-violet-700 dark:text-violet-300"><%= buildInstallmentHint(item, 'candidate') %></div>
+                              <div class="mt-1 text-[11px] font-semibold text-cyan-700 dark:text-cyan-300"><%= buildInstallmentHint(item, 'candidate') %></div>
                             <% } %>
                           </div>
                           <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.dateLabel %></div>
                           <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.cardNumberLabel %></div>
-                          <div><span class="inline-flex items-center rounded-full border border-amber-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-amber-700 dark:border-amber-900/60 dark:bg-slate-900 dark:text-amber-200">No arquivo</span></div>
-                          <div class="text-right text-[13px] font-black text-slate-900 dark:text-slate-100"><%= item.amountLabel %></div>
+                          <div><span class="inline-flex items-center rounded-full border border-amber-200 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-700 dark:border-amber-900/60 dark:bg-slate-900 dark:text-amber-200">No arquivo</span></div>
+                          <div class="text-right text-[13px] font-bold text-slate-900 dark:text-slate-100"><%= item.amountLabel %></div>
                         </div>
                       </div>
                     </div>
                   </section>
 
-                  <section class="rounded-[20px] border border-slate-200 bg-white/90 p-3.5 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                  <section class="rounded-xl border border-slate-200 bg-white/90 p-3.5 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
                     <div class="flex flex-wrap items-center justify-between gap-3">
-                      <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Ja esta no app</div>
-                      <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-amber-700 dark:border-amber-900/60 dark:bg-amber-900/30 dark:text-amber-200"><%= candidate.existingMatchCount %> coincidencia(s)</span>
+                      <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Ja esta no app</div>
+                      <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-700 dark:border-amber-900/60 dark:bg-amber-900/30 dark:text-amber-200"><%= candidate.existingMatchCount %> coincidencia(s)</span>
                     </div>
                     <div class="mt-3 overflow-x-auto">
                       <div class="min-w-[700px] space-y-2">
-                        <div class="grid grid-cols-[1.9fr_92px_96px_132px_104px] gap-3 px-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                        <div class="grid grid-cols-[1.9fr_92px_96px_132px_104px] gap-3 px-3 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
                           <div>Lancamento</div>
                           <div>Data</div>
                           <div>Final</div>
@@ -443,7 +443,7 @@
                         <% candidate.existingMatches.forEach((match) => { %>
                           <div class="grid grid-cols-[1.9fr_92px_96px_132px_104px] items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm dark:border-slate-700 dark:bg-slate-950/70">
                             <div class="min-w-0">
-                              <div class="text-[13px] font-black leading-5 text-slate-900 dark:text-slate-100"><%= match.description %></div>
+                              <div class="text-[13px] font-bold leading-5 text-slate-900 dark:text-slate-100"><%= match.description %></div>
                               <div class="mt-1 flex flex-wrap gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em]">
                                 <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300" title="<%= match.originLabel %>"><%= match.originLabel %></span>
                                 <% if (match.overwriteEligible) { %>
@@ -476,7 +476,7 @@
                             <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= match.dateLabel %></div>
                             <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= match.cardNumberLabel %></div>
                             <div><span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300" title="<%= match.originLabel %>"><%= match.isManual ? 'Manual' : 'Importada' %></span></div>
-                            <div class="text-right text-[13px] font-black text-slate-900 dark:text-slate-100"><%= match.amountLabel %></div>
+                            <div class="text-right text-[13px] font-bold text-slate-900 dark:text-slate-100"><%= match.amountLabel %></div>
                           </div>
                         <% }) %>
                       </div>
@@ -484,27 +484,27 @@
                   </section>
                 </div>
 
-                <div class="mt-3 rounded-[20px] border border-amber-200 bg-white px-4 py-3 shadow-sm dark:border-amber-900/60 dark:bg-slate-900/80">
+                <div class="mt-3 rounded-xl border border-amber-200 bg-white px-4 py-3 shadow-sm dark:border-amber-900/60 dark:bg-slate-900/80">
                   <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div class="min-w-0">
-                      <div class="text-[10px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Resolucao</div>
+                      <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-amber-700 dark:text-amber-300">Resolucao</div>
                     </div>
                     <div class="flex flex-wrap gap-2 sm:justify-end">
                       <label class="group relative overflow-hidden rounded-2xl">
                         <input type="radio" name="app_resolution_<%= candidate.id %>" value="skip" checked data-app-resolution data-candidate-id="<%= candidate.id %>" class="peer absolute inset-0 h-full w-full cursor-pointer opacity-0">
-                        <span class="inline-flex min-w-[92px] items-center justify-center rounded-2xl border border-slate-300 bg-white px-3 py-2 text-xs font-black uppercase tracking-[0.14em] text-slate-600 transition peer-checked:border-slate-900 peer-checked:bg-slate-900 peer-checked:text-white dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:peer-checked:border-slate-200 dark:peer-checked:bg-slate-100 dark:peer-checked:text-slate-900">Deixar de fora</span>
+                        <span class="inline-flex min-w-[92px] items-center justify-center rounded-2xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold uppercase tracking-[0.14em] text-slate-600 transition peer-checked:border-slate-900 peer-checked:bg-slate-900 peer-checked:text-white dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:peer-checked:border-slate-200 dark:peer-checked:bg-slate-100 dark:peer-checked:text-slate-900">Deixar de fora</span>
                       </label>
                       <label class="group relative overflow-hidden rounded-2xl">
                         <input type="radio" name="app_resolution_<%= candidate.id %>" value="import" data-app-resolution data-candidate-id="<%= candidate.id %>" class="peer absolute inset-0 h-full w-full cursor-pointer opacity-0">
-                        <span class="inline-flex min-w-[92px] items-center justify-center rounded-2xl border border-emerald-300 bg-white px-3 py-2 text-xs font-black uppercase tracking-[0.14em] text-emerald-700 transition peer-checked:border-emerald-600 peer-checked:bg-emerald-600 peer-checked:text-white dark:border-emerald-900/60 dark:bg-slate-950 dark:text-emerald-300 dark:peer-checked:border-emerald-500 dark:peer-checked:bg-emerald-500 dark:peer-checked:text-slate-950">Importar no app</span>
+                        <span class="inline-flex min-w-[92px] items-center justify-center rounded-2xl border border-emerald-300 bg-white px-3 py-2 text-xs font-bold uppercase tracking-[0.14em] text-emerald-700 transition peer-checked:border-emerald-600 peer-checked:bg-emerald-600 peer-checked:text-white dark:border-emerald-900/60 dark:bg-slate-950 dark:text-emerald-300 dark:peer-checked:border-emerald-500 dark:peer-checked:bg-emerald-500 dark:peer-checked:text-slate-950">Importar no app</span>
                       </label>
                       <% if (candidate.overwriteEligibleCount > 0) { %>
                         <label class="group relative overflow-hidden rounded-2xl">
                           <input type="radio" name="app_resolution_<%= candidate.id %>" value="overwrite" data-app-resolution data-candidate-id="<%= candidate.id %>" class="peer absolute inset-0 h-full w-full cursor-pointer opacity-0">
-                          <span class="inline-flex min-w-[132px] items-center justify-center rounded-2xl border border-violet-300 bg-white px-3 py-2 text-xs font-black uppercase tracking-[0.14em] text-violet-700 transition peer-checked:border-violet-600 peer-checked:bg-violet-600 peer-checked:text-white dark:border-violet-900/60 dark:bg-slate-950 dark:text-violet-300 dark:peer-checked:border-violet-500 dark:peer-checked:bg-violet-500 dark:peer-checked:text-slate-950">Sobrescrever</span>
+                          <span class="inline-flex min-w-[132px] items-center justify-center rounded-2xl border border-cyan-300 bg-white px-3 py-2 text-xs font-bold uppercase tracking-[0.14em] text-cyan-700 transition peer-checked:border-cyan-600 peer-checked:bg-cyan-600 peer-checked:text-white dark:border-cyan-900/60 dark:bg-slate-950 dark:text-cyan-300 dark:peer-checked:border-cyan-500 dark:peer-checked:bg-cyan-500 dark:peer-checked:text-slate-950">Sobrescrever</span>
                         </label>
                       <% } else { %>
-                        <span class="inline-flex min-w-[132px] items-center justify-center rounded-2xl border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-black uppercase tracking-[0.14em] text-slate-400 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-500">Sobrescrever</span>
+                        <span class="inline-flex min-w-[132px] items-center justify-center rounded-2xl border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-bold uppercase tracking-[0.14em] text-slate-400 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-500">Sobrescrever</span>
                       <% } %>
                     </div>
                   </div>
@@ -513,20 +513,20 @@
                     <% if (overwriteMatches.length === 1) { %>
                       <input type="hidden" name="app_overwrite_target_<%= candidate.id %>" value="<%= candidate.defaultOverwriteTargetId %>" data-overwrite-target-static data-candidate-id="<%= candidate.id %>" data-target-description="<%= defaultOverwriteMatch ? defaultOverwriteMatch.description : '' %>">
                     <% } %>
-                    <div data-overwrite-target-box="<%= candidate.id %>" class="mt-3 hidden rounded-[18px] border border-violet-200 bg-violet-50/70 px-3 py-3 dark:border-violet-900/50 dark:bg-violet-950/20">
-                      <div class="text-[10px] font-black uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">Alvo da sobrescrita</div>
+                    <div data-overwrite-target-box="<%= candidate.id %>" class="mt-3 hidden rounded-xl border border-cyan-200 bg-cyan-50/70 px-3 py-3 dark:border-cyan-900/50 dark:bg-cyan-950/20">
+                      <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-cyan-700 dark:text-cyan-300">Alvo da sobrescrita</div>
                       <% if (overwriteMatches.length === 1) { %>
-                        <div class="mt-2 rounded-2xl border border-violet-200 bg-white px-3 py-3 text-sm dark:border-violet-900/60 dark:bg-slate-900/80">
-                          <div class="font-black text-slate-900 dark:text-slate-100"><%= defaultOverwriteMatch ? defaultOverwriteMatch.description : 'Lancamento manual' %></div>
+                        <div class="mt-2 rounded-2xl border border-cyan-200 bg-white px-3 py-3 text-sm dark:border-cyan-900/60 dark:bg-slate-900/80">
+                          <div class="font-bold text-slate-900 dark:text-slate-100"><%= defaultOverwriteMatch ? defaultOverwriteMatch.description : 'Lancamento manual' %></div>
                           <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">Esse manual sera atualizado, mantendo categoria, divisao e vinculos.</div>
                         </div>
                       <% } else { %>
                         <div class="mt-2 space-y-2">
                           <% overwriteMatches.forEach((match) => { %>
-                            <label class="flex cursor-pointer items-start gap-3 rounded-2xl border border-violet-200 bg-white px-3 py-3 text-sm dark:border-violet-900/60 dark:bg-slate-900/80">
-                              <input type="radio" name="app_overwrite_target_<%= candidate.id %>" value="<%= match.id %>" data-overwrite-target data-candidate-id="<%= candidate.id %>" data-target-description="<%= match.description %>" class="mt-0.5 h-4 w-4 border-slate-300 text-violet-600 focus:ring-violet-500">
+                            <label class="flex cursor-pointer items-start gap-3 rounded-2xl border border-cyan-200 bg-white px-3 py-3 text-sm dark:border-cyan-900/60 dark:bg-slate-900/80">
+                              <input type="radio" name="app_overwrite_target_<%= candidate.id %>" value="<%= match.id %>" data-overwrite-target data-candidate-id="<%= candidate.id %>" data-target-description="<%= match.description %>" class="mt-0.5 h-4 w-4 border-slate-300 text-cyan-600 focus:ring-cyan-500">
                               <span class="min-w-0 flex-1">
-                                <span class="block font-black text-slate-900 dark:text-slate-100"><%= match.description %></span>
+                                <span class="block font-bold text-slate-900 dark:text-slate-100"><%= match.description %></span>
                                 <span class="mt-1 block text-[11px] font-semibold text-slate-500 dark:text-slate-400"><%= match.dateLabel %> · <%= match.amountLabel %> · <%= match.cardNumberLabel %></span>
                               </span>
                             </label>
@@ -538,7 +538,7 @@
                     <% const candidateUnavailableText = candidate.importedMatchCount > 0 && Number(candidate.lockedManualCount || 0) === 0
                       ? 'Essas coincidencias ja vieram de importacoes anteriores e ficam so para comparacao.'
                       : candidate.overwriteUnavailableReason; %>
-                    <div class="mt-3 rounded-[18px] border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-[11px] font-medium leading-5 text-slate-500 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-400"><%= candidateUnavailableText %></div>
+                    <div class="mt-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-[11px] font-medium leading-5 text-slate-500 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-400"><%= candidateUnavailableText %></div>
                   <% } %>
                 </div>
               </article>
@@ -547,7 +547,7 @@
 
           <section data-review-tab-panel="csv" class="hidden space-y-3.5">
             <% if (!previewCsvGroups.length) { %>
-              <div class="rounded-[24px] border border-dashed border-slate-300 bg-white px-5 py-8 text-center text-sm font-medium text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-400">
+              <div class="rounded-xl border border-dashed border-slate-300 bg-white px-5 py-8 text-center text-sm font-medium text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-400">
                 O arquivo nao trouxe grupos identicos repetidos. Aqui esta tudo liso e sem eco.
               </div>
             <% } %>
@@ -557,35 +557,35 @@
               const groupItems = (group.itemIds || []).map((itemId) => previewItemMap.get(itemId)).filter(Boolean);
               if (!representative) return;
             %>
-              <article class="rounded-[24px] border border-sky-200 bg-sky-50/60 p-3.5 shadow-sm dark:border-sky-900/50 dark:bg-sky-950/15 sm:p-4">
+              <article class="rounded-xl border border-cyan-200 bg-cyan-50/60 p-3.5 shadow-sm dark:border-cyan-900/50 dark:bg-cyan-950/15 sm:p-4">
                 <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div class="min-w-0">
                     <div class="flex flex-wrap items-center gap-2">
-                      <span class="inline-flex items-center rounded-full border border-sky-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-sky-700 dark:border-sky-900/60 dark:bg-slate-900/70 dark:text-sky-200">Grupo <%= groupIndex + 1 %></span>
+                      <span class="inline-flex items-center rounded-full border border-cyan-200 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-cyan-700 dark:border-cyan-900/60 dark:bg-slate-900/70 dark:text-cyan-200">Grupo <%= groupIndex + 1 %></span>
                       <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"><%= group.occurrenceCount %> linha(s)</span>
                       <% if (group.existingMatchCount > 0) { %>
-                        <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-amber-700 dark:border-amber-900/60 dark:bg-amber-900/30 dark:text-amber-200"><%= group.existingMatchCount %> coincidencia(s) no app</span>
+                        <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-700 dark:border-amber-900/60 dark:bg-amber-900/30 dark:text-amber-200"><%= group.existingMatchCount %> coincidencia(s) no app</span>
                       <% } %>
                     </div>
-                    <h3 class="mt-2 text-sm font-black leading-6 text-slate-900 dark:text-slate-100"><%= representative.description %></h3>
+                    <h3 class="mt-2 text-sm font-bold leading-6 text-slate-900 dark:text-slate-100"><%= representative.description %></h3>
                     <p class="mt-1 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">O arquivo repetiu esse lancamento <span class="font-bold"><%= group.occurrenceCount %></span> vez(es). Compare as linhas e ajuste quantas entram.</p>
                   </div>
-                  <div class="shrink-0 rounded-2xl border border-sky-200 bg-white px-3 py-2 text-right shadow-sm dark:border-sky-900/60 dark:bg-slate-900/70">
-                    <div class="text-[10px] font-black uppercase tracking-[0.16em] text-sky-700 dark:text-sky-300">Total do grupo</div>
-                    <div class="mt-1 text-lg font-black text-slate-900 dark:text-slate-100"><%= group.groupTotalLabel %></div>
+                  <div class="shrink-0 rounded-2xl border border-cyan-200 bg-white px-3 py-2 text-right shadow-sm dark:border-cyan-900/60 dark:bg-slate-900/70">
+                    <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-cyan-700 dark:text-cyan-300">Total do grupo</div>
+                    <div class="mt-1 text-lg font-bold text-slate-900 dark:text-slate-100"><%= group.groupTotalLabel %></div>
                   </div>
                 </div>
 
                 <div class="mt-3 grid gap-3 xl:grid-cols-[1fr_280px]">
                   <div class="space-y-3">
-                    <section class="rounded-[20px] border border-slate-200 bg-white/90 p-3.5 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+                    <section class="rounded-xl border border-slate-200 bg-white/90 p-3.5 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
                       <div class="flex items-center justify-between gap-3">
-                        <div class="text-[10px] font-black uppercase tracking-[0.18em] text-sky-700 dark:text-sky-300">Linhas do CSV</div>
-                        <span class="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-200">Cada linha vale <%= group.amountLabel %></span>
+                        <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-cyan-700 dark:text-cyan-300">Linhas do CSV</div>
+                        <span class="inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-cyan-700 dark:border-cyan-900/60 dark:bg-cyan-950/30 dark:text-cyan-200">Cada linha vale <%= group.amountLabel %></span>
                       </div>
                       <div class="mt-3 overflow-x-auto">
                         <div class="min-w-[700px] space-y-2">
-                          <div class="grid grid-cols-[1.9fr_92px_96px_132px_104px] gap-3 px-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                          <div class="grid grid-cols-[1.9fr_92px_96px_132px_104px] gap-3 px-3 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
                             <div>Lancamento</div>
                             <div>Data</div>
                             <div>Final</div>
@@ -595,13 +595,13 @@
                           <% groupItems.forEach((item, index) => { %>
                             <div class="grid grid-cols-[1.9fr_92px_96px_132px_104px] items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm dark:border-slate-700 dark:bg-slate-950/70">
                               <div class="min-w-0">
-                                <div class="text-[13px] font-black leading-5 text-slate-900 dark:text-slate-100"><%= item.description %></div>
+                                <div class="text-[13px] font-bold leading-5 text-slate-900 dark:text-slate-100"><%= item.description %></div>
                                 <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400"><%= item.installment ? buildInstallmentHint(item, 'import') : `Ocorrência ${index + 1} de ${group.occurrenceCount}` %></div>
                               </div>
                               <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.dateLabel %></div>
                               <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.cardNumberLabel %></div>
-                              <div><span class="inline-flex items-center rounded-full border border-sky-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-sky-700 dark:border-sky-900/60 dark:bg-slate-900 dark:text-sky-200">Linha <%= index + 1 %></span></div>
-                              <div class="text-right text-[13px] font-black text-slate-900 dark:text-slate-100"><%= item.amountLabel %></div>
+                              <div><span class="inline-flex items-center rounded-full border border-cyan-200 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-cyan-700 dark:border-cyan-900/60 dark:bg-slate-900 dark:text-cyan-200">Linha <%= index + 1 %></span></div>
+                              <div class="text-right text-[13px] font-bold text-slate-900 dark:text-slate-100"><%= item.amountLabel %></div>
                             </div>
                           <% }) %>
                         </div>
@@ -609,14 +609,14 @@
                     </section>
 
                     <% if (group.existingMatches && group.existingMatches.length) { %>
-                      <section class="rounded-[20px] border border-amber-200 bg-amber-50/70 p-3.5 shadow-sm dark:border-amber-900/60 dark:bg-amber-950/20">
+                      <section class="rounded-xl border border-amber-200 bg-amber-50/70 p-3.5 shadow-sm dark:border-amber-900/60 dark:bg-amber-950/20">
                         <div class="flex items-center justify-between gap-3">
-                          <div class="text-[10px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Coincidencias no app</div>
-                          <span class="inline-flex items-center rounded-full border border-amber-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-amber-700 dark:border-amber-900/60 dark:bg-slate-900/70 dark:text-amber-200"><%= group.existingMatches.length %> encontrada(s)</span>
+                          <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-amber-700 dark:text-amber-300">Coincidencias no app</div>
+                          <span class="inline-flex items-center rounded-full border border-amber-200 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-700 dark:border-amber-900/60 dark:bg-slate-900/70 dark:text-amber-200"><%= group.existingMatches.length %> encontrada(s)</span>
                         </div>
                         <div class="mt-3 overflow-x-auto">
                           <div class="min-w-[700px] space-y-2">
-                            <div class="grid grid-cols-[1.9fr_92px_96px_132px_104px] gap-3 px-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                            <div class="grid grid-cols-[1.9fr_92px_96px_132px_104px] gap-3 px-3 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
                               <div>Lancamento</div>
                               <div>Data</div>
                               <div>Final</div>
@@ -626,13 +626,13 @@
                             <% group.existingMatches.forEach((match) => { %>
                               <div class="grid grid-cols-[1.9fr_92px_96px_132px_104px] items-start gap-3 rounded-2xl border border-amber-200 bg-white px-3 py-3 text-sm dark:border-amber-900/60 dark:bg-slate-900/80">
                                 <div class="min-w-0">
-                                  <div class="text-[13px] font-black leading-5 text-slate-900 dark:text-slate-100"><%= match.description %></div>
+                                  <div class="text-[13px] font-bold leading-5 text-slate-900 dark:text-slate-100"><%= match.description %></div>
                                   <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">Mêsmo dia e valor no app</div>
                                 </div>
                                 <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= match.dateLabel %></div>
                                 <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= match.cardNumberLabel %></div>
                                 <div><span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300" title="<%= match.originLabel %>"><%= match.isManual ? 'Manual' : 'Importada' %></span></div>
-                                <div class="text-right text-[13px] font-black text-slate-900 dark:text-slate-100"><%= match.amountLabel %></div>
+                                <div class="text-right text-[13px] font-bold text-slate-900 dark:text-slate-100"><%= match.amountLabel %></div>
                               </div>
                             <% }) %>
                           </div>
@@ -641,11 +641,11 @@
                     <% } %>
                   </div>
 
-                  <aside class="rounded-[20px] border border-slate-200 bg-white/95 p-3.5 shadow-sm dark:border-slate-700 dark:bg-slate-900/80 xl:sticky xl:top-0 xl:self-start">
-                    <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Quantas linhas entram?</div>
+                  <aside class="rounded-xl border border-slate-200 bg-white/95 p-3.5 shadow-sm dark:border-slate-700 dark:bg-slate-900/80 xl:sticky xl:top-0 xl:self-start">
+                    <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Quantas linhas entram?</div>
                     <label class="mt-3 block">
-                      <span class="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Escolha a quantidade</span>
-                      <select name="keep_csv_<%= group.id %>" data-csv-keep data-group-id="<%= group.id %>" class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-2 focus:ring-sky-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:bg-slate-900">
+                      <span class="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Escolha a quantidade</span>
+                      <select name="keep_csv_<%= group.id %>" data-csv-keep data-group-id="<%= group.id %>" class="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-cyan-400 focus:bg-white focus:ring-2 focus:ring-cyan-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:bg-slate-900">
                         <% for (let keepCount = 0; keepCount <= group.occurrenceCount; keepCount += 1) { %>
                           <option value="<%= keepCount %>" <%= keepCount === Number(group.defaultKeepCount || 0) ? 'selected' : '' %>>
                             <% if (keepCount === 0) { %>
@@ -661,8 +661,8 @@
                     </label>
 
                     <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-700 dark:bg-slate-950/70">
-                      <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Sugestao automatica</div>
-                      <div class="mt-2 text-xl font-black text-slate-900 dark:text-slate-100"><span data-csv-current-count="<%= group.id %>"><%= group.defaultKeepCount %></span> linha(s)</div>
+                      <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Sugestao automatica</div>
+                      <div class="mt-2 text-xl font-bold text-slate-900 dark:text-slate-100"><span data-csv-current-count="<%= group.id %>"><%= group.defaultKeepCount %></span> linha(s)</div>
                       <p class="mt-2 text-xs font-medium leading-5 text-slate-600 dark:text-slate-300">A sugestão considera as coincidências já encontradas no app para esse mesmo dia e valor.</p>
                     </div>
                   </aside>
@@ -673,36 +673,36 @@
 
           <section data-review-tab-panel="final" class="hidden space-y-3.5">
             <div class="grid gap-2.5 lg:grid-cols-3">
-              <div class="rounded-[20px] border border-emerald-200 bg-emerald-50/80 px-4 py-3.5 dark:border-emerald-900/60 dark:bg-emerald-950/20">
-                <div class="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">Entra como compra nova</div>
-                <div class="mt-2 text-[1.7rem] font-black leading-none text-emerald-900 dark:text-emerald-100" data-final-total><%= previewSummary.defaultFinalTotalLabel || formatBRLFromCents(0) %></div>
+              <div class="rounded-xl border border-emerald-200 bg-emerald-50/80 px-4 py-3.5 dark:border-emerald-900/60 dark:bg-emerald-950/20">
+                <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-300">Entra como compra nova</div>
+                <div class="mt-2 text-[1.7rem] font-bold leading-none text-emerald-900 dark:text-emerald-100" data-final-total><%= previewSummary.defaultFinalTotalLabel || formatBRLFromCents(0) %></div>
                 <div class="mt-1.5 text-[13px] font-semibold text-emerald-700/80 dark:text-emerald-200/80"><span data-final-count><%= previewSummary.defaultNewImportCount || previewSummary.defaultFinalCount || 0 %></span> nova(s) · <span data-overwrite-count><%= previewSummary.defaultOverwriteCount || 0 %></span> sobrescrita(s) · <span data-final-affected-count><%= previewSummary.defaultFinalAffectedCount || previewSummary.defaultFinalCount || 0 %></span> transação(ões) afetada(s)</div>
               </div>
-              <div class="rounded-[20px] border border-violet-200 bg-violet-50/80 px-4 py-3.5 dark:border-violet-900/60 dark:bg-violet-950/20">
-                <div class="text-[10px] font-black uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">O cartao fica em</div>
-                <div class="mt-2 text-[1.7rem] font-black leading-none text-violet-900 dark:text-violet-100" data-projected-total><%= previewSummary.projectedCardTotalLabel || formatBRLFromCents(0) %></div>
-                <div class="mt-1.5 text-[13px] font-semibold text-violet-700/80 dark:text-violet-200/80"><span data-projected-count><%= previewSummary.projectedCardCount || 0 %></span> compra(s) no mês depois de gravar</div>
+              <div class="rounded-xl border border-cyan-200 bg-cyan-50/80 px-4 py-3.5 dark:border-cyan-900/60 dark:bg-cyan-950/20">
+                <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-cyan-700 dark:text-cyan-300">O cartao fica em</div>
+                <div class="mt-2 text-[1.7rem] font-bold leading-none text-cyan-900 dark:text-cyan-100" data-projected-total><%= previewSummary.projectedCardTotalLabel || formatBRLFromCents(0) %></div>
+                <div class="mt-1.5 text-[13px] font-semibold text-cyan-700/80 dark:text-cyan-200/80"><span data-projected-count><%= previewSummary.projectedCardCount || 0 %></span> compra(s) no mês depois de gravar</div>
               </div>
-              <div class="rounded-[20px] border border-slate-200 bg-white px-4 py-3.5 dark:border-slate-700 dark:bg-slate-900/80">
-                <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Comparacao com o arquivo</div>
-                <div class="mt-2 text-[1.45rem] font-black leading-none text-slate-900 dark:text-slate-100"><%= previewSummary.parsedTotalLabel || formatBRLFromCents(0) %></div>
+              <div class="rounded-xl border border-slate-200 bg-white px-4 py-3.5 dark:border-slate-700 dark:bg-slate-900/80">
+                <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Comparacao com o arquivo</div>
+                <div class="mt-2 text-[1.45rem] font-bold leading-none text-slate-900 dark:text-slate-100"><%= previewSummary.parsedTotalLabel || formatBRLFromCents(0) %></div>
                 <p class="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300" data-final-diff-text>Agora a comparação usa o total que o cartão vai ter depois da importação, não só o que entrou nesta rodada.</p>
               </div>
             </div>
 
             <div class="grid gap-3 xl:grid-cols-[1.1fr_0.9fr]">
-              <section class="rounded-[24px] border border-slate-200 bg-white p-3.5 shadow-sm dark:border-slate-700 dark:bg-slate-900/80 sm:p-4">
+              <section class="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm dark:border-slate-700 dark:bg-slate-900/80 sm:p-4">
                 <div class="flex flex-col gap-2.5 sm:flex-row sm:items-end sm:justify-between">
                   <div>
-                    <div class="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Lista final</div>
-                    <h3 class="mt-1.5 text-base font-black text-slate-900 dark:text-slate-100">Compras novas que vão entrar</h3>
+                    <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Lista final</div>
+                    <h3 class="mt-1.5 text-base font-bold text-slate-900 dark:text-slate-100">Compras novas que vão entrar</h3>
                   </div>
                   <div class="text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">Compras simples entram sozinhas. Quando a linha for parcelada, uma única escolha pode preparar futuras ausentes também.</div>
                 </div>
 
                 <div class="mt-4 overflow-x-auto" data-final-item-list>
                   <div class="min-w-[700px] space-y-2">
-                    <div class="grid grid-cols-[1.9fr_92px_96px_132px_104px] gap-3 px-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                    <div class="grid grid-cols-[1.9fr_92px_96px_132px_104px] gap-3 px-3 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
                       <div>Lancamento</div>
                       <div>Data</div>
                       <div>Final</div>
@@ -713,13 +713,13 @@
                     <% previewAutoItems.forEach((item) => { %>
                       <article data-final-item data-final-import-item data-amount-cents="<%= item.amountCents %>" data-affected-count="<%= item.projectedImportAffectedCount || 1 %>" class="grid grid-cols-[1.9fr_92px_96px_132px_104px] items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/70 px-3 py-3 text-sm dark:border-emerald-900/60 dark:bg-emerald-950/20">
                         <div class="min-w-0">
-                          <div class="text-[13px] font-black leading-5 text-slate-900 dark:text-slate-100"><%= item.description %></div>
+                          <div class="text-[13px] font-bold leading-5 text-slate-900 dark:text-slate-100"><%= item.description %></div>
                           <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400"><%= item.installment ? buildInstallmentHint(item, 'import') : 'Compra única do arquivo' %></div>
                         </div>
                         <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.dateLabel %></div>
                         <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.cardNumberLabel %></div>
-                        <div><span class="inline-flex items-center rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-emerald-700 dark:border-emerald-900/60 dark:bg-slate-900 dark:text-emerald-200"><%= item.installment ? `Parcelada ${item.installmentLabel || ''}`.trim() : 'Única no arquivo' %></span></div>
-                        <div class="text-right text-[13px] font-black text-slate-900 dark:text-slate-100"><%= item.amountLabel %></div>
+                        <div><span class="inline-flex items-center rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-700 dark:border-emerald-900/60 dark:bg-slate-900 dark:text-emerald-200"><%= item.installment ? `Parcelada ${item.installmentLabel || ''}`.trim() : 'Única no arquivo' %></span></div>
+                        <div class="text-right text-[13px] font-bold text-slate-900 dark:text-slate-100"><%= item.amountLabel %></div>
                       </article>
                     <% }) %>
 
@@ -729,13 +729,13 @@
                     %>
                       <article data-final-item data-final-import-item data-final-app-item="<%= candidate.id %>" data-amount-cents="<%= item.amountCents %>" data-affected-count="<%= candidate.projectedImportAffectedCount || 1 %>" class="hidden grid grid-cols-[1.9fr_92px_96px_132px_104px] items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 px-3 py-3 text-sm dark:border-amber-900/60 dark:bg-amber-950/20">
                         <div class="min-w-0">
-                          <div class="text-[13px] font-black leading-5 text-slate-900 dark:text-slate-100"><%= item.description %></div>
+                          <div class="text-[13px] font-bold leading-5 text-slate-900 dark:text-slate-100"><%= item.description %></div>
                           <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400"><%= item.installment ? buildInstallmentHint(item, 'import') : 'Incluída apesar da suspeita' %></div>
                         </div>
                         <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.dateLabel %></div>
                         <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.cardNumberLabel %></div>
-                        <div><span class="inline-flex items-center rounded-full border border-amber-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-amber-700 dark:border-amber-900/60 dark:bg-slate-900 dark:text-amber-200"><%= item.installment ? `Parcelada ${item.installmentLabel || ''}`.trim() : 'Suspeita confirmada' %></span></div>
-                        <div class="text-right text-[13px] font-black text-slate-900 dark:text-slate-100"><%= item.amountLabel %></div>
+                        <div><span class="inline-flex items-center rounded-full border border-amber-200 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-700 dark:border-amber-900/60 dark:bg-slate-900 dark:text-amber-200"><%= item.installment ? `Parcelada ${item.installmentLabel || ''}`.trim() : 'Suspeita confirmada' %></span></div>
+                        <div class="text-right text-[13px] font-bold text-slate-900 dark:text-slate-100"><%= item.amountLabel %></div>
                       </article>
                     <% }) %>
 
@@ -743,30 +743,30 @@
                       const groupItems = (group.itemIds || []).map((itemId) => previewItemMap.get(itemId)).filter(Boolean);
                       groupItems.forEach((item, index) => {
                     %>
-                      <article data-final-item data-final-import-item data-final-csv-group="<%= group.id %>" data-final-csv-position="<%= index + 1 %>" data-amount-cents="<%= item.amountCents %>" data-affected-count="<%= item.projectedImportAffectedCount || 1 %>" class="<%= index < Number(group.defaultKeepCount || 0) ? '' : 'hidden ' %>grid grid-cols-[1.9fr_92px_96px_132px_104px] items-start gap-3 rounded-2xl border border-sky-200 bg-sky-50/70 px-3 py-3 text-sm dark:border-sky-900/60 dark:bg-sky-950/20">
+                      <article data-final-item data-final-import-item data-final-csv-group="<%= group.id %>" data-final-csv-position="<%= index + 1 %>" data-amount-cents="<%= item.amountCents %>" data-affected-count="<%= item.projectedImportAffectedCount || 1 %>" class="<%= index < Number(group.defaultKeepCount || 0) ? '' : 'hidden ' %>grid grid-cols-[1.9fr_92px_96px_132px_104px] items-start gap-3 rounded-2xl border border-cyan-200 bg-cyan-50/70 px-3 py-3 text-sm dark:border-cyan-900/60 dark:bg-cyan-950/20">
                         <div class="min-w-0">
-                          <div class="text-[13px] font-black leading-5 text-slate-900 dark:text-slate-100"><%= item.description %></div>
+                          <div class="text-[13px] font-bold leading-5 text-slate-900 dark:text-slate-100"><%= item.description %></div>
                           <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400"><%= item.installment ? buildInstallmentHint(item, 'import') : `Ocorrência ${index + 1} de ${group.occurrenceCount}` %></div>
                         </div>
                         <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.dateLabel %></div>
                         <div class="text-[12px] font-semibold text-slate-700 dark:text-slate-200"><%= item.cardNumberLabel %></div>
-                        <div><span class="inline-flex items-center rounded-full border border-sky-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-sky-700 dark:border-sky-900/60 dark:bg-slate-900 dark:text-sky-200"><%= item.installment ? `Parcelada ${item.installmentLabel || ''}`.trim() : 'CSV repetido' %></span></div>
-                        <div class="text-right text-[13px] font-black text-slate-900 dark:text-slate-100"><%= item.amountLabel %></div>
+                        <div><span class="inline-flex items-center rounded-full border border-cyan-200 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-cyan-700 dark:border-cyan-900/60 dark:bg-slate-900 dark:text-cyan-200"><%= item.installment ? `Parcelada ${item.installmentLabel || ''}`.trim() : 'CSV repetido' %></span></div>
+                        <div class="text-right text-[13px] font-bold text-slate-900 dark:text-slate-100"><%= item.amountLabel %></div>
                       </article>
                     <% }) }) %>
                   </div>
                 </div>
 
-                <div data-final-import-empty class="hidden mt-4 rounded-[20px] border border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-center text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-400">
+                <div data-final-import-empty class="hidden mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-center text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-400">
                   Nada novo ficou marcado para entrar por enquanto.
                 </div>
               </section>
 
-              <section class="rounded-[24px] border border-violet-200 bg-violet-50/70 p-3.5 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/15 sm:p-4">
+              <section class="rounded-xl border border-cyan-200 bg-cyan-50/70 p-3.5 shadow-sm dark:border-cyan-900/50 dark:bg-cyan-950/15 sm:p-4">
                 <div class="flex flex-col gap-2.5 sm:flex-row sm:items-end sm:justify-between">
                   <div>
-                    <div class="text-[10px] font-black uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">Lista final</div>
-                    <h3 class="mt-1.5 text-base font-black text-slate-900 dark:text-slate-100">Lançamentos manuais que vão ser atualizados</h3>
+                    <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-cyan-700 dark:text-cyan-300">Lista final</div>
+                    <h3 class="mt-1.5 text-base font-bold text-slate-900 dark:text-slate-100">Lançamentos manuais que vão ser atualizados</h3>
                   </div>
                   <div class="text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">A compra manual continua a mesma. O app atualiza os dados vindos do CSV e preserva categoria/divisão.</div>
                 </div>
@@ -777,18 +777,18 @@
                     if (!item) return;
                     const defaultOverwriteMatch = (candidate.existingMatches || []).find((match) => Number(match.id || 0) === Number(candidate.defaultOverwriteTargetId || 0)) || null;
                   %>
-                    <article data-final-item data-final-overwrite-item="<%= candidate.id %>" data-amount-cents="<%= item.amountCents %>" data-affected-count="<%= candidate.projectedOverwriteAffectedCount || 1 %>" class="hidden rounded-2xl border border-violet-200 bg-white px-3 py-3 text-sm dark:border-violet-900/60 dark:bg-slate-900/80">
+                    <article data-final-item data-final-overwrite-item="<%= candidate.id %>" data-amount-cents="<%= item.amountCents %>" data-affected-count="<%= candidate.projectedOverwriteAffectedCount || 1 %>" class="hidden rounded-2xl border border-cyan-200 bg-white px-3 py-3 text-sm dark:border-cyan-900/60 dark:bg-slate-900/80">
                       <div class="flex items-start justify-between gap-3">
                         <div class="min-w-0">
-                          <div class="text-[13px] font-black leading-5 text-slate-900 dark:text-slate-100"><%= item.description %></div>
+                          <div class="text-[13px] font-bold leading-5 text-slate-900 dark:text-slate-100"><%= item.description %></div>
                           <div class="mt-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
                             Atualiza: <span data-final-overwrite-target-label="<%= candidate.id %>"><%= defaultOverwriteMatch ? defaultOverwriteMatch.description : 'Escolha o manual alvo na aba de suspeitas' %></span>
                           </div>
                           <% if (item.installment) { %>
-                            <div class="mt-1 text-[11px] font-semibold text-violet-700 dark:text-violet-300"><%= buildInstallmentHint({ ...item, projectedOverwriteNewTransactionCount: candidate.projectedOverwriteNewTransactionCount, installmentImpact: candidate.installmentImpact }, 'overwrite') %></div>
+                            <div class="mt-1 text-[11px] font-semibold text-cyan-700 dark:text-cyan-300"><%= buildInstallmentHint({ ...item, projectedOverwriteNewTransactionCount: candidate.projectedOverwriteNewTransactionCount, installmentImpact: candidate.installmentImpact }, 'overwrite') %></div>
                           <% } %>
                         </div>
-                        <span class="inline-flex items-center rounded-full border border-violet-200 bg-violet-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-violet-700 dark:border-violet-900/60 dark:bg-violet-900/30 dark:text-violet-200">Sobrescreve</span>
+                        <span class="inline-flex items-center rounded-full border border-cyan-200 bg-cyan-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-cyan-700 dark:border-cyan-900/60 dark:bg-cyan-900/30 dark:text-cyan-200">Sobrescreve</span>
                       </div>
                       <div class="mt-2 flex flex-wrap gap-2 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
                         <span><%= item.dateLabel %></span>
@@ -801,13 +801,13 @@
                   <% }) %>
                 </div>
 
-                <div data-final-overwrite-empty class="hidden mt-4 rounded-[20px] border border-dashed border-violet-200 bg-white/70 px-5 py-6 text-center text-sm font-medium text-slate-500 dark:border-violet-900/60 dark:bg-slate-900/50 dark:text-slate-400">
+                <div data-final-overwrite-empty class="hidden mt-4 rounded-xl border border-dashed border-cyan-200 bg-white/70 px-5 py-6 text-center text-sm font-medium text-slate-500 dark:border-cyan-900/60 dark:bg-slate-900/50 dark:text-slate-400">
                   Nenhum lancamento manual sera sobrescrito nesta confirmacao.
                 </div>
               </section>
             </div>
 
-            <div data-final-empty-state class="hidden rounded-[20px] border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-400">
+            <div data-final-empty-state class="hidden rounded-xl border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-400">
               Nada ficou selecionado para importar ou sobrescrever por enquanto. Ajuste as escolhas nas abas anteriores e volte aqui para conferir o resultado.
             </div>
           </section>
@@ -963,10 +963,10 @@
     function setActiveTab(tabName) {
       tabButtons.forEach((button) => {
         const isActive = button.getAttribute('data-review-tab-trigger') === tabName;
-        button.classList.toggle('border-violet-300', isActive);
-        button.classList.toggle('bg-violet-50', isActive);
-        button.classList.toggle('dark:border-violet-700', isActive);
-        button.classList.toggle('dark:bg-violet-950/30', isActive);
+        button.classList.toggle('border-cyan-300', isActive);
+        button.classList.toggle('bg-cyan-50', isActive);
+        button.classList.toggle('dark:border-cyan-700', isActive);
+        button.classList.toggle('dark:bg-cyan-950/30', isActive);
       });
       tabPanels.forEach((panel) => {
         panel.classList.toggle('hidden', panel.getAttribute('data-review-tab-panel') !== tabName);

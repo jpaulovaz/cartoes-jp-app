@@ -35,7 +35,7 @@
           <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
           </svg>
-          Anotar compra
+          Nova compra
         </button>
 
         <% if (canImport) { %>
@@ -44,7 +44,7 @@
             <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
             </svg>
-            Trazer fatura
+            Importar fatura
           </a>
         <% } %>
       </div>
@@ -55,9 +55,9 @@
   <div id="modalManual" data-manual-modal aria-hidden="true"
     class="hidden fixed inset-0 z-[10020] bg-slate-900/60 backdrop-blur-sm px-3 py-3 sm:px-4 sm:py-6">
     <div class="pointer-events-none flex min-h-full items-end justify-center sm:items-center">
-      <div class="pointer-events-auto flex w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800 lg:max-w-4xl xl:max-w-5xl max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)]">
+      <div class="pointer-events-auto flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800 lg:max-w-4xl xl:max-w-5xl max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)]">
       <div class="flex shrink-0 justify-between items-center border-b border-slate-200 px-4 py-4 sm:px-6 dark:border-slate-700">
-        <h2 class="text-xl font-black text-slate-800 dark:text-white">Anotar uma compra</h2>
+        <h2 class="text-xl font-bold text-slate-800 dark:text-white">Nova compra</h2>
         <button type="button" data-manual-modal-close
           class="op-icon-btn" aria-label="Fechar">✕</button>
       </div>
@@ -65,12 +65,12 @@
       <div class="op-manual-modal__scroll flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6"><form action="/txn/manual" method="POST" class="space-y-4 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0" data-auto-first-due-form data-local-draft-flow="manual_purchase">
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Quando rolou a compra?</label>
+            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Data da compra</label>
             <input type="date" name="date" required data-manual-date-input
               class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
           </div>
           <div>
-            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Qual cartão entrou nessa?</label>
+            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Cartão</label>
             <select name="card_id" data-manual-card-select
               class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
               <% cards.forEach(c=> { %>
@@ -84,45 +84,45 @@
 
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Quanto foi? (R$)</label>
+            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Valor (R$)</label>
             <input type="text" name="amount" placeholder="0,00" required data-money-mask data-manual-amount-input inputmode="decimal" enterkeyhint="next" autocapitalize="off" autocomplete="off"
               class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
           </div>
           <div>
-            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Em quantas parcelas?</label>
+            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Parcelas</label>
             <input type="number" name="installments" value="1" min="1" max="99" required data-installments-input
               class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
           </div>
         </div>
 
         <div>
-          <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Em qual fatura isso vai cair?</label>
+          <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Fatura de destino</label>
           <input type="month" name="first_due" value="<%= featuredOpenGroup ? `${featuredOpenGroup.year}-${String(featuredOpenGroup.month).padStart(2, '0')}` : `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}` %>" required data-manual-first-due
             class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
-          <p class="mt-1 text-[11px] font-medium text-slate-400 dark:text-slate-500">A gente sugere essa data com base na compra e no fechamento do cartão. Se quiser trocar, fique à vontade 🙂</p>
+          <p class="mt-1 text-[11px] font-medium text-slate-400 dark:text-slate-500">Sugerida com base na data da compra e no fechamento do cartão.</p>
         </div>
 
         <div>
-          <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">O que foi comprado?</label>
+          <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Descrição</label>
           <input type="text" name="description" placeholder="Ex: Monitor Dell" required
             class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
         </div>
 
         <div data-purchase-category-control class="space-y-3 lg:col-span-2">
           <div>
-            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Categoria (se quiser organizar já)</label>
+            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Categoria (opcional)</label>
             <select name="purchase_category_id" data-purchase-category-select
               class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
-              <option value="">Deixar sem categoria por enquanto</option>
+              <option value="">Sem categoria</option>
               <% (purchaseCategories || []).forEach(category => { %>
                 <option value="<%= category.id %>"><%= category.name %></option>
               <% }) %>
-              <option value="__new__">Criar categoria nova</option>
+              <option value="__new__">Nova categoria</option>
             </select>
-            <p class="mt-1 text-[11px] font-medium text-slate-400 dark:text-slate-500">Perfeito para organizar depois sem travar esse registro rapidinho de agora.</p>
+            <p class="mt-1 text-[11px] font-medium text-slate-400 dark:text-slate-500"></p>
           </div>
           <div data-purchase-category-custom-shell hidden>
-            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Como vai chamar essa categoria nova?</label>
+            <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Nome da nova categoria</label>
             <input type="text" name="purchase_category_custom" maxlength="60" placeholder="Ex: Feira de sábado" data-purchase-category-custom-input disabled
               class="w-full border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none focus:bg-white dark:focus:bg-slate-950 transition-colors">
           </div>
@@ -132,8 +132,8 @@
           <input type="checkbox" name="assign_to_owner" value="1"
             class="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500 bg-white dark:bg-slate-800">
           <span>
-            <span class="block text-sm font-bold text-slate-800 dark:text-white">Essa ficou 100% comigo</span>
-            <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Marque aqui quando essa compra for só sua. Se tiver parcela ou repetição, a lógica segue junto sem complicação.</span>
+            <span class="block text-sm font-bold text-slate-800 dark:text-white">Compra 100% minha</span>
+            <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">A compra não será dividida com outras pessoas.</span>
           </span>
         </label>
 
@@ -142,13 +142,13 @@
             class="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500 bg-white dark:bg-slate-800">
           <span>
             <span class="block text-sm font-bold text-slate-800 dark:text-white">Repetir todo mês</span>
-            <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Ótimo para academia, streaming, escola, internet e outras figurinhas carimbadas. Funciona com 1 parcela.</span>
+            <span class="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Para assinaturas e despesas fixas mensais.</span>
           </span>
         </label>
 
         <button type="submit"
           class="op-btn op-btn-success op-btn--block lg:col-span-2">
-          Salvar compra
+          Salvar
         </button>
       </form></div>
       </div>
@@ -165,13 +165,13 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
           </svg>
         </div>
-        <div class="op-empty-state__title">Tudo tranquilo por aqui ✨</div>
+        <div class="op-empty-state__title">Nenhum lançamento neste mês</div>
         <% if (canImport) { %>
-          <p class="op-empty-state__text max-w-sm mx-auto">Ainda não pintou nenhum movimento. Você pode trazer a primeira fatura ou anotar uma compra manual para colocar <span class="md:hidden">o mês</span><span class="hidden md:inline">o período</span> pra rodar.</p>
+          <p class="op-empty-state__text max-w-sm mx-auto">Importe uma fatura ou registre uma compra manual para começar.</p>
           <div class="op-empty-state__actions">
             <a class="op-btn op-btn-info" href="/import">
               <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-              Trazer primeira fatura
+              Importar fatura
             </a>
           </div>
         <% } else { %>
@@ -186,7 +186,7 @@
               <div class="op-radar-divider pt-1">
                 <div class="flex items-center gap-3 mb-2">
                   <div class="op-radar-divider__line h-px flex-1 <%= group.kind === 'closed' ? 'bg-amber-200 dark:bg-amber-800' : 'bg-emerald-200 dark:bg-emerald-800' %>"></div>
-                  <div class="op-radar-divider__label px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-[0.2em] <%= group.kind === 'closed' ? 'bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-900/20 dark:text-amber-200 dark:border-amber-800' : 'bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-200 dark:border-emerald-800' %>"><%= group.label %></div>
+                  <div class="op-radar-divider__label px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-[0.12em] <%= group.kind === 'closed' ? 'bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-900/20 dark:text-amber-200 dark:border-amber-800' : 'bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-200 dark:border-emerald-800' %>"><%= group.label %></div>
                   <div class="op-radar-divider__line h-px flex-1 <%= group.kind === 'closed' ? 'bg-amber-200 dark:bg-amber-800' : 'bg-emerald-200 dark:bg-emerald-800' %>"></div>
                 </div>
                 <p class="op-radar-divider__description text-xs font-medium text-slate-500 dark:text-slate-400 px-1"><%= group.description %></p>
@@ -209,7 +209,7 @@
                       </svg>
                     </div>
                     <div class="op-radar-period__heading">
-                      <h2 class="op-radar-period__title text-2xl font-extrabold text-slate-800 dark:text-white flex items-center gap-2 flex-wrap">
+                      <h2 class="op-radar-period__title text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2 flex-wrap">
                         <span><%= group.label %></span>
                         <% if (group.isClosed) { %>
                           <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">Fechado bonitinho</span>
@@ -253,9 +253,9 @@
                   </div>
 
                   <% if (group.hasSharedProjections) { %>
-                    <div class="op-radar-shared-overview mt-3 ml-0 lg:ml-16 rounded-2xl border border-violet-100 bg-violet-50/80 px-3 py-2.5 text-xs font-bold text-violet-800 dark:border-violet-900/60 dark:bg-violet-900/20 dark:text-violet-100">
+                    <div class="op-radar-shared-overview mt-3 ml-0 lg:ml-16 rounded-2xl border border-cyan-100 bg-cyan-50/80 px-3 py-2.5 text-xs font-bold text-cyan-800 dark:border-cyan-900/60 dark:bg-cyan-900/20 dark:text-cyan-100">
                       Inclui <strong><%= formatBRLFromCents(group.shared_total_cents || 0) %></strong> recebidos de amigos neste mês.
-                      <a href="/month/<%= group.year %>/<%= group.month %>" class="ml-1 underline decoration-violet-300 underline-offset-2 hover:text-violet-900 dark:hover:text-white" onclick="event.stopPropagation()">Ver no mês</a>
+                      <a href="/month/<%= group.year %>/<%= group.month %>" class="ml-1 underline decoration-cyan-300 underline-offset-2 hover:text-cyan-900 dark:hover:text-white" onclick="event.stopPropagation()">Ver no mês</a>
                     </div>
                   <% } %>
                 </div>
@@ -316,7 +316,7 @@
                         <% const cardBrandMeta = getCardBrandMeta(card.card_brand); %>
                         <div class="op-radar-card__head flex justify-between items-start gap-3 mb-3">
                           <div>
-                            <div class="font-extrabold text-slate-800 dark:text-white text-lg break-words leading-tight">
+                            <div class="font-bold text-slate-800 dark:text-white text-lg break-words leading-tight">
                               <%= card.card_name %>
                             </div>
                             <% if (cardBrandMeta) { %>
@@ -340,11 +340,11 @@
                         <div class="op-radar-card__metrics grid grid-cols-2 gap-3 mb-4">
                           <div class="op-radar-card__metric rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2">
                             <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Total de lançamentos</div>
-                            <div class="text-lg font-black text-slate-800 dark:text-white"><%= card.txn_count %></div>
+                            <div class="text-lg font-bold text-slate-800 dark:text-white"><%= card.txn_count %></div>
                           </div>
                           <div class="op-radar-card__metric rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2">
                             <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Quanto esse cartão somou</div>
-                            <div class="text-sm font-black text-slate-800 dark:text-white"><%= formatBRLFromCents(card.import_total) %></div>
+                            <div class="text-sm font-bold text-slate-800 dark:text-white"><%= formatBRLFromCents(card.import_total) %></div>
                           </div>
                         </div>
 
@@ -372,7 +372,7 @@
                     <% }) %>
                   </div>
                 <% } else { %>
-                  <div class="rounded-[24px] border border-dashed border-slate-300 bg-white/70 px-4 py-5 text-sm font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
+                  <div class="rounded-xl border border-dashed border-slate-300 bg-white/70 px-4 py-5 text-sm font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
                     Nenhum cartão próprio apareceu nesta competência. O valor do mês vem das compras recebidas de amigos.
                   </div>
                 <% } %>
